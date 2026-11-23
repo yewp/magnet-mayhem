@@ -16,6 +16,22 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 .online-options{display:grid;grid-template-columns:1fr 1fr;gap:9px}.online-options .secondary{font-size:13px;min-height:42px}.join-row{display:grid;grid-template-columns:1fr 115px;gap:9px;margin-top:10px}.join-row input{font-size:13px;letter-spacing:.14em;text-transform:uppercase}.join-row .secondary{margin:0;min-height:44px}.lobby-status{font-size:12px;line-height:1.5;color:#9ab7cc;margin:12px 0 0;min-height:18px}.lobby-status.error{color:#ffb3a0}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.room-strip{position:absolute;top:100px;left:28px;max-width:330px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:#0e1e2eea;border:1px solid #335265;padding:10px 12px;border-radius:9px;box-shadow:0 5px 20px #0003}.room-strip>div{display:grid;gap:4px}.room-strip strong{font-size:12px;color:var(--cyan)}.room-strip span{font-size:10px;color:var(--muted);letter-spacing:.1em}.room-strip b{color:var(--gold);font-size:12px}.room-strip button{background:#1b3547;border:1px solid #416277;color:#d4f6f2;border-radius:6px;padding:8px 10px;font-size:12px;font-weight:650}.room-strip.reconnecting{border-color:#ad7c52}.room-strip.reconnecting strong{color:var(--gold)}#shareLink{width:100%;height:34px;font-size:11px}.modal .rules{margin-top:18px;padding-top:17px;gap:10px}.modal .fine{margin-top:18px}.modal .title-wrap{margin-top:20px}.modal .intro{margin-bottom:18px}.modal .title-wrap h1{font-size:53px}.modal .orbit-badge{width:86px;height:86px}.modal .primary:disabled,.modal .secondary:disabled{opacity:.65}@media(max-width:720px){.room-strip{top:145px;left:15px;right:15px;max-width:none;padding:8px 10px;justify-content:space-between;gap:8px}.room-strip>div{display:flex;align-items:center;gap:12px}.room-strip strong{font-size:11px}.room-strip span{font-size:9px}.room-strip b{font-size:11px}.room-strip button{padding:7px 9px;font-size:11px}.board{top:199px}.modal .title-wrap h1{font-size:48px}.modal .orbit-badge{width:73px;height:73px}.modal{padding-top:24px;padding-bottom:23px}.modal .rules{gap:8px}.modal .fine{font-size:7px;line-height:1.6}.modal .intro{font-size:13px}.modal .title-wrap{margin-top:17px}#toast{top:198px}}@media(max-height:760px){.overlay{align-items:start}.modal{margin:auto 0}}
 .upgrade-ui{text-align:center;margin-bottom:5px}.upgrade-ui>small{background:#09131fee;color:#bbd7df;padding:2px 8px;border-radius:4px;font-size:11px}#upgradeChoices{display:flex;gap:4px;margin:4px 0;padding:4px;background:#0b1a27;border:1px solid #426069;border-radius:8px}#upgradeChoices button{flex:1;padding:8px 2px;color:#eff9fc;background:#17333d;border:1px solid #4d7a82;border-radius:5px;font-weight:650;font-size:12px}#upgradeChoices small{display:block;font-size:10px;color:#c0d7db;margin-top:3px}
+
+@media (min-width:721px){
+ .controls{bottom:16px}
+ .action{min-height:48px;padding:8px 12px;gap:10px;background:#0f2133a8;border-color:#3b536680;backdrop-filter:blur(6px);box-shadow:0 4px 18px #0002}
+ .action svg{width:22px;height:22px}
+ .action strong{font-size:13px}
+ .action small{font-size:9px;margin-top:2px;opacity:.85}
+ .action.engaged{background:#26404cc8}
+ .armor-dots{margin-top:7px}
+ .upgrade-ui{margin-bottom:3px}
+ #upgradeChoices{background:#0b1a27a8;border-color:#42606980;backdrop-filter:blur(6px);padding:3px;margin:3px 0}
+ #upgradeChoices button{padding:5px 2px;background:#17333dc0;font-size:11px}
+ #upgradeChoices small{font-size:9px;margin-top:2px}
+ .status-line{bottom:128px}
+ .hud{background:#0e1c2bb8;backdrop-filter:blur(6px)}
+}
 </style></head><body>
 <canvas id="arena" aria-label="Magnet Mayhem arena. Mouse or WASD to move. Hold left mouse or Space to fire scrap. Hold right mouse or E to pull in your shield and attract scrap. P pauses."></canvas>
 <header class="topbar"><div class="brand"><svg class="brand-logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><circle cx="20" cy="20" r="13" stroke="currentColor" stroke-opacity=".4"/><circle cx="20" cy="20" r="5" fill="currentColor"/><path d="m27 4 7 4-3 6-7-4zM3 25l7-3 3 7-7 3z" fill="#f5c886"/></svg><div><div class="wordmark">MAGNET MAYHEM</div><div class="brand-sub">YOUR ARMOR IS YOUR AMMO</div></div></div><div class="tools"><button class="icon-btn" id="soundBtn" title="Turn sound on" aria-label="Turn sound on" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m11 5-5 4H3v6h3l5 4V5Z"/><path id="soundWaves" d="m16 9 6 6m0-6-6 6"/></svg></button><button class="icon-btn" id="helpBtn" title="How to play" aria-label="How to play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4m0 2v2"/></svg></button><button class="icon-btn" id="pauseBtn" title="Pause (P)" aria-label="Pause game" disabled><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3v14H7zm7 0h3v14h-3z"/></svg></button></div></header><div id="roomStrip" class="room-strip" hidden><div><strong id="connectionValue">Connecting</strong><span>ROOM <b id="roomCodeValue"></b></span></div><button id="copyRoomBtn" type="button">Copy link</button><input id="shareLink" readonly hidden aria-label="Share this room link"></div>
@@ -748,7 +764,10 @@ function reconcileScrap(previous,next,now){
   a.fire=fireSources.size>0;a.magnet=magnetSources.size>0;
   if(touchMode&&a.fire){let target=null,d=750;for(const b of game.actors){if(!b.alive||b.id===a.id||b.shieldUntil>game.time)continue;const range=distance(a,b);if(range<d){d=range;target=b;}}if(target)a.aim=Math.atan2(target.y+target.vy*d/MM.shotSpeed-a.y,target.x+target.vx*d/MM.shotSpeed-a.x);}
  }
- function updateCamera(dt){const a=game.human,target=(width<720?.85:1.04)-a.pieces.length*.004;cam.zoom+=(target-cam.zoom)*(1-Math.exp(-dt*3));if(a.alive){const f=1-Math.exp(-dt*(online?22:7));cam.x+=(a.x-cam.x)*f;cam.y+=(a.y-cam.y)*f;}}
+ function updateCamera(dt){const a=game.human;let crowd=0;
+  for(const b of game.actors){if(b===a||!b.alive)continue;const d=Math.hypot(b.x-a.x,b.y-a.y);crowd+=limit(1-(d-300)/400,0,1);}
+  const speed=a.alive?Math.hypot(a.vx,a.vy):0,target=(width<720?.85:1.04)-a.pieces.length*.004-Math.min(.07,speed/245*.07)-Math.min(.08,crowd*.02);
+  cam.zoom+=(target-cam.zoom)*(1-Math.exp(-dt*1.6));if(a.alive){const f=1-Math.exp(-dt*(online?22:7));cam.x+=(a.x-cam.x)*f;cam.y+=(a.y-cam.y)*f;}}
  function refreshUpgradePanel(){
   const a=game.human,level=shipLevel(a),target=LEVEL_SCORES[level];
   const ready=state==='playing'&&target!==undefined&&earnedLevel(a)>level;
@@ -788,6 +807,9 @@ function reconcileScrap(previous,next,now){
   let message='Collect scrap. Pick your moment.';if(!a.alive)message='Rebuilding your core…';else if(overcharged(a,game.time))message=`OVERCHARGE · ${Math.ceil(a.overchargeUntil-game.time)}s · Double magnet range`;else if(rapidRail(a,game.time))message=`RAPID RAIL · ${Math.ceil(a.rapidUntil-game.time)}s · Double fire rate`;else if(a.shieldUntil>game.time)message=`SPAWN SHIELD · ${Math.ceil(a.shieldUntil-game.time)}s · Firing ends protection`;else if(a.repair>0)message=`REPAIRING CORE · ${(3-a.repair).toFixed(1)}s`;else if(!a.pieces.length)message='NO ARMOR · Pull in loose scrap';else if(a.magnet)message='DEFENSIVE ORBIT · Magnet active';else if(a.pieces.length===armorCapacity(a))message='FULL ORBIT · Spend some armor to attack';$('statusLine').textContent=message;$('statusLine').classList.toggle('repairing',a.repair>0);
   const list=$('leaders'),signature=ranking.map(p=>p.id+':'+p.name+':'+p.score).join('|');if(signature!==leaderKey){leaderKey=signature;list.replaceChildren();const visible=ranking.slice(0,6);if(!visible.includes(a))visible.push(a);for(const pilot of visible){const i=ranking.indexOf(pilot),row=document.createElement('div');row.className='leader'+(pilot.id===a.id?' you':'')+(i>=6?' separated':'');const rankEl=document.createElement('span');rankEl.className='rank';rankEl.textContent=String(i+1);const dot=document.createElement('i');dot.style.background=pilot.color;const who=document.createElement('span');who.className='who';who.textContent=pilot.name+(pilot.id===a.id?' (you)':pilot.human?' · player':'');const points=document.createElement('span');points.className='points';points.textContent=fmt(pilot.score);row.append(rankEl,dot,who,points);list.append(row);}}
   const feed=$('feed'),activeFeed=game.feed.filter(e=>game.time-e.time<10),signatureFeed=JSON.stringify(activeFeed);if(signatureFeed!==feedKey){feedKey=signatureFeed;feed.replaceChildren();for(const entry of activeFeed){const line=document.createElement('div');line.className='feed-line';line.style.borderColor=entry.color;const who=document.createElement('b');who.textContent=entry.killer;who.style.color=entry.color;line.append(who,document.createTextNode(` scrapped ${entry.victim}`));feed.append(line);}}
+  // Keep the status line just above the controls, whose height changes when an upgrade is offered.
+  // (Wider screens only: on phones the personal-best note sits right above the controls.)
+  const controlsBox=innerWidth>720&&document.querySelector('.controls');$('statusLine').style.bottom=!controlsBox?'':Math.round(innerHeight-controlsBox.getBoundingClientRect().top+8)+'px';
   $('rebuildPanel').hidden=a.alive||state!=='playing';if(!a.alive)$('rebuildTime').textContent=Math.max(0,a.respawnAt-game.time).toFixed(1);if(best>storedBest&&Math.floor(game.time)%5===0)save();
  }
  function finish(){const rank=game.ranking().indexOf(game.human)+1;best=Math.max(best,game.human.score);save();$('finishTitle').textContent=rank===1?'You owned the scrapyard.':'That was mayhem.';$('finishCopy').textContent=rank===1?'A full orbit, a steady aim, and a scrapyard full of spare parts.':`${game.ranking()[0].name} took the top spot. There is always another round.`;$('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
@@ -867,6 +889,45 @@ function reconcileScrap(previous,next,now){
    ctx.globalAlpha=(1-t)*.55;ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(w.x,w.y,8+120*e,0,Math.PI*2);ctx.stroke();}
   ctx.restore();
  }
+ // Magnet field: particles spiral in toward each active magnet.
+ const fieldParticles=new Map();
+ function updateMagnetFx(dt){
+  for(const a of game.actors){
+   if(!a.alive||!a.magnet||!visible(a.x,a.y,magnetRange(a,game.time))){fieldParticles.delete(a.id);continue;}
+   const R=magnetRange(a,game.time);let list=fieldParticles.get(a.id);if(!list){list=[];fieldParticles.set(a.id,list);}
+   const want=Math.min(48,Math.round(R/7));
+   while(list.length<want)list.push({r:R*(.55+Math.random()*.45),ang:Math.random()*Math.PI*2,spin:(Math.random()<.5?-1:1)*(.5+Math.random()*.4)});
+   for(const q of list){q.pr=q.r;q.pa=q.ang;const inward=1-q.r/R;q.r-=(70+300*inward)*dt;q.ang+=q.spin*(1.1*R/(q.r+60))*dt;
+    if(q.r<26){q.r=R*(.9+Math.random()*.1);q.ang=Math.random()*Math.PI*2;q.pr=q.r;q.pa=q.ang;}}
+  }
+ }
+ function drawMagnetFx(){
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';ctx.lineWidth=1.6;
+  for(const [id,list] of fieldParticles){const a=game.actors.find(x=>x.id===id);if(!a)continue;const R=magnetRange(a,game.time);ctx.strokeStyle=a.color;
+   for(const q of list){const edge=Math.min(1,(R-q.r)/(R*.25));ctx.globalAlpha=.55*edge*(.35+.65*(1-q.r/R));
+    ctx.beginPath();ctx.moveTo(a.x+Math.cos(q.pa)*(q.pr+4),a.y+Math.sin(q.pa)*(q.pr+4));ctx.lineTo(a.x+Math.cos(q.ang)*q.r,a.y+Math.sin(q.ang)*q.r);ctx.stroke();}}
+  ctx.restore();
+ }
+ // A thin curved line from each loose piece of scrap to the magnet pulling it (same choice rule as the engine).
+ function drawTethers(){
+  const magnets=game.actors.filter(a=>a.alive&&a.magnet&&a.pieces.length<armorCapacity(a));if(!magnets.length)return;
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineWidth=1.1;
+  for(const item of game.ground){if(item.dead||game.time<item.pickupAt||!visible(item.x,item.y,40))continue;let best=null,score=-1;
+   for(const a of magnets){if(item.ignoreId===a.id&&game.time<item.ignoreUntil)continue;const d=Math.hypot(item.x-a.x,item.y-a.y),R=magnetRange(a,game.time);if(d>R)continue;const w=2.4/(d+25);if(w>score){score=w;best=a;}}
+   if(!best)continue;const dx=best.x-item.x,dy=best.y-item.y,d=Math.hypot(dx,dy)||1,bend=Math.min(30,d*.18);
+   ctx.globalAlpha=.08+.24*(1-d/magnetRange(best,game.time));ctx.strokeStyle=best.color;ctx.beginPath();ctx.moveTo(item.x,item.y);
+   ctx.quadraticCurveTo((item.x+best.x)/2-dy/d*bend,(item.y+best.y)/2+dx/d*bend,best.x,best.y);ctx.stroke();}
+  ctx.restore();
+ }
+ // Orbiting scrap leaves fading arcs while its ship moves fast.
+ function orbitTrails(){
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
+  for(const a of game.actors){const speed=Math.hypot(a.vx,a.vy);if(!a.alive||speed<130||!a.pieces.length||!visible(a.x,a.y,140))continue;const strength=Math.min(1,(speed-130)/110);
+   for(const p of a.pieces){const slot=orbitSlot(p.slot),radius=shieldRadius(a,slot.radius),turn=1.28*slot.spin;ctx.strokeStyle=p.item.color;ctx.beginPath();
+    for(let k=0;k<=5;k++){const back=k*.028,ang=p.angle-turn*back,x=a.x-a.vx*back+Math.cos(ang)*radius,y=a.y-a.vy*back+Math.sin(ang)*radius;if(k)ctx.lineTo(x,y);else ctx.moveTo(x,y);}
+    ctx.globalAlpha=.32*strength;ctx.lineWidth=2.4;ctx.stroke();}}
+  ctx.restore();
+ }
  function background(){
   ctx.fillStyle='rgba(12,27,42,.84)';ctx.fillRect(0,0,MM.width,MM.height);
   const left=Math.max(0,cam.x-width/(2*cam.zoom)),right=Math.min(MM.width,cam.x+width/(2*cam.zoom)),top=Math.max(0,cam.y-height/(2*cam.zoom)),bottom=Math.min(MM.height,cam.y+height/(2*cam.zoom));
@@ -877,7 +938,7 @@ function reconcileScrap(previous,next,now){
   ctx.strokeStyle='#bf955c80';ctx.lineWidth=4;ctx.strokeRect(2,2,MM.width-4,MM.height-4);ctx.strokeStyle='#f1bc6360';ctx.lineWidth=1;ctx.setLineDash([10,13]);ctx.strokeRect(13,13,MM.width-26,MM.height-26);ctx.setLineDash([]);
  }
  function wellsAndCover(){
-  for(const w of game.wells){if(!visible(w.x,w.y,100))continue;const pulse=.5+Math.sin(game.time*2)*.15;ctx.save();ctx.fillStyle='#3dbea00c';ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(99,222,190,${pulse})`;ctx.lineWidth=1.5;ctx.setLineDash([7,8]);ctx.beginPath();ctx.arc(w.x,w.y,w.r,game.time*.12,Math.PI*2+game.time*.12);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#4fb89c45';ctx.lineWidth=1;ctx.beginPath();ctx.arc(w.x,w.y,w.r-11,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#7ce8c4a0';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(w.x-9,w.y);ctx.lineTo(w.x+9,w.y);ctx.moveTo(w.x,w.y-9);ctx.lineTo(w.x,w.y+9);ctx.stroke();ctx.fillStyle='#75c9b08c';ctx.font='600 9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillText('REPAIR WELL',w.x,w.y+w.r+17);ctx.restore();}
+  for(const w of game.wells){if(!visible(w.x,w.y,100))continue;const pulse=.5+Math.sin(game.time*2)*.15;ctx.save();ctx.fillStyle='#3dbea00c';ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(99,222,190,${pulse})`;ctx.lineWidth=1.5;ctx.setLineDash([7,8]);ctx.beginPath();ctx.arc(w.x,w.y,w.r,game.time*.12,Math.PI*2+game.time*.12);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#4fb89c45';ctx.lineWidth=1;ctx.beginPath();ctx.arc(w.x,w.y,w.r-11,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#7ce8c4a0';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(w.x-9,w.y);ctx.lineTo(w.x+9,w.y);ctx.moveTo(w.x,w.y-9);ctx.lineTo(w.x,w.y+9);ctx.stroke();ctx.fillStyle='#75c9b08c';ctx.font='600 9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';if(Math.hypot(game.human.x-w.x,game.human.y-w.y)>w.r+30)ctx.fillText('REPAIR WELL',w.x,w.y+w.r+17);ctx.restore();}
   for(const c of game.covers){if(!visible(c.x,c.y,c.r+10))continue;ctx.save();ctx.shadowColor='#0006';ctx.shadowBlur=8;polygon(c.x,c.y+3,c.r,6,Math.PI/6);ctx.fillStyle='#07111d';ctx.fill();ctx.shadowBlur=0;polygon(c.x,c.y,c.r,6,Math.PI/6);ctx.fillStyle='#152b3c';ctx.strokeStyle='#3a5365';ctx.lineWidth=2;ctx.fill();ctx.stroke();polygon(c.x,c.y,c.r*.72,6,Math.PI/6);ctx.fillStyle='#0b1c2b';ctx.strokeStyle='#294355';ctx.lineWidth=1;ctx.fill();ctx.stroke();ctx.translate(c.x,c.y);ctx.rotate(c.x*.01);ctx.strokeStyle='#b68e5260';ctx.lineWidth=3;for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(-12,i*8-4);ctx.lineTo(12,i*8+4);ctx.stroke();}ctx.fillStyle='#66899c';for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;ctx.fillRect(Math.cos(a)*c.r*.87-1.5,Math.sin(a)*c.r*.87-1.5,3,3);}ctx.restore();}
  }
  function pads(){
@@ -892,7 +953,7 @@ function reconcileScrap(previous,next,now){
  }
  function powerAuras(){for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,120))continue;const kind=overcharged(a,game.time)?'overcharge':rapidRail(a,game.time)?'rapid':null;if(!kind)continue;
   ctx.save();ctx.strokeStyle=POWER_COLORS[kind];ctx.globalAlpha=.45+Math.sin(game.time*8)*.2;ctx.lineWidth=2.5;ctx.shadowColor=POWER_COLORS[kind];ctx.shadowBlur=12;ctx.beginPath();ctx.arc(a.x,a.y,24,0,Math.PI*2);ctx.stroke();ctx.restore();}}
- function fields(){for(const a of game.actors){if(!a.alive||!a.magnet||!visible(a.x,a.y,magnetRange(a,game.time)))continue;const range=magnetRange(a,game.time);ctx.save();const grad=ctx.createRadialGradient(a.x,a.y,30,a.x,a.y,range);grad.addColorStop(0,a.color+'15');grad.addColorStop(.75,a.color+'07');grad.addColorStop(1,a.color+'00');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(a.x,a.y,range,0,Math.PI*2);ctx.fill();ctx.strokeStyle=a.color+'35';ctx.lineWidth=1;ctx.setLineDash([3,11]);ctx.beginPath();ctx.arc(a.x,a.y,range,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<3;i++){const t=(game.time*.75+i/3)%1,r=range*(1-t);ctx.globalAlpha=.14*(1-t);ctx.strokeStyle=a.color;ctx.beginPath();ctx.arc(a.x,a.y,r,0,Math.PI*2);ctx.stroke();}ctx.restore();}}
+ function fields(){for(const a of game.actors){if(!a.alive||!a.magnet||!visible(a.x,a.y,magnetRange(a,game.time)))continue;const range=magnetRange(a,game.time);ctx.save();const grad=ctx.createRadialGradient(a.x,a.y,30,a.x,a.y,range);grad.addColorStop(0,a.color+'15');grad.addColorStop(.75,a.color+'07');grad.addColorStop(1,a.color+'00');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(a.x,a.y,range,0,Math.PI*2);ctx.fill();ctx.strokeStyle=a.color+'35';ctx.lineWidth=1;ctx.setLineDash([3,11]);ctx.beginPath();ctx.arc(a.x,a.y,range,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<3;i++){const t=(game.time*.75+i/3)%1,r=range*(1-t);ctx.globalAlpha=.07*(1-t);ctx.strokeStyle=a.color;ctx.beginPath();ctx.arc(a.x,a.y,r,0,Math.PI*2);ctx.stroke();}ctx.restore();}}
  function scrapSprite(color,kind){
   const key='ground:'+color+':'+kind;
   if(spriteCache.has(key))return spriteCache.get(key);
@@ -1019,7 +1080,7 @@ function reconcileScrap(previous,next,now){
  function reticle(){if(state!=='playing'||touchMode||!pointer.active)return;const x=cam.x+(pointer.x-width/2)/cam.zoom,y=cam.y+(pointer.y-height/2)/cam.zoom;ctx.save();ctx.strokeStyle='#d5fff48f';ctx.lineWidth=1/cam.zoom;ctx.beginPath();ctx.arc(x,y,7/cam.zoom,0,Math.PI*2);ctx.moveTo(x-12/cam.zoom,y);ctx.lineTo(x-8/cam.zoom,y);ctx.moveTo(x+8/cam.zoom,y);ctx.lineTo(x+12/cam.zoom,y);ctx.moveTo(x,y-12/cam.zoom);ctx.lineTo(x,y-8/cam.zoom);ctx.moveTo(x,y+8/cam.zoom);ctx.lineTo(x,y+12/cam.zoom);ctx.stroke();ctx.restore();}
  function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);for(const a of game.actors){if(!a.alive)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
  function joystick(){if(!touch)return;ctx.save();ctx.fillStyle='#64eee00d';ctx.strokeStyle='#a1fff34a';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(touch.sx,touch.sy,42,0,Math.PI*2);ctx.fill();ctx.stroke();const len=Math.hypot(touch.dx,touch.dy)||1,range=Math.min(35,len);ctx.fillStyle='#89fff0a0';ctx.beginPath();ctx.arc(touch.sx+touch.dx/len*range,touch.sy+touch.dy/len*range,12,0,Math.PI*2);ctx.fill();ctx.restore();}
- function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();pads();fields();drawScrap();drawSmoke();powerAuras();drawPilots();drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();vignette();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
+ function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();pads();fields();drawMagnetFx();drawTethers();drawScrap();drawSmoke();orbitTrails();powerAuras();drawPilots();drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();vignette();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
  function frame(now){frames++;if(now-framesAt>=1000){
   const fps=frames*1000/(now-framesAt);
   if(online&&state==='playing'&&!document.hidden&&frames>8&&fps<45&&dpr>.75){pixelRatioCap=Math.max(.75,dpr-.25);resize();}
