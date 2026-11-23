@@ -108,7 +108,7 @@ const PAD_SPOTS=[{x:780,y:760},{x:2060,y:960},{x:1420,y:1760}];
 const hasPower=(a,kind,time)=>POWERS[a.powerKind]===kind&&(a.powerUntil||0)>time;
 const holdsPower=(a,time)=>(a.powerUntil||0)>time;
 const rapidRail=(a,time)=>hasPower(a,'rapid',time);
-const canCollectScrap=(actor,item)=>actor.pieces.length<armorCapacity(actor)||item.origin===0;
+const canCollectScrap=(actor,item,time)=>actor.pieces.length<armorCapacity(actor)||time>=(item.ignoreUntil||0);
 const magnetRange=a=>MM.pullRadius*(1+.2*(a.pullRank||0));
 const railSpeed=a=>MM.shotSpeed*(1+.15*(a.railRank||0));
 function earnedLevel(actor){
@@ -158,13 +158,13 @@ class MagnetWorld{
  label(x,y,text,color='#e8f8ff'){if(this.headless)return;if(this.labels.length<28)this.labels.push({x,y,text,color,life:.85});}
  updateOrbits(a,reset=false){for(const p of a.pieces){const s=orbitSlot(p.slot),angle=a.phase+(this.time-(a.orbitDelay||0))*1.28*s.spin+s.index/s.count*Math.PI*2;const radius=shieldRadius(a,s.radius);p.angle=angle;p.x=a.x+Math.cos(angle)*radius;p.y=a.y+Math.sin(angle)*radius;if(reset||p.prevX==null){p.prevX=p.x;p.prevY=p.y;}}}
  attach(a,item,credit=true){
-  if(!a.alive||!canCollectScrap(a,item))return false;
+  if(!a.alive||!canCollectScrap(a,item,this.time))return false;
   item.origin=item.origin||a.id;
   if(a.pieces.length<armorCapacity(a)){
    const used=new Set(a.pieces.map(p=>p.slot));let slot=0;while(used.has(slot))slot++;
    item.dead=false;a.pieces.push({item,slot,x:a.x,y:a.y,prevX:null,prevY:null,angle:0});this.updateOrbits(a);
   }
-  if(credit&&!a.seen.has(item.id)){a.seen.add(item.id);const value=[6,10,18][item.kind];a.score+=value;if(a.human){const stolen=item.origin!==a.id;if(stolen)a.steals++;this.event('collect',{stolen,value});if(stolen)this.label(item.x,item.y,`STOLEN +${value}`,'#ffda79');this.burst(item.x,item.y,item.color,3,45);}}
+  if(credit&&!a.seen.has(item.id)){a.seen.add(item.id);const value=[6,10,18][item.kind];a.score+=value;if(a.human){const stolen=item.origin!==a.id;if(stolen)a.steals++;this.event('collect',{stolen,value});if(!this.headless&&a===this.human&&a.pieces.length===armorCapacity(a)&&!stolen)this.label(a.x,a.y-30,`+${value} SALVAGE`);if(stolen)this.label(item.x,item.y,`STOLEN +${value}`,'#ffda79');this.burst(item.x,item.y,item.color,3,45);}}
   return true;
  }
  drop(item,x,y,vx=0,vy=0,ignoreId=0,grace=.55,hot=false){item.x=limit(x,8,MM.width-8);item.y=limit(y,8,MM.height-8);item.vx=vx;item.vy=vy;item.dead=false;item.pickupAt=this.time+.14;item.hot=hot;item.ignoreId=ignoreId;item.ignoreUntil=this.time+grace;item.expiresAt=this.time+45;this.ground.push(item);}
@@ -184,7 +184,7 @@ class MagnetWorld{
  think(a,dt){
   a.think-=dt;if(a.think>0)return;a.think=.16+this.random()*.12;
   let enemy=null,enemyDist=Infinity;for(const b of this.actors)if(b!==a&&b.alive&&b.shieldUntil<this.time){const d=distance(a,b);if(d<enemyDist){enemy=b;enemyDist=d;}}
-  let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(a,item);if(d<lootDist){loot=item;lootDist=d;}}
+  let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,this.time)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(a,item);if(d<lootDist){loot=item;lootDist=d;}}
   let tx=a.x,ty=a.y;const reserve=this.difficulty==='easy'?5:3;
   let pad=null,padDist=520;if(!holdsPower(a,this.time))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
   a.magnet=Boolean(loot&&lootDist<270&&(enemyDist>260||a.pieces.length<3))&&!this.eventActive('polarity');a.fire=Boolean(enemy&&enemyDist<650&&a.pieces.length>reserve&&!a.magnet&&this.time>a.shieldUntil);
@@ -268,13 +268,13 @@ class MagnetWorld{
    if(item.expiresAt<=this.time){item.dead=true;continue;}if(this.time<item.pickupAt)continue;
    if(this.eventActive('polarity')){
     for(const a of this.actors){if(!a.alive||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a);
-     if(d<28&&canCollectScrap(a,item)){if(this.attach(a,item,true))item.dead=true;break;}
+     if(d<28&&canCollectScrap(a,item,this.time)){if(this.attach(a,item,true))item.dead=true;break;}
      if(a.magnet&&d<magnetRange(a)){const push=EVENT.repel*(1-d/magnetRange(a))*dt/(d||1);item.repelUntil=this.time+.22;item.vx+=(item.x-a.x)*push;item.vy+=(item.y-a.y)*push;}}
     const speed=Math.hypot(item.vx,item.vy);if(speed>540){item.vx*=540/speed;item.vy*=540/speed;}
     continue;
    }
    let puller=null,pullScore=-1,pullDist=0;
-   for(const a of this.actors){if(!a.alive||!canCollectScrap(a,item)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a),range=a.magnet?magnetRange(a,this.time):82;if(d>range)continue;const weight=(a.magnet?2.4:1)/(d+25);if(weight>pullScore){puller=a;pullScore=weight;pullDist=d;}}
+   for(const a of this.actors){if(!a.alive||!canCollectScrap(a,item,this.time)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a),range=a.magnet?magnetRange(a,this.time):82;if(d>range)continue;const weight=(a.magnet?2.4:1)/(d+25);if(weight>pullScore){puller=a;pullScore=weight;pullDist=d;}}
    if(!puller)continue;
    if(pullDist<28){if(this.attach(puller,item,true))item.dead=true;}
    else{const force=(puller.magnet?1450:500)*(1-pullDist/(puller.magnet?magnetRange(puller,this.time):82)),dx=(puller.x-item.x)/pullDist,dy=(puller.y-item.y)/pullDist;item.vx+=dx*force*dt;item.vy+=dy*force*dt;const speed=Math.hypot(item.vx,item.vy);if(speed>540){item.vx*=540/speed;item.vy*=540/speed;}}
@@ -718,7 +718,7 @@ function reconcileScrap(previous,next,now){
   next.predictInteractions=true;
   next.attach=function(actor,item){
    // When two pilots can collect the same item this frame, wait for the room's owner decision.
-   const contested=this.actors.some(other=>other!==actor&&other.alive&&canCollectScrap(other,item)&&
+   const contested=this.actors.some(other=>other!==actor&&other.alive&&canCollectScrap(other,item,this.time)&&
     !(item.ignoreId===other.id&&this.time<item.ignoreUntil)&&Math.hypot(other.x-item.x,other.y-item.y)<28);
    if(contested)return false;
    const previousCount=actor.pieces.length;
@@ -748,7 +748,7 @@ function reconcileScrap(previous,next,now){
    if(a.alive&&old.alive&&a.hp>old.hp&&!respawned)next.events.push({type:'repair'});
    if(a.kills>old.kills)next.events.push({type:'kill',name:'a rival'});
    if(a.alive&&a.powerAt>(old.powerAt||0)&&POWERS[a.powerKind]){next.events.push({type:'power',kind:POWERS[a.powerKind]});next.label(a.x,a.y-30,POWER_LABELS[POWERS[a.powerKind]],POWER_COLORS[POWERS[a.powerKind]]);}
-   if(a.alive&&a.score>old.score&&a.kills===old.kills)next.events.push({type:'collect',stolen:a.steals>old.steals});
+   if(a.alive&&a.score>old.score&&a.kills===old.kills){next.events.push({type:'collect',stolen:a.steals>old.steals});if(a.pieces.length===armorCapacity(a))next.label(a.x,a.y-30,'+'+(a.score-old.score)+' SALVAGE');}
   }
   if(online.upgrade&&(online.upgrade.round!==data.round||shipLevel(next.human)>=online.upgrade.level))online.upgrade=null;
   online.serverTime=next.time;
@@ -954,7 +954,7 @@ function reconcileScrap(previous,next,now){
  function updateHUD(){refreshUpgradePanel();const a=game.human,ranking=game.ranking(),rank=ranking.indexOf(a)+1;best=Math.max(best,a.score);$('scoreValue').textContent=fmt(a.score);$('timeValue').textContent=clock(Math.max(0,Math.ceil(game.duration-game.time)));$('clockStat').classList.toggle('urgent',game.duration-game.time<=30);$('rankValue').replaceChildren(document.createTextNode(String(rank)),Object.assign(document.createElement('small'),{textContent:` / ${ranking.length}`}));$('bestValue').textContent=fmt(best);$('hpValue').textContent=`CORE ${Math.max(0,a.hp)}/3`;
   Array.from($('healthBars').querySelectorAll('i')).forEach((el,i)=>{el.className=i<a.hp?(a.hp===1?'full hurt':'full'):'';});
   $('fireBtn').disabled=!a.alive;$('magnetBtn').disabled=!a.alive;$('fireBtn').classList.toggle('engaged',a.fire&&a.pieces.length>0);$('magnetBtn').classList.toggle('engaged',a.magnet);$('magnetBtn').setAttribute('aria-pressed',String(a.magnet));
-  let message='Collect scrap. Pick your moment.';if(!a.alive)message='Rebuilding your core…';else if(holdsPower(a,game.time)&&POWERS[a.powerKind])message=`${POWER_LABELS[POWERS[a.powerKind]]} · ${Math.ceil(a.powerUntil-game.time)}s · ${POWER_HINTS[POWERS[a.powerKind]]}`;else if(a.shieldUntil>game.time)message=`SPAWN SHIELD · ${Math.ceil(a.shieldUntil-game.time)}s · Firing ends protection`;else if(a.repair>0)message=`REPAIRING CORE · ${(3-a.repair).toFixed(1)}s`;else if(!a.pieces.length)message='NO ARMOR · Pull in loose scrap';else if(a.magnet)message='DEFENSIVE ORBIT · Magnet active';else if(a.pieces.length===armorCapacity(a))message='FULL ORBIT · Loose arena scrap still scores';$('statusLine').textContent=eventNotice()||message;$('statusLine').classList.toggle('repairing',a.repair>0);
+  let message='Collect scrap. Pick your moment.';if(!a.alive)message='Rebuilding your core…';else if(holdsPower(a,game.time)&&POWERS[a.powerKind])message=`${POWER_LABELS[POWERS[a.powerKind]]} · ${Math.ceil(a.powerUntil-game.time)}s · ${POWER_HINTS[POWERS[a.powerKind]]}`;else if(a.shieldUntil>game.time)message=`SPAWN SHIELD · ${Math.ceil(a.shieldUntil-game.time)}s · Firing ends protection`;else if(a.repair>0)message=`REPAIRING CORE · ${(3-a.repair).toFixed(1)}s`;else if(!a.pieces.length)message='NO ARMOR · Pull in loose scrap';else if(a.magnet)message='DEFENSIVE ORBIT · Magnet active';else if(a.pieces.length===armorCapacity(a))message='FULL ORBIT · Collect cooled scrap for salvage';$('statusLine').textContent=eventNotice()||message;$('statusLine').classList.toggle('repairing',a.repair>0);
   const list=$('leaders'),signature=ranking.map(p=>p.id+':'+p.name+':'+p.score).join('|');if(signature!==leaderKey){leaderKey=signature;list.replaceChildren();const visible=ranking.slice(0,6);if(!visible.includes(a))visible.push(a);for(const pilot of visible){const i=ranking.indexOf(pilot),row=document.createElement('div');row.className='leader'+(pilot.id===a.id?' you':'')+(i>=6?' separated':'');const rankEl=document.createElement('span');rankEl.className='rank';rankEl.textContent=String(i+1);const dot=document.createElement('i');dot.style.background=pilot.color;const who=document.createElement('span');who.className='who';who.textContent=pilot.name+(pilot.id===a.id?' (you)':pilot.human?' · player':'');const points=document.createElement('span');points.className='points';points.textContent=fmt(pilot.score);row.append(rankEl,dot,who,points);list.append(row);}}
   const feed=$('feed'),activeFeed=game.feed.filter(e=>game.time-e.time<10),signatureFeed=JSON.stringify(activeFeed);if(signatureFeed!==feedKey){feedKey=signatureFeed;feed.replaceChildren();for(const entry of activeFeed){const line=document.createElement('div');line.className='feed-line';line.style.borderColor=entry.color;const who=document.createElement('b');who.textContent=entry.killer;who.style.color=entry.color;line.append(who,document.createTextNode(` scrapped ${entry.victim}`));feed.append(line);}}
   // Keep the status line just above the controls, whose height changes when an upgrade is offered.
@@ -1065,7 +1065,7 @@ function reconcileScrap(previous,next,now){
   // Kept subtle: only scrap in the inner half of the range, and only the 6 nearest pieces per magnet.
   const pulled=new Map();
   for(const item of game.ground){if(item.dead||game.time<item.pickupAt||!visible(item.x,item.y,40))continue;let best=null,score=-1,bestD=0;
-   for(const a of magnets){if(!canCollectScrap(a,item))continue;if(item.ignoreId===a.id&&game.time<item.ignoreUntil)continue;const d=Math.hypot(item.x-a.x,item.y-a.y),R=magnetRange(a,game.time);if(d>R)continue;const w=2.4/(d+25);if(w>score){score=w;best=a;bestD=d;}}
+   for(const a of magnets){if(!canCollectScrap(a,item,game.time))continue;if(item.ignoreId===a.id&&game.time<item.ignoreUntil)continue;const d=Math.hypot(item.x-a.x,item.y-a.y),R=magnetRange(a,game.time);if(d>R)continue;const w=2.4/(d+25);if(w>score){score=w;best=a;bestD=d;}}
    if(!best||bestD>magnetRange(best,game.time)*.5)continue;let list=pulled.get(best);if(!list)pulled.set(best,list=[]);list.push({item,d:bestD});}
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineWidth=.8;
   for(const [a,list] of pulled){const R=magnetRange(a,game.time)*.5;ctx.strokeStyle=a.color;
