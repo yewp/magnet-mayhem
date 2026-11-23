@@ -895,16 +895,16 @@ function reconcileScrap(previous,next,now){
   for(const a of game.actors){
    if(!a.alive||!a.magnet||!visible(a.x,a.y,magnetRange(a,game.time))){fieldParticles.delete(a.id);continue;}
    const R=magnetRange(a,game.time);let list=fieldParticles.get(a.id);if(!list){list=[];fieldParticles.set(a.id,list);}
-   const want=Math.min(48,Math.round(R/7));
+   const want=Math.min(14,Math.round(R/22));
    while(list.length<want)list.push({r:R*(.55+Math.random()*.45),ang:Math.random()*Math.PI*2,spin:(Math.random()<.5?-1:1)*(.5+Math.random()*.4)});
    for(const q of list){q.pr=q.r;q.pa=q.ang;const inward=1-q.r/R;q.r-=(70+300*inward)*dt;q.ang+=q.spin*(1.1*R/(q.r+60))*dt;
     if(q.r<26){q.r=R*(.9+Math.random()*.1);q.ang=Math.random()*Math.PI*2;q.pr=q.r;q.pa=q.ang;}}
   }
  }
  function drawMagnetFx(){
-  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';ctx.lineWidth=1.6;
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';ctx.lineWidth=1.1;
   for(const [id,list] of fieldParticles){const a=game.actors.find(x=>x.id===id);if(!a)continue;const R=magnetRange(a,game.time);ctx.strokeStyle=a.color;
-   for(const q of list){const edge=Math.min(1,(R-q.r)/(R*.25));ctx.globalAlpha=.55*edge*(.35+.65*(1-q.r/R));
+   for(const q of list){const edge=Math.min(1,(R-q.r)/(R*.25));ctx.globalAlpha=.2*edge*(.35+.65*(1-q.r/R));
     ctx.beginPath();ctx.moveTo(a.x+Math.cos(q.pa)*(q.pr+4),a.y+Math.sin(q.pa)*(q.pr+4));ctx.lineTo(a.x+Math.cos(q.ang)*q.r,a.y+Math.sin(q.ang)*q.r);ctx.stroke();}}
   ctx.restore();
  }
@@ -921,15 +921,6 @@ function reconcileScrap(previous,next,now){
    for(const {item,d} of list.sort((p,q)=>p.d-q.d).slice(0,6)){const dx=a.x-item.x,dy=a.y-item.y,len=d||1,bend=Math.min(12,len*.1);
     ctx.globalAlpha=.05+.15*(1-d/R);ctx.beginPath();ctx.moveTo(item.x,item.y);
     ctx.quadraticCurveTo((item.x+a.x)/2-dy/len*bend,(item.y+a.y)/2+dx/len*bend,a.x,a.y);ctx.stroke();}}
-  ctx.restore();
- }
- // Orbiting scrap leaves fading arcs while its ship moves fast.
- function orbitTrails(){
-  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
-  for(const a of game.actors){const speed=Math.hypot(a.vx,a.vy);if(!a.alive||speed<175||!a.pieces.length||!visible(a.x,a.y,140))continue;const strength=Math.min(1,(speed-175)/60);
-   for(const p of a.pieces){const slot=orbitSlot(p.slot),radius=shieldRadius(a,slot.radius),turn=1.28*slot.spin;ctx.strokeStyle=p.item.color;ctx.beginPath();
-    for(let k=0;k<=3;k++){const back=k*.025,ang=p.angle-turn*back,x=a.x-a.vx*back+Math.cos(ang)*radius,y=a.y-a.vy*back+Math.sin(ang)*radius;if(k)ctx.lineTo(x,y);else ctx.moveTo(x,y);}
-    ctx.globalAlpha=.14*strength;ctx.lineWidth=1.5;ctx.stroke();}}
   ctx.restore();
  }
  function background(){
@@ -1084,7 +1075,7 @@ function reconcileScrap(previous,next,now){
  function reticle(){if(state!=='playing'||touchMode||!pointer.active)return;const x=cam.x+(pointer.x-width/2)/cam.zoom,y=cam.y+(pointer.y-height/2)/cam.zoom;ctx.save();ctx.strokeStyle='#d5fff48f';ctx.lineWidth=1/cam.zoom;ctx.beginPath();ctx.arc(x,y,7/cam.zoom,0,Math.PI*2);ctx.moveTo(x-12/cam.zoom,y);ctx.lineTo(x-8/cam.zoom,y);ctx.moveTo(x+8/cam.zoom,y);ctx.lineTo(x+12/cam.zoom,y);ctx.moveTo(x,y-12/cam.zoom);ctx.lineTo(x,y-8/cam.zoom);ctx.moveTo(x,y+8/cam.zoom);ctx.lineTo(x,y+12/cam.zoom);ctx.stroke();ctx.restore();}
  function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);for(const a of game.actors){if(!a.alive)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
  function joystick(){if(!touch)return;ctx.save();ctx.fillStyle='#64eee00d';ctx.strokeStyle='#a1fff34a';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(touch.sx,touch.sy,42,0,Math.PI*2);ctx.fill();ctx.stroke();const len=Math.hypot(touch.dx,touch.dy)||1,range=Math.min(35,len);ctx.fillStyle='#89fff0a0';ctx.beginPath();ctx.arc(touch.sx+touch.dx/len*range,touch.sy+touch.dy/len*range,12,0,Math.PI*2);ctx.fill();ctx.restore();}
- function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();pads();fields();drawMagnetFx();drawTethers();drawScrap();drawSmoke();orbitTrails();powerAuras();drawPilots();drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();vignette();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
+ function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();pads();fields();drawMagnetFx();drawTethers();drawScrap();drawSmoke();powerAuras();drawPilots();drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();vignette();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
  function frame(now){frames++;if(now-framesAt>=1000){
   const fps=frames*1000/(now-framesAt);
   if(online&&state==='playing'&&!document.hidden&&frames>8&&fps<45&&dpr>.75){pixelRatioCap=Math.max(.75,dpr-.25);resize();}
