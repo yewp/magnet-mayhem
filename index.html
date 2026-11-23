@@ -851,6 +851,49 @@ function reconcileScrap(previous,next,now){
   c.strokeStyle='#09131f';c.lineWidth=1;c.strokeRect(-6.5,-4.5,13,9);c.fillStyle='#ffffff4d';c.fillRect(-5.5,-3.5,10,1.3);c.fillStyle=color;c.fillRect(-2.5,2.5,5,2);
   spriteCache.set(key,sprite);return sprite;
  }
+ // Hit feedback. Hits are detected by a ship's lastHurt changing and knockouts by new
+ // kill-feed entries, so the same code works offline and with online snapshots.
+ const GLITCH_MS=340,POP_MS=1100,glitchAt=new Map(),lastHurtSeen=new Map(),popsSeen=new Set(),pops=[];
+ let glitchBuf=null;
+ function watchCombat(now){
+  for(const a of game.actors){const seen=lastHurtSeen.get(a.id);lastHurtSeen.set(a.id,a.lastHurt);
+   if(seen!=null&&a.lastHurt>seen&&game.time-a.lastHurt<.5)glitchAt.set(a.id,now);}
+  for(const e of game.feed||[]){const key=e.time.toFixed(2)+'|'+e.killer+'|'+e.victim;if(popsSeen.has(key))continue;popsSeen.add(key);
+   if(game.time-e.time>1.5)continue;
+   const victim=game.actors.find(a=>a.name===e.victim&&!a.alive)||game.actors.find(a=>a.name===e.victim);if(!victim)continue;
+   const yours=e.killer===game.human.name&&e.color===game.human.color;
+   pops.push({x:victim.x,y:victim.y-10,text:'+'+KNOCKOUT_REWARD,color:yours?'#ffd36b':e.color,big:yours,start:now});}
+  if(popsSeen.size>200)popsSeen.clear();
+  while(pops.length&&now-pops[0].start>POP_MS)pops.shift();
+ }
+ function glitchLevel(a,now){const at=glitchAt.get(a.id);if(at==null)return 0;const k=1-(now-at)/GLITCH_MS;if(k<=0){glitchAt.delete(a.id);return 0;}return k;}
+ // Tears a ship's pixels: red/cyan color-split ghosts plus horizontal slices shifted sideways.
+ function glitchSlices(a,k){
+  if(Math.random()<.2)return;
+  const m=ctx.getTransform(),scale=Math.hypot(m.a,m.b),cx=m.a*a.x+m.c*a.y+m.e,cy=m.b*a.x+m.d*a.y+m.f,r=32*scale;
+  const x0=Math.max(0,Math.floor(cx-r)),y0=Math.max(0,Math.floor(cy-r)),w=Math.min(canvas.width-x0,Math.ceil(2*r)),h=Math.min(canvas.height-y0,Math.ceil(2*r));
+  if(w<=0||h<=0)return;
+  glitchBuf??=document.createElement('canvas');if(glitchBuf.width<w||glitchBuf.height<h){glitchBuf.width=Math.max(w,glitchBuf.width);glitchBuf.height=Math.max(h,glitchBuf.height);}
+  const g=glitchBuf.getContext('2d');ctx.save();ctx.setTransform(1,0,0,1,0,0);
+  for(const [tint,dx] of [['#ff2d6f',-1],['#2df2ff',1]]){
+   g.globalCompositeOperation='copy';g.drawImage(canvas,x0,y0,w,h,0,0,w,h);
+   g.globalCompositeOperation='multiply';g.fillStyle=tint;g.fillRect(0,0,w,h);
+   ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.55*k;ctx.drawImage(glitchBuf,0,0,w,h,x0+dx*(2+5*k)*scale,y0+(Math.random()-.5)*2*scale,w,h);
+  }
+  ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
+  const bands=2+Math.floor(Math.random()*3*k+1);
+  for(let i=0;i<bands;i++){const bh=Math.max(1,Math.round((2+Math.random()*6)*scale)),by=y0+Math.floor(Math.random()*Math.max(1,h-bh)),shift=(Math.random()-.5)*2*(4+10*k)*scale;
+   ctx.drawImage(canvas,x0,by,w,bh,x0+shift,by,w,bh);
+   if(Math.random()<.5){ctx.fillStyle=Math.random()<.5?'#ff2d6f':'#2df2ff';ctx.globalAlpha=.35*k;ctx.fillRect(x0+shift,by,w,Math.max(1,bh/3));ctx.globalAlpha=1;}}
+  ctx.restore();
+ }
+ function drawPops(now){
+  for(const p of pops){const t=(now-p.start)/1000,size=p.big?28:17;
+   const scale=t<.12?.4+.95*(t/.12):t<.22?1.35-.35*((t-.12)/.1):1,alpha=t>.7?Math.max(0,1-(t-.7)/.4):1;
+   ctx.save();ctx.translate(p.x,p.y-t*48);ctx.scale(scale,scale);ctx.globalAlpha=alpha;ctx.textAlign='center';ctx.textBaseline='middle';
+   ctx.font=`850 ${size}px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;ctx.lineWidth=p.big?5:3.5;ctx.strokeStyle='#040a12';ctx.strokeText(p.text,0,0);
+   ctx.shadowColor=p.color;ctx.shadowBlur=p.big?18:8;ctx.fillStyle=p.color;ctx.fillText(p.text,0,0);ctx.restore();}
+ }
  function drawPilots(){
   const now=performance.now();
   for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,150))continue;ctx.save();const isYou=a.id===game.human.id;const outer=a.pieces.length?shieldRadius(a,Math.max(...a.pieces.map(p=>orbitSlot(p.slot).radius))):26;
@@ -861,6 +904,7 @@ function reconcileScrap(previous,next,now){
     ctx.strokeStyle=a.color+'15';ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(x,y);ctx.stroke();ctx.save();ctx.translate(x,y);ctx.rotate(p.angle+Math.PI/2);ctx.drawImage(orbitSprite(a.color,item.kind,isYou),-21,-19);ctx.restore();}
    if(a.shieldUntil>game.time){ctx.strokeStyle=a.color+'9a';ctx.lineWidth=1.4;ctx.setLineDash([4,5]);ctx.beginPath();ctx.arc(a.x,a.y,outer+13,game.time,Math.PI*2+game.time);ctx.stroke();ctx.setLineDash([]);}
    const speed=Math.hypot(a.vx,a.vy);if(speed>15){const angle=Math.atan2(a.vy,a.vx);ctx.strokeStyle=a.color+'70';ctx.lineWidth=3;for(const offset of [-.3,.3]){const x=a.x-Math.cos(angle+offset)*19,y=a.y-Math.sin(angle+offset)*19;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-Math.cos(angle)*(7+speed*.04),y-Math.sin(angle)*(7+speed*.04));ctx.stroke();}}
+   const glitch=glitchLevel(a,now);if(glitch){const j=7*glitch;ctx.save();ctx.translate((Math.random()-.5)*2*j,(Math.random()-.5)*j);}
    ctx.save();ctx.translate(a.x,a.y);ctx.rotate(a.aim);
    for(let tier=0;tier<(a.pullRank||0);tier++){
     ctx.strokeStyle='#77fff0';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,22+tier*3,Math.PI*.6,Math.PI*1.4);ctx.stroke();
@@ -872,6 +916,7 @@ function reconcileScrap(previous,next,now){
    ctx.restore();
    ctx.shadowColor=a.color+'5a';ctx.shadowBlur=isYou?17:9;polygon(a.x,a.y,18,6,a.aim);ctx.fillStyle='#102d3d';ctx.strokeStyle=a.flashUntil>game.time?'#fff3d9':a.color;ctx.lineWidth=2.3;ctx.fill();ctx.stroke();ctx.shadowBlur=0;
    ctx.fillStyle=a.hurtUntil>game.time&&Math.floor(game.time*13)%2?'#ffffff':a.color;ctx.beginPath();ctx.arc(a.x,a.y,7.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle=a.color+'99';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(a.x+Math.cos(a.aim)*21,a.y+Math.sin(a.aim)*21);ctx.lineTo(a.x+Math.cos(a.aim)*29,a.y+Math.sin(a.aim)*29);ctx.stroke();
+   if(glitch)ctx.restore();
    if(isYou&&online&&online.flashUntil>performance.now()){
     ctx.save();ctx.translate(a.x,a.y);ctx.rotate(a.aim);ctx.fillStyle='#ffdf95';
     ctx.beginPath();ctx.moveTo(23,-4);ctx.lineTo(44,0);ctx.lineTo(23,4);ctx.fill();ctx.restore();
@@ -881,13 +926,14 @@ function reconcileScrap(previous,next,now){
    if(isYou){ctx.font='600 9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.fillStyle='#b1c8d6';ctx.fillText(`${a.pieces.length} SCRAP`,a.x,a.y+outer+23);}
    if(a.repair>0){ctx.strokeStyle='#9bffdf';ctx.lineWidth=3;ctx.beginPath();ctx.arc(a.x,a.y,25,-Math.PI/2,-Math.PI/2+Math.PI*2*a.repair/3);ctx.stroke();}
    ctx.restore();
+   if(glitch)glitchSlices(a,glitch);
   }
  }
  function effects(){for(const p of game.effects){if(!visible(p.x,p.y,10))continue;ctx.globalAlpha=limit(p.life/.45,0,1);ctx.fillStyle=p.color;ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;for(const p of game.labels){if(!visible(p.x,p.y,100))continue;ctx.save();ctx.globalAlpha=Math.min(1,p.life*3);ctx.fillStyle=p.color;ctx.font='750 11px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.shadowColor='#040a12';ctx.shadowBlur=7;ctx.fillText(p.text,p.x,p.y);ctx.restore();}}
  function reticle(){if(state!=='playing'||touchMode||!pointer.active)return;const x=cam.x+(pointer.x-width/2)/cam.zoom,y=cam.y+(pointer.y-height/2)/cam.zoom;ctx.save();ctx.strokeStyle='#d5fff48f';ctx.lineWidth=1/cam.zoom;ctx.beginPath();ctx.arc(x,y,7/cam.zoom,0,Math.PI*2);ctx.moveTo(x-12/cam.zoom,y);ctx.lineTo(x-8/cam.zoom,y);ctx.moveTo(x+8/cam.zoom,y);ctx.lineTo(x+12/cam.zoom,y);ctx.moveTo(x,y-12/cam.zoom);ctx.lineTo(x,y-8/cam.zoom);ctx.moveTo(x,y+8/cam.zoom);ctx.lineTo(x,y+12/cam.zoom);ctx.stroke();ctx.restore();}
  function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);for(const a of game.actors){if(!a.alive)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
  function joystick(){if(!touch)return;ctx.save();ctx.fillStyle='#64eee00d';ctx.strokeStyle='#a1fff34a';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(touch.sx,touch.sy,42,0,Math.PI*2);ctx.fill();ctx.stroke();const len=Math.hypot(touch.dx,touch.dy)||1,range=Math.min(35,len);ctx.fillStyle='#89fff0a0';ctx.beginPath();ctx.arc(touch.sx+touch.dx/len*range,touch.sy+touch.dy/len*range,12,0,Math.PI*2);ctx.fill();ctx.restore();}
- function draw(){ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();pads();fields();drawScrap();powerAuras();drawPilots();drawShots();effects();reticle();ctx.restore();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
+ function draw(){const drawNow=performance.now();if(state!=='menu')watchCombat(drawNow);ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();pads();fields();drawScrap();powerAuras();drawPilots();drawShots();effects();drawPops(drawNow);reticle();ctx.restore();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
  function frame(now){frames++;if(now-framesAt>=1000){
   const fps=frames*1000/(now-framesAt);
   if(online&&state==='playing'&&!document.hidden&&frames>8&&fps<45&&dpr>.75){pixelRatioCap=Math.max(.75,dpr-.25);resize();}
