@@ -191,7 +191,7 @@ class MagnetWorld{
    this.shots.push({item:p.item,owner:a.id,x,y,prevX:x,prevY:y,vx:dx*railSpeed(a)+a.vx*.12,vy:dy*railSpeed(a)+a.vy*.12,life:1.2,bounces:0,seek,dead:false});
   }
   const x=a.x+Math.cos(a.aim)*26,y=a.y+Math.sin(a.aim)*26;
-  a.nextShot=this.time+MM.fireDelay*(a.magnet?2:1)*(a.human?1:this.difficulty==='easy'?1.5:this.difficulty==='hard'?.92:1.15)*(rapidRail(a,this.time)?.5:1);a.lastShot=this.time;a.shieldUntil=Math.min(a.shieldUntil,this.time);this.burst(x,y,a.color,3,70);if(a.human)this.event('shot');return true;
+  a.nextShot=this.time+MM.fireDelay*(a.human?1:this.difficulty==='easy'?1.5:this.difficulty==='hard'?.92:1.15)*(rapidRail(a,this.time)?.5:1);a.lastShot=this.time;a.shieldUntil=Math.min(a.shieldUntil,this.time);this.burst(x,y,a.color,3,70);if(a.human)this.event('shot');return true;
  }
  bound(a){a.x=limit(a.x,MM.coreRadius+4,MM.width-MM.coreRadius-4);a.y=limit(a.y,MM.coreRadius+4,MM.height-MM.coreRadius-4);for(const c of this.covers){const dx=a.x-c.x,dy=a.y-c.y,d=Math.hypot(dx,dy),r=c.r+MM.coreRadius+2;if(d<r){const len=d||1;a.x=c.x+(d?dx/len:1)*r;a.y=c.y+(d?dy/len:0)*r;}}}
  think(a,dt){
