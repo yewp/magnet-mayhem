@@ -68,27 +68,29 @@ function movingHit(x0,y0,x1,y1,tx0,ty0,tx1,ty1,r){
  if(c<=0)return 0;const a=dx*dx+dy*dy;if(a<1e-9)return null;const b=2*(ox*dx+oy*dy),disc=b*b-4*a*c;if(disc<0)return null;const t=(-b-Math.sqrt(disc))/(2*a);return t>=0&&t<=1?t:null;
 }
 const HOT_SCRAP_SECONDS=4;
-// Armor grinding: when two ships' orbits overlap, touching pieces knock each other
-// loose. Each ship loses at most one piece per cooldown, so brushing past chips armor
-// rather than wiping it. Loose pieces ignore their owner briefly, so the other ship
-// gets the first chance to steal them.
-const GRIND=Object.freeze({contact:15,cooldown:.15,speed:170,grace:.8});
 const KNOCKOUT_REWARD=75;
 const LEVEL_SCORES=[50,150,300];
 const shipLevel=a=>(a.pullRank||0)+(a.orbitRank||0)+(a.railRank||0);
 const armorCapacity=a=>MM.maxArmor+4*(a.orbitRank||0);
-// Power-ups spawn on fixed pads. Overcharge doubles magnet range and removes the
-// magnet's movement penalty; rapid rail halves the fire delay; scrap pulse knocks
-// armor off every nearby rival the moment it is collected. A pilot holding a timed
-// power-up cannot take another until it runs out.
-const POWERS=['overcharge','rapid','pulse'];
-const POWER_LABELS={overcharge:'OVERCHARGE',rapid:'RAPID RAIL',pulse:'SCRAP PULSE'};
-const POWER_COLORS={overcharge:'#7fd8ff',rapid:'#ff8a5c',pulse:'#ffd36b'};
-const POWER=Object.freeze({first:20,recharge:25,duration:8,radius:34,pulseRadius:280,pulsePieces:3});
+// Power-ups spawn on fixed pads; a pilot holds one timed ability at a time.
+//  rapid      fire twice as fast
+//  leech      drain one armor piece from the nearest rival in range every half second
+//  deflector  shots that hit your armor bounce back at the shooter; you keep the piece
+//  seeker     your shots curve toward the nearest enemy core ahead of them
+//  phase      shots pass straight through you, but you cannot fire
+//  scatter    every shot fires three pieces in a spread
+//  vortex     (instant) a swirl at the pad spins nearby loose scrap into its center
+const POWERS=['rapid','leech','deflector','seeker','phase','scatter','vortex'];
+const POWER_LABELS={rapid:'RAPID RAIL',leech:'LEECH',deflector:'DEFLECTOR',seeker:'SEEKER ROUNDS',phase:'PHASE',scatter:'SCATTER SHOT',vortex:'SCRAP VORTEX'};
+const POWER_COLORS={rapid:'#ff6b4a',leech:'#9cf04a',deflector:'#5fd4ff',seeker:'#ff5fd2',phase:'#b9a6ff',scatter:'#ffc94a',vortex:'#7a8cff'};
+const POWER=Object.freeze({first:20,recharge:25,radius:34,
+ duration:Object.freeze({rapid:8,leech:6,deflector:6,seeker:8,phase:4,scatter:8,vortex:0}),
+ leechRange:230,leechEvery:.5,seekRange:460,seekCone:1.2,seekTurn:2.6,scatterSpread:.2,vortexLife:6,vortexRadius:280});
 const PAD_SPOTS=[{x:780,y:760},{x:2060,y:960},{x:1420,y:1760}];
-const overcharged=(a,time)=>(a.overchargeUntil||0)>time;
-const rapidRail=(a,time)=>(a.rapidUntil||0)>time;
-const magnetRange=(a,time)=>MM.pullRadius*(1+.2*(a.pullRank||0))*(time!=null&&overcharged(a,time)?2:1);
+const hasPower=(a,kind,time)=>POWERS[a.powerKind]===kind&&(a.powerUntil||0)>time;
+const holdsPower=(a,time)=>(a.powerUntil||0)>time;
+const rapidRail=(a,time)=>hasPower(a,'rapid',time);
+const magnetRange=a=>MM.pullRadius*(1+.2*(a.pullRank||0));
 const railSpeed=a=>MM.shotSpeed*(1+.15*(a.railRank||0));
 function earnedLevel(actor){
  return Math.max(actor.bankedLevel||0,LEVEL_SCORES.filter(score=>actor.score>=score).length);
@@ -112,7 +114,7 @@ class MagnetWorld{
  constructor({name='You',difficulty='normal',random=Math.random,duration=MM.duration}={}){
   this.random=random;this.difficulty=difficulty;this.duration=duration;this.time=0;this.nextId=1;this.finished=false;this.ground=[];this.shots=[];this.effects=[];this.labels=[];this.events=[];this.feed=[];
   this.wells=[{x:1400,y:1100,r:65},{x:500,y:500,r:65},{x:2300,y:1700,r:65}];
-  this.pads=PAD_SPOTS.map(p=>({...p,kind:-1,readyAt:POWER.first}));
+  this.pads=PAD_SPOTS.map(p=>({...p,kind:-1,readyAt:POWER.first}));this.vortices=[];
   this.covers=[{x:1010,y:880,r:43},{x:1790,y:1320,r:43},{x:680,y:1580,r:51},{x:2120,y:620,r:51},{x:1720,y:480,r:38},{x:1080,y:1720,r:38},{x:380,y:1050,r:45},{x:2420,y:1150,r:45}];
   this.human=this.actor(name,'#64eee0',true);this.actors=[this.human];this.spawn(this.human,true,0);
   for(let i=0;i<MM.bots;i++){const a=this.actor(PILOTS[i],PALETTE[i],false);this.actors.push(a);this.spawn(a,true,i);}
@@ -120,14 +122,14 @@ class MagnetWorld{
   // A ring of easy salvage teaches collection on the first run.
   for(let i=0;i<22;i++){const a=i*.47,r=105+i*5;this.ground[i].x=1400+Math.cos(a)*r;this.ground[i].y=1100+Math.sin(a)*r;}
  }
- actor(name,color,human){return{id:this.nextId++,name,color,human,x:0,y:0,prevX:0,prevY:0,vx:0,vy:0,hp:3,alive:true,pieces:[],phase:this.random()*Math.PI*2,score:0,kills:0,deaths:0,steals:0,seen:new Set(),moveX:0,moveY:0,aim:-Math.PI/2,fire:false,magnet:false,nextShot:0,shieldUntil:0,hurtUntil:0,lastShot:-99,lastHurt:-99,repair:0,think:0,respawnAt:0,flashUntil:0,overchargeUntil:0,rapidUntil:0,powerKind:-1,powerAt:0};}
+ actor(name,color,human){return{id:this.nextId++,name,color,human,x:0,y:0,prevX:0,prevY:0,vx:0,vy:0,hp:3,alive:true,pieces:[],phase:this.random()*Math.PI*2,score:0,kills:0,deaths:0,steals:0,seen:new Set(),moveX:0,moveY:0,aim:-Math.PI/2,fire:false,magnet:false,nextShot:0,shieldUntil:0,hurtUntil:0,lastShot:-99,lastHurt:-99,repair:0,think:0,respawnAt:0,flashUntil:0,powerUntil:0,powerKind:-1,powerAt:0,leechAt:0};}
  scrap(x,y,kind=null){if(x==null||y==null){const p=this.freePoint();x=p.x;y=p.y;}if(kind==null){const n=this.random();kind=n>.94?2:n>.72?1:0;}return{id:this.nextId++,x,y,kind,color:METAL[kind],origin:0,vx:0,vy:0,pickupAt:0,ignoreId:0,ignoreUntil:0,expiresAt:this.time+65+this.random()*35,dead:false};}
  freePoint(){let p={x:1400,y:1100};for(let i=0;i<80;i++){p={x:70+this.random()*(MM.width-140),y:70+this.random()*(MM.height-140)};if(this.covers.every(c=>distance(c,p)>c.r+25))break;}return p;}
  safeSpawn(actor){let best=this.freePoint(),bestScore=-1;for(let i=0;i<45;i++){const p=this.freePoint();let d=Infinity;for(const a of this.actors)if(a!==actor&&a.alive)d=Math.min(d,distance(a,p));if(d>bestScore){best=p;bestScore=d;}if(d>550)break;}return best;}
  spawn(a,initial=false,index=0){
   a.spawnSeq=(a.spawnSeq||0)+1;
   let p;if(initial&&a.human)p={x:1400,y:1100};else if(initial){const angle=index/MM.bots*Math.PI*2,r=740+this.random()*180;p={x:limit(1400+Math.cos(angle)*r,120,MM.width-120),y:limit(1100+Math.sin(angle)*r,120,MM.height-120)};}else p=this.safeSpawn(a);
-  a.x=a.prevX=p.x;a.y=a.prevY=p.y;a.vx=a.vy=0;a.hp=3;a.alive=true;a.pieces=[];a.fire=a.magnet=false;a.shieldTightness=0;a.orbitDelay=0;a.moveX=a.moveY=0;a.shieldUntil=this.time+(a.human?3.5:2);a.hurtUntil=0;a.repair=0;a.overchargeUntil=a.rapidUntil=0;a.nextShot=this.time+(a.human?0:.3);a.think=0;
+  a.x=a.prevX=p.x;a.y=a.prevY=p.y;a.vx=a.vy=0;a.hp=3;a.alive=true;a.pieces=[];a.fire=a.magnet=false;a.shieldTightness=0;a.orbitDelay=0;a.moveX=a.moveY=0;a.shieldUntil=this.time+(a.human?3.5:2);a.hurtUntil=0;a.repair=0;a.powerUntil=0;a.leechAt=0;a.nextShot=this.time+(a.human?0:.3);a.think=0;
   const count=initial?(a.human?8:[6,9,12,15,18,20,7,11,14,22][index]):6;
   for(let i=0;i<count;i++){const item=this.scrap(a.x,a.y);item.origin=a.id;a.seen.add(item.id);this.attach(a,item,false);}
   this.bound(a);this.updateOrbits(a,true);if(a.human&&!initial)this.event('respawn');
@@ -144,11 +146,15 @@ class MagnetWorld{
  }
  drop(item,x,y,vx=0,vy=0,ignoreId=0,grace=.55,hot=false){item.x=limit(x,8,MM.width-8);item.y=limit(y,8,MM.height-8);item.vx=vx;item.vy=vy;item.dead=false;item.pickupAt=this.time+.14;item.hot=hot;item.ignoreId=ignoreId;item.ignoreUntil=this.time+grace;item.expiresAt=this.time+45;this.ground.push(item);}
  shoot(a){
-  if(this.finished||!a.alive||!a.pieces.length||this.time+1e-9<a.nextShot)return false;
-  const dx=Math.cos(a.aim),dy=Math.sin(a.aim);let index=0,best=-Infinity;
-  for(let i=0;i<a.pieces.length;i++){const p=a.pieces[i],dot=Math.cos(p.angle)*dx+Math.sin(p.angle)*dy;if(dot>best){index=i;best=dot;}}
-  const p=a.pieces.splice(index,1)[0],x=a.x+dx*26,y=a.y+dy*26;
-  this.shots.push({item:p.item,owner:a.id,x,y,prevX:x,prevY:y,vx:dx*railSpeed(a)+a.vx*.12,vy:dy*railSpeed(a)+a.vy*.12,life:1.2,bounces:0,dead:false});
+  if(this.finished||!a.alive||!a.pieces.length||this.time+1e-9<a.nextShot||hasPower(a,'phase',this.time))return false;
+  const count=hasPower(a,'scatter',this.time)?Math.min(3,a.pieces.length):1,seek=hasPower(a,'seeker',this.time);
+  for(let k=0;k<count;k++){
+   const turn=count===1?0:(k-(count-1)/2)*POWER.scatterSpread,dx=Math.cos(a.aim+turn),dy=Math.sin(a.aim+turn);let index=0,best=-Infinity;
+   for(let i=0;i<a.pieces.length;i++){const p=a.pieces[i],dot=Math.cos(p.angle)*dx+Math.sin(p.angle)*dy;if(dot>best){index=i;best=dot;}}
+   const p=a.pieces.splice(index,1)[0],x=a.x+dx*26,y=a.y+dy*26;
+   this.shots.push({item:p.item,owner:a.id,x,y,prevX:x,prevY:y,vx:dx*railSpeed(a)+a.vx*.12,vy:dy*railSpeed(a)+a.vy*.12,life:1.2,bounces:0,seek,dead:false});
+  }
+  const x=a.x+Math.cos(a.aim)*26,y=a.y+Math.sin(a.aim)*26;
   a.nextShot=this.time+MM.fireDelay*(a.human?1:this.difficulty==='easy'?1.5:this.difficulty==='hard'?.92:1.15)*(rapidRail(a,this.time)?.5:1);a.lastShot=this.time;a.shieldUntil=Math.min(a.shieldUntil,this.time);this.burst(x,y,a.color,3,70);if(a.human)this.event('shot');return true;
  }
  bound(a){a.x=limit(a.x,MM.coreRadius+4,MM.width-MM.coreRadius-4);a.y=limit(a.y,MM.coreRadius+4,MM.height-MM.coreRadius-4);for(const c of this.covers){const dx=a.x-c.x,dy=a.y-c.y,d=Math.hypot(dx,dy),r=c.r+MM.coreRadius+2;if(d<r){const len=d||1;a.x=c.x+(d?dx/len:1)*r;a.y=c.y+(d?dy/len:0)*r;}}}
@@ -157,7 +163,7 @@ class MagnetWorld{
   let enemy=null,enemyDist=Infinity;for(const b of this.actors)if(b!==a&&b.alive&&b.shieldUntil<this.time){const d=distance(a,b);if(d<enemyDist){enemy=b;enemyDist=d;}}
   let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(a,item);if(d<lootDist){loot=item;lootDist=d;}}
   let tx=a.x,ty=a.y;const reserve=this.difficulty==='easy'?5:3;
-  let pad=null,padDist=520;if(!overcharged(a,this.time)&&!rapidRail(a,this.time))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
+  let pad=null,padDist=520;if(!holdsPower(a,this.time))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
   a.magnet=Boolean(loot&&lootDist<270&&a.pieces.length<armorCapacity(a)&&(enemyDist>260||a.pieces.length<3));a.fire=Boolean(enemy&&enemyDist<650&&a.pieces.length>reserve&&!a.magnet&&this.time>a.shieldUntil);
   if(a.hp===1&&this.time-a.lastHurt>1){const well=this.wells.reduce((best,w)=>distance(a,w)<distance(a,best)?w:best);tx=well.x;ty=well.y;a.fire=false;if(distance(a,well)<30){tx=a.x;ty=a.y;}}
   else if(enemy&&enemyDist<270&&(a.pieces.length<5||a.hp===1)){tx=a.x+(a.x-enemy.x)*2;ty=a.y+(a.y-enemy.y)*2;a.magnet=false;}
@@ -168,7 +174,7 @@ class MagnetWorld{
   tx=limit(tx,70,MM.width-70);ty=limit(ty,70,MM.height-70);const dx=tx-a.x,dy=ty-a.y,len=Math.hypot(dx,dy);a.moveX=len>5?dx/len:0;a.moveY=len>5?dy/len:0;
   if(enemy){const lead=Math.min(.55,enemyDist/MM.shotSpeed),error=(this.random()-.5)*(this.difficulty==='easy'?.38:this.difficulty==='hard'?.065:.17);a.aim=Math.atan2(enemy.y+enemy.vy*lead-a.y,enemy.x+enemy.vx*lead-a.x)+error;}
  }
- move(a,dt){const speed=245/(1+a.pieces.length*.012)*(a.magnet&&!overcharged(a,this.time)?.56:1)*(a.human?1:this.difficulty==='easy'?.88:1),len=Math.hypot(a.moveX,a.moveY),scale=len>1?1/len:1,f=1-Math.exp(-dt*11);a.vx+=(a.moveX*scale*speed-a.vx)*f;a.vy+=(a.moveY*scale*speed-a.vy)*f;a.x+=a.vx*dt;a.y+=a.vy*dt;this.bound(a);}
+ move(a,dt){const speed=245/(1+a.pieces.length*.012)*(a.magnet?.56:1)*(a.human?1:this.difficulty==='easy'?.88:1),len=Math.hypot(a.moveX,a.moveY),scale=len>1?1/len:1,f=1-Math.exp(-dt*11);a.vx+=(a.moveX*scale*speed-a.vx)*f;a.vy+=(a.moveY*scale*speed-a.vy)*f;a.x+=a.vx*dt;a.y+=a.vy*dt;this.bound(a);}
  hitCore(a,owner){
   if(!a.alive||a.shieldUntil>this.time||a.hurtUntil>this.time)return false;a.hp--;a.hurtUntil=this.time+.6;a.lastHurt=this.time;a.flashUntil=this.time+.25;a.repair=0;
   this.burst(a.x,a.y,a.color,20,180);this.label(a.x,a.y-25,'CORE HIT','#ff9e8d');
@@ -183,7 +189,9 @@ class MagnetWorld{
   this.burst(a.x,a.y,a.color,35,260);if(a.human)this.event('death',{name:killer?.name||'a rival'});
  }
  updateShots(dt){
-  for(const s of this.shots){if(s.dead)continue;s.prevX=s.x;s.prevY=s.y;s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;
+  for(const s of this.shots){if(s.dead)continue;
+   if(s.seek)this.steerSeeker(s,dt);
+   s.prevX=s.x;s.prevY=s.y;s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;
 
    let first=Infinity,hit=null;
    const test=(t,object)=>{if(t!=null&&t<first){first=t;hit=object;}};
@@ -191,12 +199,14 @@ class MagnetWorld{
    test(wallTime(s.prevX,s.x,5,MM.width-5),{kind:'wall'});
    test(wallTime(s.prevY,s.y,5,MM.height-5),{kind:'wall'});
    for(const c of this.covers)test(movingHit(s.prevX,s.prevY,s.x,s.y,c.x,c.y,c.x,c.y,c.r+4),{kind:'cover'});
-   for(const a of this.actors){if(!a.alive||a.id===s.owner||a.shieldUntil>this.time)continue;
+   for(const a of this.actors){if(!a.alive||a.id===s.owner||a.shieldUntil>this.time||hasPower(a,'phase',this.time))continue;
     for(const p of a.pieces)test(movingHit(s.prevX,s.prevY,s.x,s.y,p.prevX,p.prevY,p.x,p.y,11),{kind:'armor',a,p});
     test(movingHit(s.prevX,s.prevY,s.x,s.y,a.prevX,a.prevY,a.x,a.y,MM.coreRadius+4),{kind:'core',a});
    }
    if(hit){s.x=s.prevX+(s.x-s.prevX)*first;s.y=s.prevY+(s.y-s.prevY)*first;
 
+    // Capped so two deflectors cannot bounce a shot back and forth forever.
+    if(hit.kind==='armor'&&hasPower(hit.a,'deflector',this.time)&&s.bounces<3){this.deflect(s,hit.a);continue;}
     if(hit.kind==='armor'){const index=hit.a.pieces.indexOf(hit.p);if(index>=0){hit.a.pieces.splice(index,1);this.drop(hit.p.item,hit.p.x,hit.p.y,s.vx*.15+(this.random()-.5)*120,s.vy*.15+(this.random()-.5)*120,hit.a.id,HOT_SCRAP_SECONDS,true);this.burst(s.x,s.y,'#ffcf85',10,130);if(s.owner===this.human.id)this.event('strip');}}
     else if(hit.kind==='core')this.hitCore(hit.a,s.owner);
     else this.burst(s.x,s.y,'#9bb3c8',5,70);
@@ -208,6 +218,9 @@ class MagnetWorld{
   for(const item of this.ground){if(item.dead)continue;
    item.x+=item.vx*dt;item.y+=item.vy*dt;item.vx*=Math.exp(-2.4*dt);item.vy*=Math.exp(-2.4*dt);item.x=limit(item.x,7,MM.width-7);item.y=limit(item.y,7,MM.height-7);
    for(const cover of this.covers){const dx=item.x-cover.x,dy=item.y-cover.y,d=Math.hypot(dx,dy);if(d<cover.r+8){const len=d||1;item.x=cover.x+(d?dx/len:1)*(cover.r+9);item.y=cover.y+(d?dy/len:0)*(cover.r+9);}}
+   for(const v of this.vortices){const dx=v.x-item.x,dy=v.y-item.y,d=Math.hypot(dx,dy)||1;if(d>POWER.vortexRadius)continue;
+    const pull=(120+900*(1-d/POWER.vortexRadius))*dt;item.vx+=(dx/d-dy/d*.6)*pull;item.vy+=(dy/d+dx/d*.6)*pull;
+    if(d<45){item.vx*=Math.exp(-6*dt);item.vy*=Math.exp(-6*dt);}const speed=Math.hypot(item.vx,item.vy);if(speed>420){item.vx*=420/speed;item.vy*=420/speed;}}
    if(item.expiresAt<=this.time){item.dead=true;continue;}if(this.time<item.pickupAt)continue;
    let puller=null,pullScore=-1,pullDist=0;
    for(const a of this.actors){if(!a.alive||a.pieces.length>=armorCapacity(a)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a),range=a.magnet?magnetRange(a,this.time):82;if(d>range)continue;const weight=(a.magnet?2.4:1)/(d+25);if(weight>pullScore){puller=a;pullScore=weight;pullDist=d;}}
@@ -223,8 +236,7 @@ class MagnetWorld{
   for(const a of this.actors){if(!a.alive)continue;a.prevX=a.x;a.prevY=a.y;for(const p of a.pieces){p.prevX=p.x;p.prevY=p.y;}if(!a.human)this.think(a,dt);if(a.human&&this.humanMovementStep)this.humanMovementStep(a,dt);else this.move(a,dt);}
   for(let i=0;i<this.actors.length;i++){const a=this.actors[i];if(!a.alive)continue;for(let j=i+1;j<this.actors.length;j++){const b=this.actors[j];if(!b.alive)continue;const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d<33){const len=d||1,px=(d?dx/len:1)*(33-d)*.5,py=(d?dy/len:0)*(33-d)*.5;a.x-=px;a.y-=py;b.x+=px;b.y+=py;this.bound(a);this.bound(b);}}}
   for(const a of this.actors)if(a.alive){advanceShield(a,dt);this.updateOrbits(a);if(a.fire)this.shoot(a);}
-  this.grindArmor();
-  this.updateShots(dt);this.updateScrap(dt);this.updatePads();
+  this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updatePads();this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
   for(const a of this.actors){if(!a.alive){if(this.time>=a.respawnAt)this.spawn(a);continue;}
    const canRepair=a.hp<3&&this.time-a.lastHurt>2&&this.time-a.lastShot>1.5&&this.wells.some(w=>distance(a,w)<w.r-9);
    if(canRepair){a.repair+=dt;if(a.repair>=3){a.hp++;a.repair=0;this.burst(a.x,a.y,'#7af2d0',12,80);if(a.human)this.event('repair');}}else a.repair=0;
@@ -233,44 +245,55 @@ class MagnetWorld{
   for(const p of this.labels){p.y-=dt*22;p.life-=dt;}this.labels=this.labels.filter(p=>p.life>0);
   if(this.time>=this.duration){this.time=this.duration;this.finished=true;this.event('finished');}
  }
- grindArmor(){
-  const live=this.actors.filter(a=>a.alive&&a.pieces.length&&a.shieldUntil<=this.time);
-  for(let i=0;i<live.length;i++)for(let j=i+1;j<live.length;j++){
-   const a=live[i],b=live[j];
-   if(!a.pieces.length||!b.pieces.length||this.time<(a.grindAt||0)||this.time<(b.grindAt||0))continue;
-   if(distance(a,b)>shieldRadius(a,110)+shieldRadius(b,110)+GRIND.contact)continue;
-   let hit=null,closest=GRIND.contact;
-   for(const p of a.pieces)for(const q of b.pieces){const d=Math.hypot(p.x-q.x,p.y-q.y);if(d<closest){closest=d;hit=[p,q];}}
-   if(!hit)continue;
-   for(const [owner,piece] of [[a,hit[0]],[b,hit[1]]]){
-    owner.pieces.splice(owner.pieces.indexOf(piece),1);
-    const ang=Math.atan2(piece.y-owner.y,piece.x-owner.x);
-    this.drop(piece.item,piece.x,piece.y,Math.cos(ang)*GRIND.speed,Math.sin(ang)*GRIND.speed,owner.id,GRIND.grace,true);
-    owner.grindAt=this.time+GRIND.cooldown;owner.grinds=(owner.grinds||0)+1;
-   }
-   this.burst((hit[0].x+hit[1].x)/2,(hit[0].y+hit[1].y)/2,'#ffcf85',8,150);
-   if(a===this.human||b===this.human)this.event('grind');
-  }
- }
  updatePads(){
   for(const pad of this.pads||[]){
    if(pad.kind<0){if(this.time>=pad.readyAt)pad.kind=Math.floor(this.random()*POWERS.length);continue;}
-   const taker=this.actors.find(a=>a.alive&&distance(a,pad)<POWER.radius&&!overcharged(a,this.time)&&!rapidRail(a,this.time));
+   const taker=this.actors.find(a=>a.alive&&distance(a,pad)<POWER.radius&&!holdsPower(a,this.time));
    if(!taker)continue;
-   const kind=POWERS[pad.kind];pad.kind=-1;pad.readyAt=this.time+POWER.recharge;this.empower(taker,kind);
+   const kind=POWERS[pad.kind];pad.kind=-1;pad.readyAt=this.time+POWER.recharge;this.empower(taker,kind,pad);
   }
  }
- empower(a,kind){
-  a.powerKind=POWERS.indexOf(kind);a.powerAt=this.time;
-  if(kind==='overcharge')a.overchargeUntil=this.time+POWER.duration;
-  else if(kind==='rapid'){a.rapidUntil=this.time+POWER.duration;a.nextShot=Math.min(a.nextShot,this.time);}
-  else for(const b of this.actors){
-   if(b===a||!b.alive||b.shieldUntil>this.time||distance(a,b)>POWER.pulseRadius)continue;
-   for(let i=0;i<POWER.pulsePieces&&b.pieces.length;i++){const p=b.pieces.pop(),ang=Math.atan2(p.y-b.y,p.x-b.x);this.drop(p.item,p.x,p.y,Math.cos(ang)*260,Math.sin(ang)*260,b.id,HOT_SCRAP_SECONDS,true);}
-   this.burst(b.x,b.y,'#ffcf85',8,150);
-  }
+ empower(a,kind,at=a){
+  a.powerKind=POWERS.indexOf(kind);a.powerAt=this.time;a.powerUntil=this.time+POWER.duration[kind];
+  if(kind==='rapid')a.nextShot=Math.min(a.nextShot,this.time);
+  if(kind==='leech')a.leechAt=this.time;
+  if(kind==='vortex'){this.vortices??=[];this.vortices.push({x:at.x,y:at.y,until:this.time+POWER.vortexLife,owner:a.id});}
   this.burst(a.x,a.y,POWER_COLORS[kind],24,200);this.label(a.x,a.y-30,POWER_LABELS[kind],POWER_COLORS[kind]);
   if(a===this.human)this.event('power',{kind});
+ }
+ // The rival a leeching pilot drains: the nearest one in range with armor to take.
+ leechTarget(a){
+  let target=null,best=POWER.leechRange;
+  for(const b of this.actors){if(b===a||!b.alive||!b.pieces.length||b.shieldUntil>this.time||hasPower(b,'phase',this.time))continue;const d=distance(a,b);if(d<best){best=d;target=b;}}
+  return target;
+ }
+ updateLeech(){
+  for(const a of this.actors){
+   if(!a.alive||!hasPower(a,'leech',this.time)||this.time<(a.leechAt||0)||a.pieces.length>=armorCapacity(a))continue;
+   const target=this.leechTarget(a);if(!target)continue;
+   const p=target.pieces.pop();a.leechAt=this.time+POWER.leechEvery;
+   this.burst(p.x,p.y,POWER_COLORS.leech,6,90);
+   if(!this.attach(a,p.item,true))this.drop(p.item,p.x,p.y,0,0,target.id,HOT_SCRAP_SECONDS,true);
+   if(a===this.human)this.event('leech');else if(target===this.human)this.event('leeched');
+  }
+ }
+ // Seeker shots turn toward the nearest enemy core within reach and roughly ahead.
+ steerSeeker(s,dt){
+  const heading=Math.atan2(s.vy,s.vx),speed=Math.hypot(s.vx,s.vy);let target=null,best=POWER.seekRange;
+  for(const a of this.actors){if(!a.alive||a.id===s.owner||a.shieldUntil>this.time||hasPower(a,'phase',this.time))continue;
+   const d=Math.hypot(a.x-s.x,a.y-s.y);if(d>=best)continue;let off=Math.atan2(a.y-s.y,a.x-s.x)-heading;off=Math.atan2(Math.sin(off),Math.cos(off));
+   if(Math.abs(off)<POWER.seekCone){best=d;target=off;}}
+  if(target==null)return;
+  const turn=Math.max(-POWER.seekTurn*dt,Math.min(POWER.seekTurn*dt,target)),angle=heading+turn;
+  s.vx=Math.cos(angle)*speed;s.vy=Math.sin(angle)*speed;
+ }
+ // A deflected shot keeps its speed, aims back at the shooter, and now belongs to the defender.
+ deflect(s,defender){
+  const shooter=this.actors.find(a=>a.id===s.owner),speed=Math.hypot(s.vx,s.vy)||MM.shotSpeed;
+  const angle=shooter?.alive?Math.atan2(shooter.y-s.y,shooter.x-s.x):Math.atan2(-s.vy,-s.vx);
+  s.vx=Math.cos(angle)*speed;s.vy=Math.sin(angle)*speed;s.prevX=s.x;s.prevY=s.y;s.owner=defender.id;s.life=Math.max(s.life,.9);s.bounces++;s.seek=false;
+  this.burst(s.x,s.y,POWER_COLORS.deflector,10,140);
+  if(defender===this.human||shooter===this.human)this.event('deflect');
  }
  ranking(){return this.actors.slice().sort((a,b)=>b.score-a.score||b.kills-a.kills||b.pieces.length-a.pieces.length);}
 }
@@ -278,10 +301,12 @@ class MagnetWorld{
 // Orbit positions, particle effects, and colors are rebuilt locally rather than
 // transferred as hundreds of redundant objects on every update.
 const WIRE_METALS=['#9dbbd5','#efae72','#ffda79'];
-const WIRE_ACTOR_FIELDS=['id','name','color','human','x','y','vx','vy','hp','alive','phase','score','kills','deaths','steals','aim','fire','magnet','shieldUntil','hurtUntil','lastShot','lastHurt','repair','respawnAt','flashUntil','spawnSeq','moveX','moveY','pullRank','orbitRank','railRank','shieldTightness','orbitDelay','bankedLevel','overchargeUntil','rapidUntil','powerKind','powerAt'];
+const WIRE_ACTOR_FIELDS=['id','name','color','human','x','y','vx','vy','hp','alive','phase','score','kills','deaths','steals','aim','fire','magnet','shieldUntil','hurtUntil','lastShot','lastHurt','repair','respawnAt','flashUntil','spawnSeq','moveX','moveY','pullRank','orbitRank','railRank','shieldTightness','orbitDelay','bankedLevel','powerUntil','powerKind','powerAt'];
 // Power-up pads: [x, y, kind (-1 while charging), readyAt].
 const wirePads=w=>(w.pads||[]).map(p=>[p.x,p.y,p.kind,Math.round(p.readyAt*10)/10]);
 const unwirePads=list=>(list||[]).map(([x,y,kind,readyAt])=>({x,y,kind,readyAt}));
+const wireVortices=w=>(w.vortices||[]).map(v=>[Math.round(v.x),Math.round(v.y),Math.round(v.until*100)/100,v.owner]);
+const unwireVortices=list=>(list||[]).map(([x,y,until,owner])=>({x,y,until,owner}));
 const wireRound=n=>Math.round((Number(n)||0)*10)/10;
 function wireVisibility(w,selfId,view){
  const self=w.actors.find(a=>a.id===selfId),vw=Number(view?.width),vh=Number(view?.height);
@@ -291,17 +316,17 @@ function wireVisibility(w,selfId,view){
 }
 function encodeWireWorld(w,selfId,view){
  const visible=wireVisibility(w,selfId,view);
- return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),
+ return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),
   a:w.actors.map(a=>[WIRE_ACTOR_FIELDS.map(k=>a[k]??0),a.pieces.map(p=>[p.slot,p.item.id,p.item.kind])]),
   g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.hot?[1]:[])]),
-  s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces])};
+  s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.seek?[1]:[])])};
 }
 function decodeWireWorld(w){
  if(w?.wire!==2)return w;
- return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),effects:[],labels:[],
+ return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),effects:[],labels:[],
   actors:w.a.map(([values,pieces])=>{const a=Object.fromEntries(WIRE_ACTOR_FIELDS.map((k,i)=>[k,values[i]]));a.pieces=pieces.map(([slot,id,kind])=>({slot,item:{id,kind,color:WIRE_METALS[kind]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0}));return a;}),
   ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0])=>({id,x,y,kind,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot})),
-  shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces}))};
+  shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,seek:seek===1}))};
 }
 
 // Wire 3 is for a WebSocket, where every message arrives in order. The arena keeps
@@ -314,7 +339,7 @@ const WIRE3_KEYFRAME_TICKS=40;
 const WIRE3_ACTOR_FIELDS=WIRE_ACTOR_FIELDS.filter(k=>!['name','color','human'].includes(k));
 const WIRE3_BOOLEANS=new Set(['alive','fire','magnet']);
 const WIRE3_DIGITS={x:2,y:2,vx:1,vy:1,phase:3,aim:3,moveX:3,moveY:3,shieldTightness:3,orbitDelay:3,
- shieldUntil:2,hurtUntil:2,lastShot:2,lastHurt:2,repair:2,respawnAt:2,flashUntil:2,overchargeUntil:2,rapidUntil:2,powerAt:2};
+ shieldUntil:2,hurtUntil:2,lastShot:2,lastHurt:2,repair:2,respawnAt:2,flashUntil:2,powerUntil:2,powerAt:2};
 const WIRE3_EXACT=new Set(['x','y','vx','vy']);
 const wireDigits=(n,d)=>{const f=10**d;return Math.round((Number(n)||0)*f)/f;};
 // Trailing zeros are implied by the decoder's defaults.
@@ -324,7 +349,7 @@ class WireSender{
  encode(w,selfId,view){
   const key=this.ticks++%WIRE3_KEYFRAME_TICKS===0,visible=wireVisibility(w,selfId,view),t=w.time;
   if(key)this.pieces.clear();
-  const out={wire:3,time:w.time,finished:w.finished,pads:wirePads(w)};
+  const out={wire:3,time:w.time,finished:w.finished,pads:wirePads(w),vx:wireVortices(w)};
   if(key)Object.assign(out,{key:1,duration:w.duration,difficulty:w.difficulty,wells:w.wells,covers:w.covers});
   const feed=JSON.stringify(w.feed);if(key||feed!==this.feed){out.feed=w.feed;this.feed=feed;}
   const roster=w.actors.map(a=>[a.id,a.name,a.color,a.human?1:0]),rosterText=JSON.stringify(roster);
@@ -340,7 +365,7 @@ class WireSender{
   // Pickup and ignore windows that already ended are sent as zero.
   out.g=w.ground.filter(visible).map(p=>{const ignoring=p.ignoreUntil>t;return wireTrim([p.id,wireDigits(p.x,1),wireDigits(p.y,1),p.kind,wireDigits(p.expiresAt,1),
    wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0]);});
-  out.s=w.shots.filter(visible).map(s=>wireTrim([s.item.id,s.item.kind,s.owner,wireDigits(s.x,1),wireDigits(s.y,1),wireDigits(s.vx,1),wireDigits(s.vy,1),wireDigits(s.life,3),s.bounces]));
+  out.s=w.shots.filter(visible).map(s=>wireTrim([s.item.id,s.item.kind,s.owner,wireDigits(s.x,1),wireDigits(s.y,1),wireDigits(s.vx,1),wireDigits(s.vy,1),wireDigits(s.life,3),s.bounces,s.seek?1:0]));
   return out;
  }
 }
@@ -362,9 +387,9 @@ class WireReceiver{
    a.pieces=[];for(let i=0;i<pieces.length;i+=3)a.pieces.push({slot:pieces[i],item:{id:pieces[i+1],kind:pieces[i+2],color:WIRE_METALS[pieces[i+2]]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0});
    actors.push(a);
   }
-  return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),effects:[],labels:[],actors,
+  return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),effects:[],labels:[],actors,
    ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0])=>({id,x,y,kind,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot})),
-   shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces}))};
+   shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,seek:seek===1}))};
  }
 }
 // Shared fixed-step movement. Render interpolation never changes this state.
@@ -388,10 +413,8 @@ function movementCopy(a) {
 // Contact with other ships is deliberately NOT predicted: their positions are a
 // snapshot old, and pushing off stale positions caused more corrections than it
 // removed (measured with a 240 ms round trip while ramming bots).
-// Overcharge (no magnet slowdown) is replayed the same way.
 function predictMovementCommand(world, physics, command) {
   if (Number.isInteger(command.pieces)) physics.pieces = {length: command.pieces};
-  physics.overchargeUntil = command.overcharged ? Infinity : 0;
   applyMovementCommand(world, physics, command);
 }
 class MovementPrediction {
@@ -415,7 +438,7 @@ class MovementPrediction {
     while (this.accumulator + 1e-9 >= MOVEMENT_TICK && this.pending.length < MAX_PENDING_MOVES) {
       const command = {seq:++this.seq, life:actor.spawnSeq||0,
         x:controls.x,y:controls.y,aim:controls.aim,fire:!!controls.fire,magnet:!!controls.magnet,
-        pieces:actor.pieces.length,overcharged:(actor.overchargeUntil||0)>world.time};
+        pieces:actor.pieces.length};
       predictMovementCommand(world, this.physics, command);
       this.pending.push(command);
       this.accumulator -= MOVEMENT_TICK;
@@ -451,9 +474,9 @@ class MovementPrediction {
     actor.y = this.physics.y + this.offsetY + this.physics.vy*this.accumulator;
     actor.vx = this.physics.vx; actor.vy = this.physics.vy;
   }
-  // Wire form: scrap count and overcharge are local replay hints; the server uses its own.
+  // Wire form: the scrap count is a local replay hint; the server uses its own.
   commands(after = 0) {
-    return this.pending.filter(c => c.seq > after).slice(0, MAX_PENDING_MOVES).map(({pieces, overcharged, ...c}) => c);
+    return this.pending.filter(c => c.seq > after).slice(0, MAX_PENDING_MOVES).map(({pieces, ...c}) => c);
   }
 }
 
@@ -662,10 +685,9 @@ function reconcileScrap(previous,next,now){
   online.nextFeedback=now+MM.fireDelay*1000*(rapidRail(pilot,game.time)?.5:1);
   online.flashUntil=now+85;
   pilot.nextShot=game.time;
+  const firstNew=game.shots.length;
   if(game.shoot(pilot)){
-   const shot=game.shots.at(-1);
-   shot.request=online.seq+1;
-   online.pendingShots.push(shot);
+   for(const shot of game.shots.slice(firstNew)){shot.request=online.seq+1;online.pendingShots.push(shot);}
   }
   // shoot() queues the local sound.
  }
@@ -829,7 +851,7 @@ function reconcileScrap(previous,next,now){
  function updateHUD(){refreshUpgradePanel();const a=game.human,ranking=game.ranking(),rank=ranking.indexOf(a)+1;best=Math.max(best,a.score);$('scoreValue').textContent=fmt(a.score);$('timeValue').textContent=clock(Math.max(0,Math.ceil(game.duration-game.time)));$('clockStat').classList.toggle('urgent',game.duration-game.time<=30);$('rankValue').replaceChildren(document.createTextNode(String(rank)),Object.assign(document.createElement('small'),{textContent:` / ${ranking.length}`}));$('bestValue').textContent=fmt(best);$('hpValue').textContent=`CORE ${Math.max(0,a.hp)}/3`;
   Array.from($('healthBars').querySelectorAll('i')).forEach((el,i)=>{el.className=i<a.hp?(a.hp===1?'full hurt':'full'):'';});
   $('fireBtn').disabled=!a.alive;$('magnetBtn').disabled=!a.alive;$('fireBtn').classList.toggle('engaged',a.fire&&a.pieces.length>0);$('magnetBtn').classList.toggle('engaged',a.magnet);$('magnetBtn').setAttribute('aria-pressed',String(a.magnet));
-  let message='Collect scrap. Pick your moment.';if(!a.alive)message='Rebuilding your core…';else if(overcharged(a,game.time))message=`OVERCHARGE · ${Math.ceil(a.overchargeUntil-game.time)}s · Double magnet range`;else if(rapidRail(a,game.time))message=`RAPID RAIL · ${Math.ceil(a.rapidUntil-game.time)}s · Double fire rate`;else if(a.shieldUntil>game.time)message=`SPAWN SHIELD · ${Math.ceil(a.shieldUntil-game.time)}s · Firing ends protection`;else if(a.repair>0)message=`REPAIRING CORE · ${(3-a.repair).toFixed(1)}s`;else if(!a.pieces.length)message='NO ARMOR · Pull in loose scrap';else if(a.magnet)message='DEFENSIVE ORBIT · Magnet active';else if(a.pieces.length===armorCapacity(a))message='FULL ORBIT · Spend some armor to attack';$('statusLine').textContent=message;$('statusLine').classList.toggle('repairing',a.repair>0);
+  let message='Collect scrap. Pick your moment.';if(!a.alive)message='Rebuilding your core…';else if(holdsPower(a,game.time)&&POWERS[a.powerKind])message=`${POWER_LABELS[POWERS[a.powerKind]]} · ${Math.ceil(a.powerUntil-game.time)}s · ${POWER_HINTS[POWERS[a.powerKind]]}`;else if(a.shieldUntil>game.time)message=`SPAWN SHIELD · ${Math.ceil(a.shieldUntil-game.time)}s · Firing ends protection`;else if(a.repair>0)message=`REPAIRING CORE · ${(3-a.repair).toFixed(1)}s`;else if(!a.pieces.length)message='NO ARMOR · Pull in loose scrap';else if(a.magnet)message='DEFENSIVE ORBIT · Magnet active';else if(a.pieces.length===armorCapacity(a))message='FULL ORBIT · Spend some armor to attack';$('statusLine').textContent=message;$('statusLine').classList.toggle('repairing',a.repair>0);
   const list=$('leaders'),signature=ranking.map(p=>p.id+':'+p.name+':'+p.score).join('|');if(signature!==leaderKey){leaderKey=signature;list.replaceChildren();const visible=ranking.slice(0,6);if(!visible.includes(a))visible.push(a);for(const pilot of visible){const i=ranking.indexOf(pilot),row=document.createElement('div');row.className='leader'+(pilot.id===a.id?' you':'')+(i>=6?' separated':'');const rankEl=document.createElement('span');rankEl.className='rank';rankEl.textContent=String(i+1);const dot=document.createElement('i');dot.style.background=pilot.color;const who=document.createElement('span');who.className='who';who.textContent=pilot.name+(pilot.id===a.id?' (you)':pilot.human?' · player':'');const points=document.createElement('span');points.className='points';points.textContent=fmt(pilot.score);row.append(rankEl,dot,who,points);list.append(row);}}
   const feed=$('feed'),activeFeed=game.feed.filter(e=>game.time-e.time<10),signatureFeed=JSON.stringify(activeFeed);if(signatureFeed!==feedKey){feedKey=signatureFeed;feed.replaceChildren();for(const entry of activeFeed){const line=document.createElement('div');line.className='feed-line';line.style.borderColor=entry.color;const who=document.createElement('b');who.textContent=entry.killer;who.style.color=entry.color;line.append(who,document.createTextNode(` scrapped ${entry.victim}`));feed.append(line);}}
   // Keep the status line just above the controls, whose height changes when an upgrade is offered.
@@ -838,7 +860,7 @@ function reconcileScrap(previous,next,now){
   $('rebuildPanel').hidden=a.alive||state!=='playing';if(!a.alive)$('rebuildTime').textContent=Math.max(0,a.respawnAt-game.time).toFixed(1);if(best>storedBest&&Math.floor(game.time)%5===0)save();
  }
  function finish(){const rank=game.ranking().indexOf(game.human)+1;best=Math.max(best,game.human.score);save();$('finishTitle').textContent=rank===1?'You owned the scrapyard.':'That was mayhem.';$('finishCopy').textContent=rank===1?'A full orbit, a steady aim, and a scrapyard full of spare parts.':`${game.ranking()[0].name} took the top spot. There is always another round.`;$('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
- function events(){for(const e of game.events){if(e.type==='shot')play('shot');if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip'||e.type==='grind')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast({overcharge:'OVERCHARGE: double magnet range, no magnet slowdown.',rapid:'RAPID RAIL: fire twice as fast.',pulse:'SCRAP PULSE: rivals nearby lost armor. Grab it!'}[e.kind]||'Power-up!');play('power');}}game.events.length=0;}
+ function events(){for(const e of game.events){if(e.type==='shot')play('shot');if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');}game.events.length=0;}
  function visible(x,y,r=50){return Math.abs(x-cam.x)<width/(2*cam.zoom)+r&&Math.abs(y-cam.y)<height/(2*cam.zoom)+r;}
  function polygon(x,y,r,sides,angle=0){ctx.beginPath();for(let i=0;i<sides;i++){const a=angle+i/sides*Math.PI*2,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;if(i)ctx.lineTo(px,py);else ctx.moveTo(px,py);}ctx.closePath();}
  // ---- Arena depth and combat effects (drawing only; nothing here changes the game) ----
@@ -1024,8 +1046,29 @@ function reconcileScrap(previous,next,now){
     ctx.fillStyle='#7fa3b8b0';ctx.font='600 9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillText(Math.ceil(left)+'s',pad.x,pad.y+46);}
    ctx.restore();}
  }
- function powerAuras(){for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,120))continue;const kind=overcharged(a,game.time)?'overcharge':rapidRail(a,game.time)?'rapid':null;if(!kind)continue;
-  ctx.save();ctx.strokeStyle=POWER_COLORS[kind];ctx.globalAlpha=.45+Math.sin(game.time*8)*.2;ctx.lineWidth=2.5;ctx.shadowColor=POWER_COLORS[kind];ctx.shadowBlur=12;ctx.beginPath();ctx.arc(a.x,a.y,24,0,Math.PI*2);ctx.stroke();ctx.restore();}}
+ const POWER_HINTS={rapid:'Double fire rate',leech:'Draining the nearest rival',deflector:'Shots bounce off your armor',seeker:'Shots curve toward enemies',phase:'Untouchable, cannot fire',scatter:'Three pieces per shot',vortex:'Scrap swirls to the pad'};
+ const POWER_TOASTS={rapid:'RAPID RAIL: fire twice as fast.',leech:'LEECH: you drain armor from the nearest rival in range.',deflector:'DEFLECTOR: shots that hit your armor bounce back.',seeker:'SEEKER ROUNDS: your shots curve toward enemies.',phase:'PHASE: shots pass through you, but you cannot fire.',scatter:'SCATTER SHOT: every shot fires three pieces.',vortex:'SCRAP VORTEX: loose scrap is swirling into the pad. Go claim it!'};
+ function powerAuras(){
+  for(const a of game.actors){if(!a.alive||!holdsPower(a,game.time)||!visible(a.x,a.y,260))continue;const kind=POWERS[a.powerKind];if(!kind)continue;const color=POWER_COLORS[kind],t=performance.now()/1000;
+   ctx.save();ctx.strokeStyle=color;ctx.globalAlpha=.45+Math.sin(t*8)*.2;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(a.x,a.y,24,0,Math.PI*2);ctx.stroke();
+   if(kind==='deflector'){const outer=a.pieces.length?shieldRadius(a,Math.max(...a.pieces.map(p=>orbitSlot(p.slot).radius)))+14:40;ctx.globalAlpha=.35+.15*Math.sin(t*5);ctx.lineWidth=2;polygon(a.x,a.y,outer,6,t*.4);ctx.stroke();}
+   if(kind==='leech'){const target=game.leechTarget?.(a);if(target){ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
+    for(const [w,al] of [[6,.12],[2,.6]]){ctx.lineWidth=w;ctx.globalAlpha=al;ctx.beginPath();ctx.moveTo(target.x,target.y);
+     for(let k=1;k<=12;k++){const f=k/12,wob=Math.sin(f*Math.PI*3-t*14)*8*Math.sin(f*Math.PI),dx=a.x-target.x,dy=a.y-target.y,len=Math.hypot(dx,dy)||1;ctx.lineTo(target.x+dx*f-dy/len*wob,target.y+dy*f+dx/len*wob);}ctx.stroke();}}}
+   if(kind==='scatter'||kind==='seeker'||kind==='rapid'){ctx.globalAlpha=.5;ctx.lineWidth=2;for(let k=0;k<3;k++){const ang=a.aim+(k-1)*(kind==='scatter'?.2:0);ctx.beginPath();ctx.moveTo(a.x+Math.cos(ang)*30,a.y+Math.sin(ang)*30);ctx.lineTo(a.x+Math.cos(ang)*(38+k*(kind==='scatter'?0:4)),a.y+Math.sin(ang)*(38+k*(kind==='scatter'?0:4)));ctx.stroke();if(kind!=='scatter')break;}}
+   ctx.restore();}
+ }
+ // Scrap vortices: spiral arms turning around a dark center, with a ring showing time left.
+ function drawVortices(){
+  const t=performance.now()/1000;
+  for(const v of game.vortices||[]){const R=POWER.vortexRadius;if(!visible(v.x,v.y,R))continue;const left=Math.max(0,v.until-game.time),fade=Math.min(1,left/.6),color=POWER_COLORS.vortex;
+   ctx.save();ctx.globalAlpha=.22*fade;ctx.drawImage(softSprite(color),v.x-R,v.y-R,R*2,R*2);
+   ctx.globalCompositeOperation='lighter';ctx.strokeStyle=color;ctx.lineCap='round';
+   for(let arm=0;arm<3;arm++){ctx.globalAlpha=.18*fade;ctx.lineWidth=1.5;ctx.beginPath();for(let k=0;k<=28;k++){const f=k/28,r=18+f*(R*.75-30),ang=arm*Math.PI*2/3+t*2.2-f*3.4;const x=v.x+Math.cos(ang)*r,y=v.y+Math.sin(ang)*r;if(k)ctx.lineTo(x,y);else ctx.moveTo(x,y);}ctx.stroke();}
+   ctx.globalCompositeOperation='source-over';ctx.globalAlpha=.85*fade;ctx.fillStyle='#050b14';ctx.beginPath();ctx.arc(v.x,v.y,16,0,Math.PI*2);ctx.fill();
+   ctx.strokeStyle=color;ctx.lineWidth=3;ctx.beginPath();ctx.arc(v.x,v.y,22,-Math.PI/2,-Math.PI/2+Math.PI*2*left/POWER.vortexLife);ctx.stroke();
+   ctx.restore();}
+ }
  function fields(){for(const a of game.actors){if(!a.alive||!a.magnet||!visible(a.x,a.y,magnetRange(a,game.time)))continue;const range=magnetRange(a,game.time);ctx.save();const grad=ctx.createRadialGradient(a.x,a.y,30,a.x,a.y,range);grad.addColorStop(0,a.color+'15');grad.addColorStop(.75,a.color+'07');grad.addColorStop(1,a.color+'00');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(a.x,a.y,range,0,Math.PI*2);ctx.fill();ctx.strokeStyle=a.color+'35';ctx.lineWidth=1;ctx.setLineDash([3,11]);ctx.beginPath();ctx.arc(a.x,a.y,range,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<3;i++){const t=(game.time*.75+i/3)%1,r=range*(1-t);ctx.globalAlpha=.07*(1-t);ctx.strokeStyle=a.color;ctx.beginPath();ctx.arc(a.x,a.y,r,0,Math.PI*2);ctx.stroke();}ctx.restore();}}
  function scrapSprite(color,kind){
   const key='ground:'+color+':'+kind;
@@ -1059,7 +1102,7 @@ function reconcileScrap(previous,next,now){
    ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';ctx.strokeStyle=color;
    for(let i=1;i<trail.length;i++){const f=i/trail.length;ctx.globalAlpha=.55*f;ctx.lineWidth=1+5*f;ctx.beginPath();ctx.moveTo(trail[i-1].x,trail[i-1].y);ctx.lineTo(trail[i].x,trail[i].y);ctx.stroke();}
    ctx.globalAlpha=.9;ctx.lineWidth=1.4;ctx.strokeStyle='#ffffff';const prev=trail.at(-2);if(prev){ctx.beginPath();ctx.moveTo(prev.x,prev.y);ctx.lineTo(s.x,s.y);ctx.stroke();}
-   ctx.restore();ctx.save();ctx.translate(s.x,s.y);ctx.rotate(Math.atan2(s.vy,s.vx));ctx.shadowColor=s.item.color;ctx.shadowBlur=10;ctx.fillStyle=s.item.color;ctx.fillRect(-6,-3,12,6);ctx.shadowBlur=0;ctx.fillStyle='#fff3d1';ctx.fillRect(3,-2,3,4);ctx.restore();}
+   ctx.restore();if(s.seek){ctx.save();ctx.strokeStyle=POWER_COLORS.seeker;ctx.globalAlpha=.8;ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(s.x,s.y,9,0,Math.PI*2);ctx.stroke();ctx.restore();}ctx.save();ctx.translate(s.x,s.y);ctx.rotate(Math.atan2(s.vy,s.vx));ctx.shadowColor=s.item.color;ctx.shadowBlur=10;ctx.fillStyle=s.item.color;ctx.fillRect(-6,-3,12,6);ctx.shadowBlur=0;ctx.fillStyle='#fff3d1';ctx.fillRect(3,-2,3,4);ctx.restore();}
   for(const id of shotTrails.keys())if(!live.has(id))shotTrails.delete(id);
  }
  function orbitSprite(color,kind,focus){
@@ -1114,7 +1157,7 @@ function reconcileScrap(previous,next,now){
  }
  function drawPilots(){
   const now=performance.now();
-  for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,150))continue;ctx.save();const isYou=a.id===game.human.id;const outer=a.pieces.length?shieldRadius(a,Math.max(...a.pieces.map(p=>orbitSlot(p.slot).radius))):26;
+  for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,150))continue;ctx.save();const isYou=a.id===game.human.id;if(hasPower(a,'phase',game.time))ctx.globalAlpha=.35+.12*Math.sin(now/90);const outer=a.pieces.length?shieldRadius(a,Math.max(...a.pieces.map(p=>orbitSlot(p.slot).radius))):26;
    if(isYou){ctx.fillStyle='#64eee006';ctx.beginPath();ctx.arc(a.x,a.y,outer+13,0,Math.PI*2);ctx.fill();}
    const rings=new Set(a.pieces.map(p=>orbitSlot(p.slot).radius));for(const r of rings){ctx.strokeStyle=a.color+'1c';ctx.lineWidth=1;ctx.beginPath();ctx.arc(a.x,a.y,shieldRadius(a,r),0,Math.PI*2);ctx.stroke();}
    for(const p of a.pieces){const item=p.item,blend=scrapBlend(p,now);
@@ -1149,9 +1192,9 @@ function reconcileScrap(previous,next,now){
  }
  function effects(){for(const p of game.effects){if(!visible(p.x,p.y,10))continue;ctx.globalAlpha=limit(p.life/.45,0,1);ctx.fillStyle=p.color;ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;for(const p of game.labels){if(!visible(p.x,p.y,100))continue;ctx.save();ctx.globalAlpha=Math.min(1,p.life*3);ctx.fillStyle=p.color;ctx.font='750 11px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.shadowColor='#040a12';ctx.shadowBlur=7;ctx.fillText(p.text,p.x,p.y);ctx.restore();}}
  function reticle(){if(state!=='playing'||touchMode||!pointer.active)return;const x=cam.x+(pointer.x-width/2)/cam.zoom,y=cam.y+(pointer.y-height/2)/cam.zoom;ctx.save();ctx.strokeStyle='#d5fff48f';ctx.lineWidth=1/cam.zoom;ctx.beginPath();ctx.arc(x,y,7/cam.zoom,0,Math.PI*2);ctx.moveTo(x-12/cam.zoom,y);ctx.lineTo(x-8/cam.zoom,y);ctx.moveTo(x+8/cam.zoom,y);ctx.lineTo(x+12/cam.zoom,y);ctx.moveTo(x,y-12/cam.zoom);ctx.lineTo(x,y-8/cam.zoom);ctx.moveTo(x,y+8/cam.zoom);ctx.lineTo(x,y+12/cam.zoom);ctx.stroke();ctx.restore();}
- function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);for(const a of game.actors){if(!a.alive)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
+ function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}for(const v of game.vortices||[]){mc.strokeStyle=POWER_COLORS.vortex;mc.lineWidth=2;mc.beginPath();mc.arc(v.x*sx,v.y*sy,POWER.vortexRadius*sx,0,Math.PI*2);mc.stroke();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);for(const a of game.actors){if(!a.alive)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
  function joystick(){if(!touch)return;ctx.save();ctx.fillStyle='#64eee00d';ctx.strokeStyle='#a1fff34a';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(touch.sx,touch.sy,42,0,Math.PI*2);ctx.fill();ctx.stroke();const len=Math.hypot(touch.dx,touch.dy)||1,range=Math.min(35,len);ctx.fillStyle='#89fff0a0';ctx.beginPath();ctx.arc(touch.sx+touch.dx/len*range,touch.sy+touch.dy/len*range,12,0,Math.PI*2);ctx.fill();ctx.restore();}
- function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();pads();fields();drawMagnetFx();drawTethers();drawScrap();drawSmoke();powerAuras();drawPilots();drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();vignette();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
+ function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawSmoke();powerAuras();drawPilots();drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();vignette();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
  function frame(now){frames++;if(now-framesAt>=1000){
   const fps=frames*1000/(now-framesAt);
   if(online&&state==='playing'&&!document.hidden&&frames>8&&fps<45&&dpr>.75){pixelRatioCap=Math.max(.75,dpr-.25);resize();}
