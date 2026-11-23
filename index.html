@@ -67,6 +67,7 @@ function movingHit(x0,y0,x1,y1,tx0,ty0,tx1,ty1,r){
  const ox=x0-tx0,oy=y0-ty0,dx=x1-x0-(tx1-tx0),dy=y1-y0-(ty1-ty0),c=ox*ox+oy*oy-r*r;
  if(c<=0)return 0;const a=dx*dx+dy*dy;if(a<1e-9)return null;const b=2*(ox*dx+oy*dy),disc=b*b-4*a*c;if(disc<0)return null;const t=(-b-Math.sqrt(disc))/(2*a);return t>=0&&t<=1?t:null;
 }
+const DEFLECT_TRAIL_SECONDS=.35;
 const HOT_SCRAP_SECONDS=4;
 const KNOCKOUT_REWARD=75;
 const LEVEL_SCORES=[50,150,300];
@@ -354,7 +355,7 @@ class MagnetWorld{
  deflect(s,defender){
   const shooter=this.actors.find(a=>a.id===s.owner),speed=Math.hypot(s.vx,s.vy)||MM.shotSpeed;
   const angle=shooter?.alive?Math.atan2(shooter.y-s.y,shooter.x-s.x):Math.atan2(-s.vy,-s.vx);
-  s.vx=Math.cos(angle)*speed;s.vy=Math.sin(angle)*speed;s.prevX=s.x;s.prevY=s.y;s.owner=defender.id;s.life=Math.max(s.life,.9);s.bounces++;s.seek=false;
+  s.vx=Math.cos(angle)*speed;s.vy=Math.sin(angle)*speed;s.prevX=s.x;s.prevY=s.y;s.owner=defender.id;s.life=Math.max(s.life,.9);s.bounces++;s.seek=false;s.deflectTrailUntil=this.time+DEFLECT_TRAIL_SECONDS;
   this.burst(s.x,s.y,POWER_COLORS.deflector,10,140);
   if(defender===this.human||shooter===this.human)this.event('deflect');
  }
@@ -433,14 +434,14 @@ function encodeWireWorld(w,selfId,view){
  return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),ev:wireEvent(w),
   a:w.actors.map(a=>[WIRE_ACTOR_FIELDS.map(k=>a[k]??0),a.pieces.map(p=>[p.slot,p.item.id,p.item.kind])]),
   g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.origin?[Number(Boolean(p.hot)),p.repelUntil>w.time?r2(p.repelUntil):0,p.origin]:p.repelUntil>w.time?[Number(Boolean(p.hot)),r2(p.repelUntil)]:p.hot?[1]:[])]),
-  s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.seek?[1]:[])])};
+  s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.deflectTrailUntil>w.time?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil)]:s.seek?[1]:[])])};
 }
 function decodeWireWorld(w){
  if(w?.wire!==2)return w;
  return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],
   actors:w.a.map(([values,pieces])=>{const a=Object.fromEntries(WIRE_ACTOR_FIELDS.map((k,i)=>[k,values[i]]));a.pieces=pieces.map(([slot,id,kind])=>({slot,item:{id,kind,color:WIRE_METALS[kind]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0}));return a;}),
   ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
-  shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,seek:seek===1}))};
+  shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0,deflectTrailUntil=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,seek:seek===1}))};
 }
 
 // Wire 3 is for a WebSocket, where every message arrives in order. The arena keeps
@@ -479,7 +480,7 @@ class WireSender{
   // Pickup and ignore windows that already ended are sent as zero.
   out.g=w.ground.filter(visible).map(p=>{const ignoring=p.ignoreUntil>t;return wireTrim([p.id,wireDigits(p.x,1),wireDigits(p.y,1),p.kind,wireDigits(p.expiresAt,1),
    wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0,p.repelUntil>t?r2(p.repelUntil):0,p.origin||0]);});
-  out.s=w.shots.filter(visible).map(s=>wireTrim([s.item.id,s.item.kind,s.owner,wireDigits(s.x,1),wireDigits(s.y,1),wireDigits(s.vx,1),wireDigits(s.vy,1),wireDigits(s.life,3),s.bounces,s.seek?1:0]));
+  out.s=w.shots.filter(visible).map(s=>wireTrim([s.item.id,s.item.kind,s.owner,wireDigits(s.x,1),wireDigits(s.y,1),wireDigits(s.vx,1),wireDigits(s.vy,1),wireDigits(s.life,3),s.bounces,s.seek?1:0,s.deflectTrailUntil>t?r2(s.deflectTrailUntil):0]));
   return out;
  }
 }
@@ -503,7 +504,7 @@ class WireReceiver{
   }
   return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],actors,
    ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
-   shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,seek:seek===1}))};
+   shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0,deflectTrailUntil=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,seek:seek===1}))};
  }
 }
 // Shared fixed-step movement. Render interpolation never changes this state.
@@ -1213,14 +1214,25 @@ function reconcileScrap(previous,next,now){
  }
  function drawShots(){
   const live=new Set();
-  for(const s of game.shots){const id=s.item.id;live.add(id);let trail=shotTrails.get(id);if(!trail){trail=[];shotTrails.set(id,trail);}
+  for(const s of game.shots){const id=s.item.id;live.add(id);let trail=shotTrails.get(id);if(!trail||trail.bounces!==s.bounces){trail=[];trail.bounces=s.bounces;shotTrails.set(id,trail);}
    const tip=trail.at(-1);if(!tip||Math.hypot(tip.x-s.x,tip.y-s.y)>3){trail.push({x:s.x,y:s.y});if(trail.length>11)trail.shift();}
    if(!visible(s.x,s.y,160))continue;const owner=game.actors.find(a=>a.id===s.owner),color=owner?.color||'#ffb37d';
    ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';ctx.strokeStyle=color;
    for(let i=1;i<trail.length;i++){const f=i/trail.length;ctx.globalAlpha=.55*f;ctx.lineWidth=1+5*f;ctx.beginPath();ctx.moveTo(trail[i-1].x,trail[i-1].y);ctx.lineTo(trail[i].x,trail[i].y);ctx.stroke();}
    ctx.globalAlpha=.9;ctx.lineWidth=1.4;ctx.strokeStyle='#ffffff';const prev=trail.at(-2);if(prev){ctx.beginPath();ctx.moveTo(prev.x,prev.y);ctx.lineTo(s.x,s.y);ctx.stroke();}
-   ctx.restore();if(s.seek){ctx.save();ctx.strokeStyle=POWER_COLORS.seeker;ctx.globalAlpha=.8;ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(s.x,s.y,9,0,Math.PI*2);ctx.stroke();ctx.restore();}ctx.save();ctx.translate(s.x,s.y);ctx.rotate(Math.atan2(s.vy,s.vx));ctx.shadowColor=s.item.color;ctx.shadowBlur=10;ctx.fillStyle=s.item.color;ctx.fillRect(-6,-3,12,6);ctx.shadowBlur=0;ctx.fillStyle='#fff3d1';ctx.fillRect(3,-2,3,4);ctx.restore();}
+   ctx.restore();if(s.deflectTrailUntil>game.time)drawDeflectTrail(s);
+   if(s.seek){ctx.save();ctx.strokeStyle=POWER_COLORS.seeker;ctx.globalAlpha=.8;ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(s.x,s.y,9,0,Math.PI*2);ctx.stroke();ctx.restore();}ctx.save();ctx.translate(s.x,s.y);ctx.rotate(Math.atan2(s.vy,s.vx));ctx.shadowColor=s.item.color;ctx.shadowBlur=10;ctx.fillStyle=s.item.color;ctx.fillRect(-6,-3,12,6);ctx.shadowBlur=0;ctx.fillStyle='#fff3d1';ctx.fillRect(3,-2,3,4);ctx.restore();}
   for(const id of shotTrails.keys())if(!live.has(id))shotTrails.delete(id);
+ }
+ function drawDeflectTrail(shot){
+  const left=limit((shot.deflectTrailUntil-game.time)/DEFLECT_TRAIL_SECONDS,0,1);
+  const speed=Math.hypot(shot.vx,shot.vy);
+  const length=Math.min(56,8+speed*DEFLECT_TRAIL_SECONDS*(1-left));
+  ctx.save();ctx.translate(shot.x,shot.y);ctx.rotate(Math.atan2(shot.vy,shot.vx));
+  ctx.globalAlpha=Math.min(1,left*3);ctx.shadowColor='#178cff';ctx.shadowBlur=9;
+  const glow=ctx.createLinearGradient(-length,0,0,0);
+  glow.addColorStop(0,'rgba(30,106,255,0)');glow.addColorStop(.45,'#208bff');glow.addColorStop(1,'#8feaff');
+  ctx.fillStyle=glow;ctx.beginPath();ctx.moveTo(-length,0);ctx.lineTo(0,-4);ctx.lineTo(0,4);ctx.closePath();ctx.fill();ctx.restore();
  }
  function orbitSprite(color,kind,focus){
   const key=color+':'+kind+':'+focus;if(spriteCache.has(key))return spriteCache.get(key);
