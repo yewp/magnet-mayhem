@@ -911,21 +911,25 @@ function reconcileScrap(previous,next,now){
  // A thin curved line from each loose piece of scrap to the magnet pulling it (same choice rule as the engine).
  function drawTethers(){
   const magnets=game.actors.filter(a=>a.alive&&a.magnet&&a.pieces.length<armorCapacity(a));if(!magnets.length)return;
-  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineWidth=1.1;
-  for(const item of game.ground){if(item.dead||game.time<item.pickupAt||!visible(item.x,item.y,40))continue;let best=null,score=-1;
-   for(const a of magnets){if(item.ignoreId===a.id&&game.time<item.ignoreUntil)continue;const d=Math.hypot(item.x-a.x,item.y-a.y),R=magnetRange(a,game.time);if(d>R)continue;const w=2.4/(d+25);if(w>score){score=w;best=a;}}
-   if(!best)continue;const dx=best.x-item.x,dy=best.y-item.y,d=Math.hypot(dx,dy)||1,bend=Math.min(30,d*.18);
-   ctx.globalAlpha=.08+.24*(1-d/magnetRange(best,game.time));ctx.strokeStyle=best.color;ctx.beginPath();ctx.moveTo(item.x,item.y);
-   ctx.quadraticCurveTo((item.x+best.x)/2-dy/d*bend,(item.y+best.y)/2+dx/d*bend,best.x,best.y);ctx.stroke();}
+  // Kept subtle: only scrap in the inner half of the range, and only the 6 nearest pieces per magnet.
+  const pulled=new Map();
+  for(const item of game.ground){if(item.dead||game.time<item.pickupAt||!visible(item.x,item.y,40))continue;let best=null,score=-1,bestD=0;
+   for(const a of magnets){if(item.ignoreId===a.id&&game.time<item.ignoreUntil)continue;const d=Math.hypot(item.x-a.x,item.y-a.y),R=magnetRange(a,game.time);if(d>R)continue;const w=2.4/(d+25);if(w>score){score=w;best=a;bestD=d;}}
+   if(!best||bestD>magnetRange(best,game.time)*.5)continue;let list=pulled.get(best);if(!list)pulled.set(best,list=[]);list.push({item,d:bestD});}
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineWidth=.8;
+  for(const [a,list] of pulled){const R=magnetRange(a,game.time)*.5;ctx.strokeStyle=a.color;
+   for(const {item,d} of list.sort((p,q)=>p.d-q.d).slice(0,6)){const dx=a.x-item.x,dy=a.y-item.y,len=d||1,bend=Math.min(12,len*.1);
+    ctx.globalAlpha=.05+.15*(1-d/R);ctx.beginPath();ctx.moveTo(item.x,item.y);
+    ctx.quadraticCurveTo((item.x+a.x)/2-dy/len*bend,(item.y+a.y)/2+dx/len*bend,a.x,a.y);ctx.stroke();}}
   ctx.restore();
  }
  // Orbiting scrap leaves fading arcs while its ship moves fast.
  function orbitTrails(){
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
-  for(const a of game.actors){const speed=Math.hypot(a.vx,a.vy);if(!a.alive||speed<130||!a.pieces.length||!visible(a.x,a.y,140))continue;const strength=Math.min(1,(speed-130)/110);
+  for(const a of game.actors){const speed=Math.hypot(a.vx,a.vy);if(!a.alive||speed<175||!a.pieces.length||!visible(a.x,a.y,140))continue;const strength=Math.min(1,(speed-175)/60);
    for(const p of a.pieces){const slot=orbitSlot(p.slot),radius=shieldRadius(a,slot.radius),turn=1.28*slot.spin;ctx.strokeStyle=p.item.color;ctx.beginPath();
-    for(let k=0;k<=5;k++){const back=k*.028,ang=p.angle-turn*back,x=a.x-a.vx*back+Math.cos(ang)*radius,y=a.y-a.vy*back+Math.sin(ang)*radius;if(k)ctx.lineTo(x,y);else ctx.moveTo(x,y);}
-    ctx.globalAlpha=.32*strength;ctx.lineWidth=2.4;ctx.stroke();}}
+    for(let k=0;k<=3;k++){const back=k*.025,ang=p.angle-turn*back,x=a.x-a.vx*back+Math.cos(ang)*radius,y=a.y-a.vy*back+Math.sin(ang)*radius;if(k)ctx.lineTo(x,y);else ctx.moveTo(x,y);}
+    ctx.globalAlpha=.14*strength;ctx.lineWidth=1.5;ctx.stroke();}}
   ctx.restore();
  }
  function background(){
