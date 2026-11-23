@@ -89,15 +89,21 @@ const POWER=Object.freeze({first:20,recharge:25,radius:34,
 // Arena events: the first is announced 20 s in, then one every 35-45 s (never the
 // same kind twice in a row), each announced a few seconds before it starts.
 //  rain      scrap falls at marked spots over 6 s, some of it where players are
-//  jackpot   a crate bursts into ~35 mostly rare pieces after a 5 s countdown
+//  jackpot   four panels release loot on impact; remaining loot spills at expiry
 //  blackout  8 s of darkness (drawing only); bots aim worse while it lasts
-//  polarity  8 s where magnets push loose scrap away and nothing is pulled in;
+//  polarity  16 s where magnets push loose scrap away and nothing is pulled in;
 //            scrap is still collected by flying right into it
-const EVENTS=['rain','jackpot','blackout','polarity'];
-const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY'};
-const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c'};
+const EVENTS=['rain','jackpot','blackout','polarity','comet'];
+const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY',comet:'SCRAP COMET'};
+const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c',comet:'#80efff'};
 const EVENT=Object.freeze({first:20,gapMin:35,gapMax:45,warn:3,jackpotWarn:5,
- length:Object.freeze({rain:6,jackpot:1,blackout:8,polarity:8}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
+ length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:14}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
+const CRATE_RADIUS=28;
+const CRATE_NORMALS=[[1,0],[0,1],[-1,0],[0,-1]];
+function cometPoint(e,progress){
+ const t=limit(progress,0,1);
+ return {x:e.x+(e.toX-e.x)*t,y:e.y+(e.toY-e.y)*t};
+}
 const PAD_SPOTS=[{x:780,y:760},{x:2060,y:960},{x:1420,y:1760}];
 const hasPower=(a,kind,time)=>POWERS[a.powerKind]===kind&&(a.powerUntil||0)>time;
 const holdsPower=(a,time)=>(a.powerUntil||0)>time;
@@ -136,7 +142,7 @@ class MagnetWorld{
  }
  actor(name,color,human){return{id:this.nextId++,name,color,human,x:0,y:0,prevX:0,prevY:0,vx:0,vy:0,hp:3,alive:true,pieces:[],phase:this.random()*Math.PI*2,score:0,kills:0,deaths:0,steals:0,seen:new Set(),moveX:0,moveY:0,aim:-Math.PI/2,fire:false,magnet:false,nextShot:0,shieldUntil:0,hurtUntil:0,lastShot:-99,lastHurt:-99,repair:0,think:0,respawnAt:0,flashUntil:0,powerUntil:0,powerKind:-1,powerAt:0,leechAt:0};}
  scrap(x,y,kind=null){if(x==null||y==null){const p=this.freePoint();x=p.x;y=p.y;}if(kind==null){const n=this.random();kind=n>.94?2:n>.72?1:0;}return{id:this.nextId++,x,y,kind,color:METAL[kind],origin:0,vx:0,vy:0,pickupAt:0,ignoreId:0,ignoreUntil:0,expiresAt:this.time+65+this.random()*35,dead:false};}
- freePoint(){let p={x:1400,y:1100};for(let i=0;i<80;i++){p={x:70+this.random()*(MM.width-140),y:70+this.random()*(MM.height-140)};if(this.covers.every(c=>distance(c,p)>c.r+25))break;}return p;}
+ freePoint(clearance=25){let p={x:1400,y:1100};for(let i=0;i<80;i++){p={x:70+this.random()*(MM.width-140),y:70+this.random()*(MM.height-140)};if(this.covers.every(c=>distance(c,p)>c.r+clearance))break;}return p;}
  safeSpawn(actor){let best=this.freePoint(),bestScore=-1;for(let i=0;i<45;i++){const p=this.freePoint();let d=Infinity;for(const a of this.actors)if(a!==actor&&a.alive)d=Math.min(d,distance(a,p));if(d>bestScore){best=p;bestScore=d;}if(d>550)break;}return best;}
  spawn(a,initial=false,index=0){
   a.spawnSeq=(a.spawnSeq||0)+1;
@@ -177,7 +183,7 @@ class MagnetWorld{
   let tx=a.x,ty=a.y;const reserve=this.difficulty==='easy'?5:3;
   let pad=null,padDist=520;if(!holdsPower(a,this.time))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
   a.magnet=Boolean(loot&&lootDist<270&&a.pieces.length<armorCapacity(a)&&(enemyDist>260||a.pieces.length<3))&&!this.eventActive('polarity');a.fire=Boolean(enemy&&enemyDist<650&&a.pieces.length>reserve&&!a.magnet&&this.time>a.shieldUntil);
-  const jackpot=this.arenaEvent?.kind==='jackpot'&&!this.arenaEvent.fired&&distance(a,this.arenaEvent)<900?this.arenaEvent:null;
+  const jackpot=this.arenaEvent?.kind==='jackpot'&&this.arenaEvent.panels&&distance(a,this.arenaEvent)<900?this.arenaEvent:null;
   if(a.hp===1&&this.time-a.lastHurt>1){const well=this.wells.reduce((best,w)=>distance(a,w)<distance(a,best)?w:best);tx=well.x;ty=well.y;a.fire=false;if(distance(a,well)<30){tx=a.x;ty=a.y;}}
   else if(enemy&&enemyDist<270&&(a.pieces.length<5||a.hp===1)){tx=a.x+(a.x-enemy.x)*2;ty=a.y+(a.y-enemy.y)*2;a.magnet=false;}
   else if(jackpot){tx=jackpot.x;ty=jackpot.y;}
@@ -212,6 +218,18 @@ class MagnetWorld{
    // Compare boundary contact with armor, cores and cover on the same swept path.
    test(wallTime(s.prevX,s.x,5,MM.width-5),{kind:'wall'});
    test(wallTime(s.prevY,s.y,5,MM.height-5),{kind:'wall'});
+   const crate=this.arenaEvent;
+   if(this.eventActive('jackpot') && crate.panels){
+    for(const [side,[nx,ny]] of CRATE_NORMALS.entries()){
+     if(!(crate.panels & (1<<side)))continue;
+     const dx=s.x-s.prevX,dy=s.y-s.prevY,along=dx*nx+dy*ny;
+     if(!along)continue;
+     const t=(CRATE_RADIUS-(s.prevX-crate.x)*nx-(s.prevY-crate.y)*ny)/along;
+     if(t<0||t>1)continue;
+     const across=(s.prevX+dx*t-crate.x)*ny-(s.prevY+dy*t-crate.y)*nx;
+     if(Math.abs(across)<=CRATE_RADIUS)test(t,{kind:'crate',side});
+    }
+   }
    for(const c of this.covers)test(movingHit(s.prevX,s.prevY,s.x,s.y,c.x,c.y,c.x,c.y,c.r+4),{kind:'cover'});
    for(const a of this.actors){if(!a.alive||a.id===s.owner||a.shieldUntil>this.time||hasPower(a,'phase',this.time))continue;
     for(const p of a.pieces)test(movingHit(s.prevX,s.prevY,s.x,s.y,p.prevX,p.prevY,p.x,p.y,11),{kind:'armor',a,p});
@@ -222,6 +240,13 @@ class MagnetWorld{
     // Capped so two deflectors cannot bounce a shot back and forth forever.
     if(hit.kind==='armor'&&hasPower(hit.a,'deflector',this.time)&&s.bounces<3){this.deflect(s,hit.a);continue;}
     if(hit.kind==='armor'){const index=hit.a.pieces.indexOf(hit.p);if(index>=0){hit.a.pieces.splice(index,1);this.drop(hit.p.item,hit.p.x,hit.p.y,s.vx*.15+(this.random()-.5)*120,s.vy*.15+(this.random()-.5)*120,hit.a.id,HOT_SCRAP_SECONDS,true);this.burst(s.x,s.y,'#ffcf85',10,130);if(s.owner===this.human.id)this.event('strip');}}
+    else if(hit.kind==='crate'){
+     if(!this.predictInteractions){
+      crate.panels &= ~(1<<hit.side);
+      this.spillCrate(crate,hit.side);
+     }
+     this.burst(s.x,s.y,EVENT_COLORS.jackpot,10,100);
+    }
     else if(hit.kind==='core')this.hitCore(hit.a,s.owner);
     else this.burst(s.x,s.y,'#9bb3c8',5,70);
     this.drop(s.item,s.x,s.y,-s.vx*.12,-s.vy*.12,hit.a?.id??s.owner,hit.a?HOT_SCRAP_SECONDS:.45,Boolean(hit.a));s.dead=true;
@@ -239,7 +264,7 @@ class MagnetWorld{
    if(this.eventActive('polarity')){
     for(const a of this.actors){if(!a.alive||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a);
      if(d<28&&a.pieces.length<armorCapacity(a)){if(this.attach(a,item,true))item.dead=true;break;}
-     if(a.magnet&&d<magnetRange(a)){const push=EVENT.repel*(1-d/magnetRange(a))*dt/(d||1);item.vx+=(item.x-a.x)*push;item.vy+=(item.y-a.y)*push;}}
+     if(a.magnet&&d<magnetRange(a)){const push=EVENT.repel*(1-d/magnetRange(a))*dt/(d||1);item.repelUntil=this.time+.22;item.vx+=(item.x-a.x)*push;item.vy+=(item.y-a.y)*push;}}
     const speed=Math.hypot(item.vx,item.vy);if(speed>540){item.vx*=540/speed;item.vy*=540/speed;}
     continue;
    }
@@ -316,10 +341,19 @@ class MagnetWorld{
   this.burst(s.x,s.y,POWER_COLORS.deflector,10,140);
   if(defender===this.human||shooter===this.human)this.event('deflect');
  }
+ spillCrate(e,side){
+  const count=Math.floor(EVENT.jackpotPieces/4)+(side<EVENT.jackpotPieces%4?1:0);
+  for(let i=0;i<count;i++){
+   const roll=this.random(),angle=side*Math.PI/2+(this.random()-.5)*1.25,speed=120+this.random()*260;
+   const [nx,ny]=CRATE_NORMALS[side];
+   const item=this.scrap(e.x+nx*CRATE_RADIUS,e.y+ny*CRATE_RADIUS,roll<.4?2:roll<.75?1:0);
+   item.vx=Math.cos(angle)*speed;item.vy=Math.sin(angle)*speed;item.pickupAt=this.time+.2;this.ground.push(item);
+  }
+ }
  eventActive(kind){const e=this.arenaEvent;return Boolean(e)&&e.kind===kind&&this.time>=e.start&&this.time<e.end;}
  updateEvents(){
   const e=this.arenaEvent;
-  if(e&&this.time>=e.end){this.arenaEvent=null;this.nextEventAt=this.time+EVENT.gapMin+this.random()*(EVENT.gapMax-EVENT.gapMin);return;}
+  if(e&&this.time>=e.end){if(e.kind==='jackpot')for(let side=0;side<4;side++){if(e.panels & (1<<side))this.spillCrate(e,side);}this.arenaEvent=null;this.nextEventAt=this.time+EVENT.gapMin+this.random()*(EVENT.gapMax-EVENT.gapMin);return;}
   if(!e){
    if(this.nextEventAt==null)this.nextEventAt=EVENT.first;
    if(this.time<this.nextEventAt)return;
@@ -327,7 +361,13 @@ class MagnetWorld{
    const start=this.time+(kind==='jackpot'?EVENT.jackpotWarn:EVENT.warn),end=start+EVENT.length[kind];
    if(end>this.duration-2){this.nextEventAt=Infinity;return;}
    const next={kind,start,end,x:0,y:0,drops:[],fired:false};
-   if(kind==='jackpot'){const p=this.freePoint();next.x=limit(p.x,300,MM.width-300);next.y=limit(p.y,300,MM.height-300);}
+   if(kind==='jackpot'){const p=this.freePoint(55);next.x=p.x;next.y=p.y;next.panels=15;}
+   if(kind==='comet'){
+    const flip=this.random()<.5;
+    next.x=flip?90:MM.width-90;next.toX=MM.width-next.x;
+    next.y=180+this.random()*(MM.height-360);next.toY=180+this.random()*(MM.height-360);
+    next.dropped=0;
+   }
    if(kind==='rain'){const alive=this.actors.filter(a=>a.alive);
     for(let i=0;i<EVENT.rainDrops;i++){let p;
      if(i%4===0&&alive.length){const a=alive[Math.floor(this.random()*alive.length)];p={x:limit(a.x+(this.random()-.5)*360,60,MM.width-60),y:limit(a.y+(this.random()-.5)*360,60,MM.height-60)};}
@@ -336,10 +376,12 @@ class MagnetWorld{
    this.arenaEvent=next;this.lastEvent=kind;return;
   }
   if(this.time<e.start)return;
-  if(e.kind==='jackpot'&&!e.fired){e.fired=true;
-   for(let i=0;i<EVENT.jackpotPieces;i++){const n=this.random(),kind=n<.4?2:n<.75?1:0,ang=this.random()*Math.PI*2,speed=120+this.random()*260,item=this.scrap(e.x,e.y,kind);
-    item.vx=Math.cos(ang)*speed;item.vy=Math.sin(ang)*speed;item.pickupAt=this.time+.35;this.ground.push(item);}
-   this.burst(e.x,e.y,EVENT_COLORS.jackpot,40,300);}
+  if(e.kind==='comet'){
+   while(e.dropped<28 && this.time>=e.start+e.dropped*.5){
+    const p=cometPoint(e,e.dropped/28);
+    this.ground.push(this.scrap(p.x,p.y,e.dropped%4===0?2:1));e.dropped++;
+   }
+  }
   if(e.kind==='rain'){
    for(const d of e.drops)if(!d.landed&&this.time>=d.t){d.landed=true;const n=this.random(),item=this.scrap(d.x,d.y,n<.2?2:n<.5?1:0);item.pickupAt=this.time+.25;this.ground.push(item);this.burst(d.x,d.y,'#c9d6e3',6,90);}
    // Keep landed drops briefly so clients can draw the impact.
@@ -360,8 +402,8 @@ const wireVortices=w=>(w.vortices||[]).map(v=>[Math.round(v.x),Math.round(v.y),M
 const unwireVortices=list=>(list||[]).map(([x,y,until,owner])=>({x,y,until,owner}));
 // Arena event: [kind, start, end, x, y, [[dropX, dropY, dropTime], ...]] or 0.
 const r2=n=>Math.round(n*100)/100;
-const wireEvent=w=>{const e=w.arenaEvent;return e?[e.kind,r2(e.start),r2(e.end),Math.round(e.x),Math.round(e.y),(e.drops||[]).map(d=>[Math.round(d.x),Math.round(d.y),r2(d.t)])]:0;};
-const unwireEvent=e=>e?{kind:e[0],start:e[1],end:e[2],x:e[3],y:e[4],drops:(e[5]||[]).map(([x,y,t])=>({x,y,t})),fired:false}:null;
+const wireEvent=w=>{const e=w.arenaEvent;return e?[e.kind,r2(e.start),r2(e.end),Math.round(e.x),Math.round(e.y),(e.drops||[]).map(d=>[Math.round(d.x),Math.round(d.y),r2(d.t)]),e.panels??0,e.toX??0,e.toY??0]:0;};
+const unwireEvent=e=>e?{kind:e[0],start:e[1],end:e[2],x:e[3],y:e[4],drops:(e[5]||[]).map(([x,y,t])=>({x,y,t})),panels:e[6]??0,toX:e[7]??0,toY:e[8]??0,fired:false}:null;
 const wireRound=n=>Math.round((Number(n)||0)*10)/10;
 function wireVisibility(w,selfId,view){
  const self=w.actors.find(a=>a.id===selfId),vw=Number(view?.width),vh=Number(view?.height);
@@ -373,14 +415,14 @@ function encodeWireWorld(w,selfId,view){
  const visible=wireVisibility(w,selfId,view);
  return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),ev:wireEvent(w),
   a:w.actors.map(a=>[WIRE_ACTOR_FIELDS.map(k=>a[k]??0),a.pieces.map(p=>[p.slot,p.item.id,p.item.kind])]),
-  g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.hot?[1]:[])]),
+  g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.repelUntil>w.time?[Number(Boolean(p.hot)),r2(p.repelUntil)]:p.hot?[1]:[])]),
   s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.seek?[1]:[])])};
 }
 function decodeWireWorld(w){
  if(w?.wire!==2)return w;
  return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],
   actors:w.a.map(([values,pieces])=>{const a=Object.fromEntries(WIRE_ACTOR_FIELDS.map((k,i)=>[k,values[i]]));a.pieces=pieces.map(([slot,id,kind])=>({slot,item:{id,kind,color:WIRE_METALS[kind]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0}));return a;}),
-  ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0])=>({id,x,y,kind,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot})),
+  ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0,repelUntil=0])=>({id,x,y,kind,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
   shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,seek:seek===1}))};
 }
 
@@ -419,7 +461,7 @@ class WireSender{
   });
   // Pickup and ignore windows that already ended are sent as zero.
   out.g=w.ground.filter(visible).map(p=>{const ignoring=p.ignoreUntil>t;return wireTrim([p.id,wireDigits(p.x,1),wireDigits(p.y,1),p.kind,wireDigits(p.expiresAt,1),
-   wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0]);});
+   wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0,p.repelUntil>t?r2(p.repelUntil):0]);});
   out.s=w.shots.filter(visible).map(s=>wireTrim([s.item.id,s.item.kind,s.owner,wireDigits(s.x,1),wireDigits(s.y,1),wireDigits(s.vx,1),wireDigits(s.vy,1),wireDigits(s.life,3),s.bounces,s.seek?1:0]));
   return out;
  }
@@ -443,7 +485,7 @@ class WireReceiver{
    actors.push(a);
   }
   return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],actors,
-   ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0])=>({id,x,y,kind,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot})),
+   ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0])=>({id,x,y,kind,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
    shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,seek:seek===1}))};
  }
 }
@@ -1012,6 +1054,7 @@ function reconcileScrap(previous,next,now){
  }
  // A thin curved line from each loose piece of scrap to the magnet pulling it (same choice rule as the engine).
  function drawTethers(){
+  if(game.eventActive('polarity'))return;
   const magnets=game.actors.filter(a=>a.alive&&a.magnet&&a.pieces.length<armorCapacity(a));if(!magnets.length)return;
   // Kept subtle: only scrap in the inner half of the range, and only the 6 nearest pieces per magnet.
   const pulled=new Map();
@@ -1254,16 +1297,46 @@ function reconcileScrap(previous,next,now){
   if(!e || game.time>=e.end)return '';
   const label=EVENT_LABELS[e.kind];
   if(game.time<e.start)return label+' in '+Math.ceil(e.start-game.time)+'s';
-  const hints={rain:'Collect the falling scrap',jackpot:'The crate has burst',blackout:'Visibility reduced',polarity:'Magnets repel scrap'};
+  const hints={rain:'Collect the falling scrap',jackpot:e.panels?'Shoot the gold panels':'Crate emptied',comet:'Follow the glowing scrap trail',blackout:'Visibility reduced',polarity:'Magnets repel scrap'};
   return label+' · '+hints[e.kind];
  }
  function drawEventMarkers(){
   const e=game.arenaEvent;
   if(!e || game.time>=e.end)return;
   ctx.save();ctx.strokeStyle=EVENT_COLORS[e.kind];ctx.lineWidth=2;
-  if(e.kind==='jackpot' && game.time<e.start){
-   ctx.strokeRect(e.x-14,e.y-14,28,28);
-   ctx.beginPath();ctx.arc(e.x,e.y,24,0,Math.PI*2);ctx.stroke();
+  if(e.kind==='jackpot' && e.panels){
+   for(const [side,[nx,ny]] of CRATE_NORMALS.entries()){
+    if(!(e.panels & (1<<side)))continue;
+    const x=e.x+nx*CRATE_RADIUS,y=e.y+ny*CRATE_RADIUS;
+    ctx.lineWidth=game.time<e.start?2:5;ctx.beginPath();
+    ctx.moveTo(x-ny*25,y+nx*25);ctx.lineTo(x+ny*25,y-nx*25);ctx.stroke();
+   }
+   const pilot=game.human,dx=e.x-pilot.x,dy=e.y-pilot.y;
+   if(Math.hypot(dx,dy)>90){
+    ctx.save();ctx.translate(pilot.x,pilot.y);ctx.rotate(Math.atan2(dy,dx));
+    ctx.fillStyle=EVENT_COLORS.jackpot;ctx.beginPath();ctx.moveTo(60,0);
+    ctx.lineTo(46,-6);ctx.lineTo(46,6);ctx.closePath();ctx.fill();ctx.restore();
+   }
+  }
+  if(e.kind==='polarity' && game.time>=e.start){
+   ctx.beginPath();
+   for(const p of game.ground){
+    if(!(p.repelUntil>game.time)||!visible(p.x,p.y))continue;
+    ctx.moveTo(p.x-p.vx*.085,p.y-p.vy*.085);ctx.lineTo(p.x,p.y);
+   }
+   ctx.stroke();
+  }
+  if(e.kind==='comet'){
+   const position=cometPoint(e,(game.time-e.start)/(e.end-e.start));
+   ctx.globalAlpha=.45;ctx.setLineDash([14,18]);ctx.beginPath();
+   ctx.moveTo(position.x,position.y);ctx.lineTo(e.toX,e.toY);ctx.stroke();ctx.setLineDash([]);
+   if(game.time>=e.start){
+    const angle=Math.atan2(e.toY-e.y,e.toX-e.x);
+    ctx.translate(position.x,position.y);ctx.rotate(angle);ctx.globalAlpha=.8;
+    ctx.fillStyle=EVENT_COLORS.comet;ctx.beginPath();ctx.moveTo(-64,0);ctx.lineTo(0,-9);
+    ctx.lineTo(10,0);ctx.lineTo(0,9);ctx.closePath();ctx.fill();
+    ctx.fillStyle='white';ctx.beginPath();ctx.arc(2,0,6,0,Math.PI*2);ctx.fill();
+   }
   }
   if(e.kind==='rain')for(const drop of e.drops){
    const left=drop.t-game.time;
