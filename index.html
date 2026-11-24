@@ -855,7 +855,7 @@ function reconcileScrap(previous,next,now){
   online.serverTime=next.time;
   next.time=next.finished?next.duration:sameRound?Math.max(previous.time,next.time):next.time;
   for(const actor of next.actors)actor.orbitDelay=(actor.orbitDelay||0)+(next.time-online.serverTime)*.75*(actor.shieldTightness||0);
-  if(!sameRound||!next.human.alive||motionLife(next.human)!==motionLife(old)){online.pendingShots=[];online.nextFeedback=0;online.flashUntil=0;online.shot=data.shotAck||0;}
+  if(!sameRound||!next.human.alive||motionLife(next.human)!==motionLife(old)){online.nextTriggerFlash=0;online.flashUntil=0;online.shot=data.shotAck||0;}
   if(sameRound){
    const prior=new Map(previous.shots.map(shot=>[shot.item.id,shot]));
    const lead=Math.min(.15,(online.rtt||0)/2000);
@@ -869,12 +869,13 @@ function reconcileScrap(previous,next,now){
     shot.x+=shot.vx*dt;shot.y+=shot.vy*dt;shot.life-=dt;
    }
   }
-  for(const shot of online.pendingShots||[]){
-   if(data.ack>=shot.request||next.shots.some(s=>s.item.id===shot.item.id)||shot.dead)continue;
-   const index=next.human.pieces.findIndex(p=>p.item.id===shot.item.id);
-   if(index>=0){next.human.pieces.splice(index,1);next.shots.push(shot);}
+  // Acknowledging an input packet does not confirm which orbital the room fired.
+  // Apply ammo removal and the corresponding projectile from the same snapshot.
+  if(sameRound&&next.human.alive&&motionLife(next.human)===motionLife(old)&&next.human.lastShot>old.lastShot){
+   next.events.push({type:'shot'});
+   if(receivedAt>=online.flashUntil)online.flashUntil=receivedAt+85;
+   online.nextTriggerFlash=receivedAt+1000*MM.fireDelay*(rapidRail(next.human,next.time)?.5:1);
   }
-  online.pendingShots=(online.pendingShots||[]).filter(s=>data.ack<s.request&&!s.dead);
   online.playback.present(next,next.human.id,0);for(const a of next.actors)next.updateOrbits(a,true);
   if(sameRound)reconcileScrap(previous,next,receivedAt);
   game=next;online.version=data.version;online.round=data.round;online.humans=data.humans;online.maxPlayers=data.maxPlayers;online.queued=data.motion.queued||0;online.dropped=data.motion.dropped||0;online.updateGap=sameRound?((online.updateGap||receivedAt-online.lastSnapshot)*.8+(receivedAt-online.lastSnapshot)*.2):0;online.lastSnapshot=receivedAt;online.failures=0;updateRoomStrip();
@@ -883,19 +884,16 @@ function reconcileScrap(previous,next,now){
   if(game.finished){$('finishCopy').textContent=`Next round starts in ${Math.ceil(data.restartIn)}s. Stay here to play again.`;$('againBtn').textContent='Leave to lobby';}
   if(sameRound){for(const a of game.actors){const before=previous.actors.find(b=>b.id===a.id);if(before?.alive&&(!a.alive||a.hp<before.hp))game.burst(a.x,a.y,a.color,a.alive?7:15,120);}if(game.human.score>old.score)game.burst(game.human.x,game.human.y,'#f5c886',3,45);}
  }
- function localFireFeedback(){
-  const pilot=game.human, now=performance.now();
-  if(!pilot.alive||!pilot.pieces.length||now<(online.nextFeedback||0))return;
-  pilot.nextShot=game.time;
-  const firstNew=game.shots.length;
-  if(game.shoot(pilot)){
-   online.nextFeedback=now+(pilot.nextShot-game.time)*1000;
+ function requestShot(){
+  if(!online)return;
+  const a=game.human,now=performance.now();
+  if(a.alive&&a.pieces.length&&!hasPower(a,'phase',game.time)&&now>=(online.nextTriggerFlash||0)){
    online.flashUntil=now+85;
-   for(const shot of game.shots.slice(firstNew)){shot.request=online.seq+1;online.pendingShots.push(shot);}
+   online.nextTriggerFlash=now+1000*MM.fireDelay*(rapidRail(a,game.time)?.5:1);
   }
-  // shoot() queues the local sound.
+  online.shot++;
+  if(!online.failures)sendArenaInput(online);
  }
- function requestShot(){if(!online)return;localFireFeedback();online.shot++;if(!online.failures)sendArenaInput(online);}
 
  function arenaInput(session,requestSeq){
   if(state==='playing')input();const a=game.human,active=state==='playing'&&a.alive;
@@ -955,7 +953,7 @@ function reconcileScrap(previous,next,now){
   if(!online)return;
   const a=game.human,active=state==='playing'&&a.alive&&!game.finished;
   if(!game.finished){
-   if(active&&a.fire)localFireFeedback();
+
    online.prediction.step(game,a,{x:active?a.moveX:0,y:active?a.moveY:0,aim:a.aim,fire:active&&a.fire,magnet:active&&a.magnet},dt);
    const now=performance.now();online.playback.advance(dt,now,online.rtt||0);
    const lastOrbitTime=game.time;
