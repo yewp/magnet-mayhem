@@ -211,7 +211,12 @@ class MagnetWorld{
  knockout(a,owner){
   if(!a.alive)return;a.alive=false;a.deaths++;a.score=Math.floor(a.score*.8);a.fire=a.magnet=false;a.respawnAt=this.time+2.8;
   for(const p of a.pieces){const ang=Math.atan2(p.y-a.y,p.x-a.x),speed=110+this.random()*130;this.drop(p.item,p.x,p.y,Math.cos(ang)*speed,Math.sin(ang)*speed,0,0);}a.pieces=[];
-  const killer=this.actors.find(b=>b.id===owner);if(killer&&killer!==a){killer.kills++;killer.score+=KNOCKOUT_REWARD;this.feed.unshift({killer:killer.name,victim:a.name,color:killer.color,time:this.time});this.feed=this.feed.slice(0,4);if(killer.human)this.event('kill',{name:a.name});}
+  const killer=this.actors.find(b=>b.id===owner);if(killer&&killer!==a){killer.kills++;killer.score+=KNOCKOUT_REWARD;
+   if(killer.alive && killer.hp<3){
+    killer.hp=Math.min(3,killer.hp+1);
+    this.label(killer.x,killer.y-32,'+1 HP','#7af2d0');
+   }
+   this.feed.unshift({killer:killer.name,victim:a.name,color:killer.color,time:this.time});this.feed=this.feed.slice(0,4);if(killer.human)this.event('kill',{name:a.name});}
   this.burst(a.x,a.y,a.color,35,260);if(a.human)this.event('death',{name:killer?.name||'a rival'});
  }
  updateShots(dt){
@@ -790,7 +795,10 @@ function reconcileScrap(previous,next,now){
    if(old.alive&&a.alive&&a.hp<old.hp)next.events.push({type:'hurt'});
    if(old.alive&&!a.alive)next.events.push({type:'death',name:'A rival'});
    if(respawned)next.events.push({type:'respawn'});
-   if(a.alive&&old.alive&&a.hp>old.hp&&!respawned)next.events.push({type:'repair'});
+   if(a.alive&&old.alive&&a.hp>old.hp&&!respawned){
+    if(a.kills>old.kills)next.label(a.x,a.y-32,'+'+(a.hp-old.hp)+' HP','#7af2d0');
+    else next.events.push({type:'repair'});
+   }
    if(a.kills>old.kills)next.events.push({type:'kill',name:'a rival'});
    if(a.alive&&a.powerAt>(old.powerAt||0)&&POWERS[a.powerKind]){next.events.push({type:'power',kind:POWERS[a.powerKind]});next.label(a.x,a.y-30,POWER_LABELS[POWERS[a.powerKind]],POWER_COLORS[POWERS[a.powerKind]]);}
    if(a.alive&&a.score>old.score&&a.kills===old.kills){next.events.push({type:'collect',stolen:a.steals>old.steals});}
