@@ -91,9 +91,10 @@ const EVENTS=['rain','jackpot','blackout','polarity','comet'];
 const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY',comet:'SCRAP COMET'};
 const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c',comet:'#80efff'};
 const EVENT=Object.freeze({first:20,gapMin:35,gapMax:45,warn:3,jackpotWarn:5,
- length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:14}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
+ length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:6.2}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
 const CRATE_RADIUS=28;
 const CRATE_NORMALS=[[1,0],[0,1],[-1,0],[0,-1]];
+const COMET={trail:48,burst:36,afterglow:1.2};
 function cometPoint(e,progress){
  const t=limit(progress,0,1);
  return {x:e.x+(e.toX-e.x)*t,y:e.y+(e.toY-e.y)*t};
@@ -355,9 +356,28 @@ class MagnetWorld{
    item.vx=Math.cos(angle)*speed;item.vy=Math.sin(angle)*speed;item.pickupAt=this.time+.2;this.ground.push(item);
   }
  }
+ updateComet(e){
+  const flight=e.end-e.start-COMET.afterglow,dx=e.toX-e.x,dy=e.toY-e.y,length=Math.hypot(dx,dy);
+  const tx=dx/length,ty=dy/length,age=this.time-e.start;
+  while(e.dropped<COMET.trail && age>=e.dropped*flight/COMET.trail){
+   const n=e.dropped++,p=cometPoint(e,n/COMET.trail);
+   const offset=(n%2?1:-1)*(6+this.random()*12);
+   const item=this.scrap(limit(p.x-tx*12-ty*offset,8,MM.width-8),limit(p.y-ty*12+tx*offset,8,MM.height-8));
+   item.vx=tx*length/flight*.81-ty*offset*3;item.vy=ty*length/flight*.81+tx*offset*3;this.ground.push(item);
+  }
+  if(age<flight || e.fired)return;
+  e.fired=true;
+  const inward=e.toX>MM.width/2?-1:1;
+  for(let i=0;i<COMET.burst;i++){
+   const angle=((i+this.random())/COMET.burst-.5)*Math.PI*.94,speed=140+this.random()*300;
+   const item=this.scrap(e.toX,e.toY);item.vx=inward*Math.cos(angle)*speed;item.vy=Math.sin(angle)*speed;
+   item.pickupAt=this.time+.15;this.ground.push(item);
+  }
+ }
  eventActive(kind){const e=this.arenaEvent;return Boolean(e)&&e.kind===kind&&this.time>=e.start&&this.time<e.end;}
  updateEvents(){
   const e=this.arenaEvent;
+  if(e?.kind==='comet' && this.time>=e.start)this.updateComet(e);
   if(e&&this.time>=e.end){if(e.kind==='jackpot')for(let side=0;side<4;side++){if(e.panels & (1<<side))this.spillCrate(e,side);}this.arenaEvent=null;this.nextEventAt=this.time+EVENT.gapMin+this.random()*(EVENT.gapMax-EVENT.gapMin);return;}
   if(!e){
    if(this.nextEventAt==null)this.nextEventAt=EVENT.first;
@@ -369,7 +389,7 @@ class MagnetWorld{
    if(kind==='jackpot'){const p=this.freePoint(55);next.x=p.x;next.y=p.y;next.panels=15;}
    if(kind==='comet'){
     const flip=this.random()<.5;
-    next.x=flip?90:MM.width-90;next.toX=MM.width-next.x;
+    next.x=flip?8:MM.width-8;next.toX=MM.width-next.x;
     next.y=180+this.random()*(MM.height-360);next.toY=180+this.random()*(MM.height-360);
     next.dropped=0;
    }
@@ -381,12 +401,6 @@ class MagnetWorld{
    this.arenaEvent=next;this.lastEvent=kind;return;
   }
   if(this.time<e.start)return;
-  if(e.kind==='comet'){
-   while(e.dropped<28 && this.time>=e.start+e.dropped*.5){
-    const p=cometPoint(e,e.dropped/28);
-    this.ground.push(this.scrap(p.x,p.y,e.dropped%4===0?2:1));e.dropped++;
-   }
-  }
   if(e.kind==='rain'){
    for(const d of e.drops)if(!d.landed&&this.time>=d.t){d.landed=true;const n=this.random(),item=this.scrap(d.x,d.y,n<.2?2:n<.5?1:0);item.pickupAt=this.time+.25;this.ground.push(item);this.burst(d.x,d.y,'#c9d6e3',6,90);}
    // Keep landed drops briefly so clients can draw the impact.
@@ -1303,46 +1317,41 @@ function reconcileScrap(previous,next,now){
   const hints={rain:'Collect the falling scrap',jackpot:e.panels?'Shoot the gold panels':'Crate emptied',comet:'Follow the glowing scrap trail',blackout:'Visibility reduced',polarity:'Magnets repel scrap'};
   return label+' · '+hints[e.kind];
  }
+ let iceCometSprite;
+ function cometSprite(){
+  if(iceCometSprite)return iceCometSprite;
+  const sprite=document.createElement('canvas');sprite.width=384;sprite.height=120;
+  const c=sprite.getContext('2d'),img=c.createImageData(384,120);
+  for(let y=0;y<120;y++)for(let x=0;x<384;x++){
+   const dx=330-x,side=Math.abs(59.5-y),d=Math.max(0,dx),u=d/300,r=Math.hypot(dx,side);
+   const fade=Math.exp(-d/185)*Math.min(1,Math.max(0,(330-d)/57))*(dx<0?Math.exp(-dx*dx/45):1);
+   const dust=fade*Math.exp(-side/(4+13*u))*(.83+.17*Math.cos(side/(1.5+4*u)+8*u));
+   const ion=.72*fade*Math.exp(-side/(1.1+2.4*u)),halo=Math.exp(-r/8)+.27*Math.exp(-r/15),core=Math.exp(-r*r/13);
+   const red=dust*130+ion*56+halo*150+core*195,green=dust*190+ion*136+halo*209+core*195,blue=dust*225+ion*252+halo*238+core*195;
+   const alpha=Math.min(255,blue),idx=(y*384+x)*4;
+   img.data[idx]=red*255/(alpha||1);img.data[idx+1]=green*255/(alpha||1);img.data[idx+2]=blue*255/(alpha||1);img.data[idx+3]=alpha;
+  }
+  c.putImageData(img,0,0);iceCometSprite=sprite;return sprite;
+ }
  function drawScrapComet(e){
-  const age=game.time-e.start, duration=e.end-e.start;
-  const head=cometPoint(e,age/duration);
-  ctx.save();
-  ctx.globalAlpha=age<0?.48:.16;
-  ctx.setLineDash([10,20]);ctx.lineDashOffset=-game.time*25;
-  ctx.beginPath();ctx.moveTo(head.x,head.y);ctx.lineTo(e.toX,e.toY);ctx.stroke();
-  ctx.restore();
-  if(age<0 || !visible(head.x,head.y,290))return;
-  ctx.save();ctx.translate(head.x,head.y);ctx.rotate(Math.atan2(e.toY-e.y,e.toX-e.x));
-  const tail=260*Math.min(1,.18+age), sway=Math.sin(age*4)*8;
-  const plume=ctx.createLinearGradient(-tail,0,10,0);
-  plume.addColorStop(0,'rgba(63,110,255,0)');plume.addColorStop(.42,'rgba(65,125,232,.33)');
-  plume.addColorStop(.8,'rgba(63,218,228,.69)');plume.addColorStop(1,'#e4fffb');
-  ctx.fillStyle=plume;
-  for(const side of [-1,1]){
-   ctx.beginPath();ctx.moveTo(7,side*11);
-   ctx.bezierCurveTo(-38,side*34,-tail*.62,sway+side*6,-tail,sway+side*21);
-   ctx.bezierCurveTo(-tail*.58,sway-side*8,-42,side*4,7,0);ctx.fill();
+  const age=game.time-e.start,flight=e.end-e.start-COMET.afterglow;
+  if(age<0)return;
+  const p=cometPoint(e,age/flight),after=Math.max(0,age-flight);
+  if(!visible(p.x,p.y,800))return;
+  const dx=e.toX-e.x,dy=e.toY-e.y,speed=Math.hypot(dx,dy)/flight;
+  ctx.save();ctx.translate(p.x,p.y);ctx.rotate(Math.atan2(dy,dx));
+  if(!after){ctx.save();ctx.scale(Math.min(1,.15+age*3),1);ctx.drawImage(cometSprite(),-330,-60);ctx.restore();}
+  // Mirrored grains are anchored at their emission point and fade after impact.
+  for(let i=Math.max(0,Math.floor((age-1.5)*80));i<=Math.min(Math.floor(age*80),Math.floor(flight*80));i++){
+   const elapsed=age-i/80,seed=(i*.61803399)%1,life=.85+.65*seed;
+   if(elapsed>=life)continue;
+   const x=-(Math.min(age,flight)-i/80)*speed+elapsed*24,offset=3+elapsed*(3+15*((i*.75488)%1));
+   ctx.globalAlpha=(1-elapsed/life)*.78;ctx.fillStyle=i%4?'#b5dbf4':'#f6e2ac';
+   for(const sign of [-1,1])ctx.fillRect(x,offset*sign,1.1+2*seed,1.3);
   }
-  // Fragments follow a repeatable arc so a network snapshot never restarts the trail.
-  ctx.lineCap='round';
-  for(let i=0;i<19;i++){
-   const t=(age*(.66+(i%4)*.08)+i*.618)%1, side=i%2?1:-1;
-   const x=-12-tail*t, y=side*(5+t*t*(12+i%7*5))+sway*t;
-   ctx.globalAlpha=(1-t)*.85;ctx.strokeStyle=i%3?'#8ee2fa':'#ffc686';ctx.lineWidth=1+i%3;
-   ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+3+t*9,y-side*2*t);ctx.stroke();
-  }
-  ctx.globalAlpha=1;
-  const halo=ctx.createRadialGradient(5,0,4,5,0,43);
-  halo.addColorStop(0,'rgba(255,249,201,.88)');halo.addColorStop(.42,'rgba(255,187,98,.38)');halo.addColorStop(1,'rgba(255,165,76,0)');
-  ctx.fillStyle=halo;ctx.fillRect(-38,-43,86,86);
-  // Tumbling iron silhouette with a sunlit leading edge and a broken seam.
-  ctx.save();ctx.rotate(age*1.45);
-  ctx.fillStyle='#554457';ctx.strokeStyle='#e7a775';ctx.lineWidth=1.6;
-  ctx.beginPath();ctx.moveTo(-16,-6);ctx.lineTo(-8,-15);ctx.lineTo(4,-13);ctx.lineTo(14,-6);
-  ctx.lineTo(16,4);ctx.lineTo(6,14);ctx.lineTo(-9,11);ctx.lineTo(-15,4);ctx.closePath();ctx.fill();ctx.stroke();
-  ctx.strokeStyle='#ffdba4';ctx.beginPath();ctx.moveTo(-6,-14);ctx.lineTo(-2,-4);ctx.lineTo(5,0);ctx.lineTo(3,7);ctx.stroke();
-  ctx.restore();ctx.strokeStyle='#fff5ce';ctx.lineWidth=3;
-  ctx.beginPath();ctx.moveTo(6,-15);ctx.quadraticCurveTo(28,0,7,15);ctx.stroke();
+  if(after){const t=after/COMET.afterglow;ctx.globalAlpha=(1-t)*(1-t);ctx.strokeStyle='#c7f1ff';ctx.lineWidth=3*(1-t)+.5;
+   ctx.beginPath();ctx.arc(0,0,5+95*t,0,Math.PI*2);ctx.stroke();
+   ctx.globalAlpha=Math.max(0,1-t*4);ctx.fillStyle='#f0fbff';ctx.beginPath();ctx.arc(0,0,5+30*t,0,Math.PI*2);ctx.fill();}
   ctx.restore();
  }
  function drawEventMarkers(){
