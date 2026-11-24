@@ -855,14 +855,13 @@ function reconcileScrap(previous,next,now){
   online.serverTime=next.time;
   next.time=next.finished?next.duration:sameRound?Math.max(previous.time,next.time):next.time;
   for(const actor of next.actors)actor.orbitDelay=(actor.orbitDelay||0)+(next.time-online.serverTime)*.75*(actor.shieldTightness||0);
-  if(!sameRound||!next.human.alive||motionLife(next.human)!==motionLife(old)){online.launches=new Map();online.nextTriggerFlash=0;online.flashUntil=0;online.shot=data.shotAck||0;}
+  if(!sameRound||!next.human.alive||motionLife(next.human)!==motionLife(old)){online.pendingShots=[];online.nextFeedback=0;online.flashUntil=0;online.shot=data.shotAck||0;}
   if(sameRound){
    const prior=new Map(previous.shots.map(shot=>[shot.item.id,shot]));
    const lead=Math.min(.15,(online.rtt||0)/2000);
    for(const shot of next.shots){
     const last=prior.get(shot.item.id);
     if(!last||last.owner!==shot.owner||last.bounces!==shot.bounces)continue;
-    shot.visualLaunch=last.visualLaunch;
     // Retain visible forward progress along a confirmed trajectory.
     const speed2=shot.vx*shot.vx+shot.vy*shot.vy;
     const ahead=((last.x-shot.x)*shot.vx+(last.y-shot.y)*shot.vy)/(speed2||1);
@@ -870,22 +869,12 @@ function reconcileScrap(previous,next,now){
     shot.x+=shot.vx*dt;shot.y+=shot.vy*dt;shot.life-=dt;
    }
   }
-  // Acknowledging an input packet does not confirm which orbital the room fired.
-  // Apply ammo removal and the corresponding projectile from the same snapshot.
-  if(sameRound&&next.human.alive&&motionLife(next.human)===motionLife(old)&&next.human.lastShot>old.lastShot){
-   next.events.push({type:'shot'});
+  for(const shot of online.pendingShots||[]){
+   if(data.ack>=shot.request||next.shots.some(s=>s.item.id===shot.item.id)||shot.dead)continue;
+   const index=next.human.pieces.findIndex(p=>p.item.id===shot.item.id);
+   if(index>=0){next.human.pieces.splice(index,1);next.shots.push(shot);}
   }
-  for(const [id,...items] of data.launchReceipts||[]){
-   const launch=online.launches.get(id);if(!launch)continue;
-   for(const [index,item] of items.entries()){
-    const shot=next.shots.find(s=>s.item.id===item&&s.owner===next.human.id&&!s.bounces);
-    const marker=launch.shots[index];if(!shot||!marker)continue;
-    if(!shot.seek)shot.visualLaunch=marker;
-    const trail=shotTrails.get(marker.item.id);
-    if(trail&&!shot.seek)shotTrails.set(item,trail);
-   }
-   online.launches.delete(id);
-  }
+  online.pendingShots=(online.pendingShots||[]).filter(s=>data.ack<s.request&&!s.dead);
   online.playback.present(next,next.human.id,0);for(const a of next.actors)next.updateOrbits(a,true);
   if(sameRound)reconcileScrap(previous,next,receivedAt);
   game=next;online.version=data.version;online.round=data.round;online.humans=data.humans;online.maxPlayers=data.maxPlayers;online.queued=data.motion.queued||0;online.dropped=data.motion.dropped||0;online.updateGap=sameRound?((online.updateGap||receivedAt-online.lastSnapshot)*.8+(receivedAt-online.lastSnapshot)*.2):0;online.lastSnapshot=receivedAt;online.failures=0;updateRoomStrip();
@@ -894,29 +883,23 @@ function reconcileScrap(previous,next,now){
   if(game.finished){$('finishCopy').textContent=`Next round starts in ${Math.ceil(data.restartIn)}s. Stay here to play again.`;$('againBtn').textContent='Leave to lobby';}
   if(sameRound){for(const a of game.actors){const before=previous.actors.find(b=>b.id===a.id);if(before?.alive&&(!a.alive||a.hp<before.hp))game.burst(a.x,a.y,a.color,a.alive?7:15,120);}if(game.human.score>old.score)game.burst(game.human.x,game.human.y,'#f5c886',3,45);}
  }
- function previewLaunch(){
-  const pilot=game.human,now=performance.now();
-  if(!online.launches||online.launches.size>=8||now<(online.nextTriggerFlash||0)||online.socket?.readyState!==WebSocket.OPEN||
-     !pilot.alive||!pilot.pieces.length||game.finished||hasPower(pilot,'phase',game.time))return;
-  const count=hasPower(pilot,'scatter',game.time)?Math.min(3,pilot.pieces.length):1,shots=[];
-  const id=++online.shot;
-  for(let i=0;i<count;i++){
-   const angle=pilot.aim+(i-(count-1)/2)*POWER.scatterSpread,dx=Math.cos(angle),dy=Math.sin(angle);
-   shots.push({item:{id:-(id*3+i),color:'#c5d3d9'},owner:pilot.id,bounces:0,at:now,x:pilot.x+dx*26,y:pilot.y+dy*26,
-    vx:dx*railSpeed(pilot)+pilot.vx*.12,vy:dy*railSpeed(pilot)+pilot.vy*.12});
-
+ function localFireFeedback(){
+  const pilot=game.human, now=performance.now();
+  if(!pilot.alive||!pilot.pieces.length||now<(online.nextFeedback||0))return;
+  pilot.nextShot=game.time;
+  const firstNew=game.shots.length;
+  if(game.shoot(pilot)){
+   online.nextFeedback=now+(pilot.nextShot-game.time)*1000;
+   online.flashUntil=now+85;
+   for(const shot of game.shots.slice(firstNew)){shot.request=online.seq+1;online.pendingShots.push(shot);}
   }
-  online.launches.set(id,{shots,at:now,aim:pilot.aim});
-  online.flashUntil=now+85;
-  online.nextTriggerFlash=now+1000*MM.fireDelay*(rapidRail(pilot,game.time)?.5:1);
-  if(!online.failures)sendArenaInput(online);
+  // shoot() queues the local sound.
  }
- function requestShot(){if(online)previewLaunch();
- }
+ function requestShot(){if(!online)return;localFireFeedback();online.shot++;if(!online.failures)sendArenaInput(online);}
 
  function arenaInput(session,requestSeq){
   if(state==='playing')input();const a=game.human,active=state==='playing'&&a.alive;
-  return {action:'input',protocol:2,wire:3,view:{width:width/cam.zoom,height:height/cam.zoom},commands:[],code:session.code,token:session.token,seq:requestSeq,knownVersion:session.version,round:session.round,life:a.spawnSeq,shot:session.shot,launches:Array.from(session.launches||[],([id,l])=>[id,l.aim]),input:{x:active?a.moveX:0,y:active?a.moveY:0,aim:a.aim,fire:active&&a.fire,magnet:active&&a.magnet}};
+  return {action:'input',protocol:2,wire:3,view:{width:width/cam.zoom,height:height/cam.zoom},commands:[],code:session.code,token:session.token,seq:requestSeq,knownVersion:session.version,round:session.round,life:a.spawnSeq,shot:session.shot,input:{x:active?a.moveX:0,y:active?a.moveY:0,aim:a.aim,fire:active&&a.fire,magnet:active&&a.magnet}};
  }
  async function socketLobby(body,signal){
   const response=await fetch(new URL('/lobby',arenaOrigin),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});
@@ -972,9 +955,7 @@ function reconcileScrap(previous,next,now){
   if(!online)return;
   const a=game.human,active=state==='playing'&&a.alive&&!game.finished;
   if(!game.finished){
-
-   for(const [id,l] of online.launches||[])if(performance.now()-l.at>1200)online.launches.delete(id);
-   if(active&&a.fire)previewLaunch();
+   if(active&&a.fire)localFireFeedback();
    online.prediction.step(game,a,{x:active?a.moveX:0,y:active?a.moveY:0,aim:a.aim,fire:active&&a.fire,magnet:active&&a.magnet},dt);
    const now=performance.now();online.playback.advance(dt,now,online.rtt||0);
    const lastOrbitTime=game.time;
@@ -1305,21 +1286,7 @@ function reconcileScrap(previous,next,now){
  }
  function drawShots(){
   const live=new Set();
-  const now=performance.now(),shots=game.shots.slice();
-  for(const launch of online?.launches?.values()||[]){
-   if(now-launch.at<350)shots.push(...launch.shots);
-  }
-  for(const shot of shots){
-   let s=shot;
-   // A straight shot keeps the exact visual ray shown on the trigger frame.
-   // The room still determines the physical impact, armor loss and lifetime.
-   const launch=shot.item.id<0?shot:(!shot.bounces&&!shot.seek&&shot.visualLaunch);
-   if(launch){
-    const age=Math.max(0,(now-launch.at)/1000);
-    s={...shot,x:launch.x+launch.vx*age,y:launch.y+launch.vy*age,vx:launch.vx,vy:launch.vy};
-    if(s.x<5||s.y<5||s.x>MM.width-5||s.y>MM.height-5)continue;
-   }
-   const id=s.item.id;live.add(id);let trail=shotTrails.get(id);if(!trail||trail.bounces!==s.bounces){trail=[];trail.bounces=s.bounces;shotTrails.set(id,trail);}
+  for(const s of game.shots){const id=s.item.id;live.add(id);let trail=shotTrails.get(id);if(!trail||trail.bounces!==s.bounces){trail=[];trail.bounces=s.bounces;shotTrails.set(id,trail);}
    const tip=trail.at(-1);if(!tip||Math.hypot(tip.x-s.x,tip.y-s.y)>3){trail.push({x:s.x,y:s.y});if(trail.length>11)trail.shift();}
    if(!visible(s.x,s.y,160))continue;const owner=game.actors.find(a=>a.id===s.owner),color=owner?.color||'#ffb37d';
    ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';ctx.strokeStyle=color;
