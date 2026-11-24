@@ -65,7 +65,7 @@ function movingHit(x0,y0,x1,y1,tx0,ty0,tx1,ty1,r){
 const DEFLECT_TRAIL_SECONDS=.35;
 const HOT_SCRAP_SECONDS=6;
 const KNOCKOUT_REWARD=75;
-const WRECK_NAMES=['','RAIL DRIVE','EXTRA ORBIT'];
+const WRECK_NAMES=['','PIERCING SHOT','EXTRA ORBIT'];
 const newWrecks=()=>[{x:960,y:1120,kind:1},{x:1840,y:1080,kind:2}].map(w=>({...w,hp:50,vx:0,vy:0,opened:0}));
 const armorCapacity=a=>MM.maxArmor+(a?.wreckMod===2?8:0);
 // Power-ups spawn on fixed pads; a pilot holds one timed ability at a time.
@@ -179,10 +179,10 @@ class MagnetWorld{
    const turn=count===1?0:(k-(count-1)/2)*POWER.scatterSpread,dx=Math.cos(a.aim+turn),dy=Math.sin(a.aim+turn);let index=0,best=-Infinity;
    for(let i=0;i<a.pieces.length;i++){const p=a.pieces[i],dot=Math.cos(p.angle)*dx+Math.sin(p.angle)*dy;if(dot>best){index=i;best=dot;}}
    const p=a.pieces.splice(index,1)[0],x=a.x+dx*26,y=a.y+dy*26;
-   this.shots.push({item:p.item,owner:a.id,x,y,prevX:x,prevY:y,vx:dx*railSpeed(a)+a.vx*.12,vy:dy*railSpeed(a)+a.vy*.12,life:1.2,bounces:0,seek,dead:false});
+   this.shots.push({item:p.item,owner:a.id,x,y,prevX:x,prevY:y,vx:dx*railSpeed(a)+a.vx*.12,vy:dy*railSpeed(a)+a.vy*.12,life:1.2,bounces:0,pierce:a.wreckMod===1,seek,dead:false});
   }
   const x=a.x+Math.cos(a.aim)*26,y=a.y+Math.sin(a.aim)*26;
-  a.nextShot=this.time+(a.wreckMod===1?.20:MM.fireDelay)*(a.human?1:this.difficulty==='easy'?1.5:this.difficulty==='hard'?.92:1.15)*(rapidRail(a,this.time)?.5:1);a.lastShot=this.time;a.shieldUntil=Math.min(a.shieldUntil,this.time);this.burst(x,y,a.color,3,70);if(a.human)this.event('shot');return true;
+  a.nextShot=this.time+MM.fireDelay*(a.human?1:this.difficulty==='easy'?1.5:this.difficulty==='hard'?.92:1.15)*(rapidRail(a,this.time)?.5:1);a.lastShot=this.time;a.shieldUntil=Math.min(a.shieldUntil,this.time);this.burst(x,y,a.color,3,70);if(a.human)this.event('shot');return true;
  }
  bound(a){a.x=limit(a.x,MM.coreRadius+4,MM.width-MM.coreRadius-4);a.y=limit(a.y,MM.coreRadius+4,MM.height-MM.coreRadius-4);for(const c of this.covers){const dx=a.x-c.x,dy=a.y-c.y,d=Math.hypot(dx,dy),r=c.r+MM.coreRadius+2;if(d<r){const len=d||1;a.x=c.x+(d?dx/len:1)*r;a.y=c.y+(d?dy/len:0)*r;}}}
  think(a,dt){
@@ -227,8 +227,10 @@ class MagnetWorld{
    if(s.seek)this.steerSeeker(s,dt);
    s.prevX=s.x;s.prevY=s.y;s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;
 
-   let first=Infinity,hit=null;
-   const test=(t,object)=>{if(t!=null&&t<first){first=t;hit=object;}};
+   let first=Infinity,hit=null,second=Infinity,nextHit=null;
+   const test=(t,object)=>{if(t==null)return;
+    if(t<first){second=first;nextHit=hit;first=t;hit=object;}
+    else if(s.pierce&&t<second){second=t;nextHit=object;}};
    // Compare boundary contact with armor, cores and cover on the same swept path.
    test(wallTime(s.prevX,s.x,5,MM.width-5),{kind:'wall'});
    test(wallTime(s.prevY,s.y,5,MM.height-5),{kind:'wall'});
@@ -250,11 +252,14 @@ class MagnetWorld{
     for(const p of a.pieces)test(movingHit(s.prevX,s.prevY,s.x,s.y,p.prevX,p.prevY,p.x,p.y,11),{kind:'armor',a,p});
     test(movingHit(s.prevX,s.prevY,s.x,s.y,a.prevX,a.prevY,a.x,a.y,MM.coreRadius+4),{kind:'core',a});
    }
-   if(hit){s.x=s.prevX+(s.x-s.prevX)*first;s.y=s.prevY+(s.y-s.prevY)*first;
+   const endX=s.x,endY=s.y;
+   while(hit){s.x=s.prevX+(endX-s.prevX)*first;s.y=s.prevY+(endY-s.prevY)*first;
 
     // Capped so two deflectors cannot bounce a shot back and forth forever.
-    if(hit.kind==='armor'&&hasPower(hit.a,'deflector',this.time)&&s.bounces<3){this.deflect(s,hit.a);continue;}
-    if(hit.kind==='armor'){const index=hit.a.pieces.indexOf(hit.p);if(index>=0){hit.a.pieces.splice(index,1);this.drop(hit.p.item,hit.p.x,hit.p.y,s.vx*.15+(this.random()-.5)*120,s.vy*.15+(this.random()-.5)*120,0,HOT_SCRAP_SECONDS,true);this.burst(s.x,s.y,'#ffcf85',10,130);if(s.owner===this.human.id)this.event('strip');}}
+    if(hit.kind==='armor'&&hasPower(hit.a,'deflector',this.time)&&s.bounces<3){this.deflect(s,hit.a);break;}
+    if(hit.kind==='armor'){const index=hit.a.pieces.indexOf(hit.p);if(index>=0){hit.a.pieces.splice(index,1);this.drop(hit.p.item,hit.p.x,hit.p.y,s.vx*.15+(this.random()-.5)*120,s.vy*.15+(this.random()-.5)*120,0,HOT_SCRAP_SECONDS,true);this.burst(s.x,s.y,'#ffcf85',10,130);if(s.owner===this.human.id)this.event('strip');}
+     if(s.pierce){s.pierce=false;s.x=endX;s.y=endY;hit=nextHit;first=second;nextHit=null;continue;}
+    }
     else if(hit.kind==='wreck'){
      const w=hit.wreck;
      if(!this.predictInteractions){
@@ -273,8 +278,8 @@ class MagnetWorld{
     else if(hit.kind==='core')this.hitCore(hit.a,s.owner);
     else this.burst(s.x,s.y,'#9bb3c8',5,70);
     const ignoreId=hit.kind==='armor'?0:(hit.a?.id??s.owner);
-    this.drop(s.item,s.x,s.y,-s.vx*.12,-s.vy*.12,ignoreId,hit.a?HOT_SCRAP_SECONDS:.45,Boolean(hit.a));s.dead=true;
-   }else if(s.life<=0){this.drop(s.item,s.x,s.y,s.vx*.13,s.vy*.13,s.owner,.35);s.dead=true;}
+    this.drop(s.item,s.x,s.y,-s.vx*.12,-s.vy*.12,ignoreId,hit.a?HOT_SCRAP_SECONDS:.45,Boolean(hit.a));s.dead=true;break;
+   }if(!s.dead&&s.life<=0){this.drop(s.item,s.x,s.y,s.vx*.13,s.vy*.13,s.owner,.35);s.dead=true;}
   }this.shots=this.shots.filter(s=>!s.dead);
  }
  updateScrap(dt,replenish=true){
@@ -511,14 +516,14 @@ function encodeWireWorld(w,selfId,view){
  return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),wr:wireWrecks(w),cm:wireComets(w),ev:wireEvent(w),
   a:w.actors.map(a=>[WIRE_ACTOR_FIELDS.map(k=>a[k]??0),a.pieces.map(p=>[p.slot,p.item.id,p.item.kind])]),
   g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.origin?[Number(Boolean(p.hot)),p.repelUntil>w.time?r2(p.repelUntil):0,p.origin]:p.repelUntil>w.time?[Number(Boolean(p.hot)),r2(p.repelUntil)]:p.hot?[1]:[])]),
-  s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.deflectTrailUntil>w.time?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil)]:s.seek?[1]:[])])};
+  s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.pierce?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil||0),1]:s.deflectTrailUntil>w.time?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil)]:s.seek?[1]:[])])};
 }
 function decodeWireWorld(w){
  if(w?.wire!==2)return w;
  return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(w.wr),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],
   actors:w.a.map(([values,pieces])=>{const a=Object.fromEntries(WIRE_ACTOR_FIELDS.map((k,i)=>[k,values[i]]));a.pieces=pieces.map(([slot,id,kind])=>({slot,item:{id,kind,color:WIRE_METALS[kind]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0}));return a;}),
   ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
-  shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0,deflectTrailUntil=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,seek:seek===1}))};
+  shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
 }
 
 // Wire 3 is for a WebSocket, where every message arrives in order. The arena keeps
@@ -559,7 +564,7 @@ class WireSender{
   // Pickup and ignore windows that already ended are sent as zero.
   out.g=w.ground.filter(visible).map(p=>{const ignoring=p.ignoreUntil>t;return wireTrim([p.id,wireDigits(p.x,1),wireDigits(p.y,1),p.kind,wireDigits(p.expiresAt,1),
    wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0,p.repelUntil>t?r2(p.repelUntil):0,p.origin||0]);});
-  out.s=w.shots.filter(visible).map(s=>wireTrim([s.item.id,s.item.kind,s.owner,wireDigits(s.x,1),wireDigits(s.y,1),wireDigits(s.vx,1),wireDigits(s.vy,1),wireDigits(s.life,3),s.bounces,s.seek?1:0,s.deflectTrailUntil>t?r2(s.deflectTrailUntil):0]));
+  out.s=w.shots.filter(visible).map(s=>wireTrim([s.item.id,s.item.kind,s.owner,wireDigits(s.x,1),wireDigits(s.y,1),wireDigits(s.vx,1),wireDigits(s.vy,1),wireDigits(s.life,3),s.bounces,s.seek?1:0,s.deflectTrailUntil>t?r2(s.deflectTrailUntil):0,s.pierce?1:0]));
   return out;
  }
 }
@@ -584,7 +589,7 @@ class WireReceiver{
   }
   return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(this.wrecks),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],actors,
    ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
-   shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0,deflectTrailUntil=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,seek:seek===1}))};
+   shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
  }
 }
 // Shared fixed-step movement. Render interpolation never changes this state.
@@ -1440,20 +1445,29 @@ function reconcileScrap(previous,next,now){
   for(const w of game.wrecks||[]){
    if(w.hp<0||!visible(w.x,w.y,75))continue;
    ctx.save();ctx.translate(w.x,w.y);
+   const accent=w.kind===1?'#ffd283':'#78ede2';
    if(w.hp>0){
-    ctx.fillStyle='#24333f';ctx.strokeStyle='#738594';ctx.lineWidth=2;
-    ctx.beginPath();ctx.moveTo(-30,-12);ctx.lineTo(-17,-20);ctx.lineTo(17,-16);ctx.lineTo(32,0);ctx.lineTo(17,16);ctx.lineTo(-19,19);ctx.lineTo(-30,10);ctx.closePath();ctx.fill();ctx.stroke();
-    for(let i=0;i<Math.ceil(w.hp/10);i++){
-     const x=-24+10*i;ctx.fillStyle=i===Math.ceil(w.hp/10)-1?'#82919b':'#526573';
-     ctx.fillRect(x,-13,7,26);ctx.fillStyle='#a3b6bd';ctx.fillRect(x,-13,7,2);
+    polygon(0,0,28,6,0);ctx.fillStyle='#182c39';ctx.strokeStyle='#809aa8';ctx.lineWidth=1.5;ctx.fill();ctx.stroke();
+    // Each pair of neighboring corners defines one beveled face of the vault.
+    const faceOrder=[4,1,3,0,2,5],tones=['#617986','#445c6a','#506977','#7d959f','#a2b7be','#829ba5'];
+    const faces=6-Math.floor((50-w.hp)/10);
+    for(let i=0;i<faces;i++){
+     const side=faceOrder[i],a=side*Math.PI/3,b=a+Math.PI/3;
+     ctx.beginPath();
+     ctx.moveTo(26*Math.cos(a+.035),26*Math.sin(a+.035));
+     ctx.lineTo(26*Math.cos(b-.035),26*Math.sin(b-.035));
+     ctx.lineTo(15*Math.cos(b-.065),15*Math.sin(b-.065));
+     ctx.lineTo(15*Math.cos(a+.065),15*Math.sin(a+.065));
+     ctx.closePath();ctx.fillStyle=tones[side];ctx.fill();
     }
    }
    ctx.save();if(w.hp===0)ctx.rotate(game.time*1.4);
-   ctx.strokeStyle=w.kind===1?'#ffd283':'#78ede2';ctx.lineWidth=3;
-   if(w.kind===1){for(const y of [-3,3]){ctx.beginPath();ctx.moveTo(-8,y);ctx.lineTo(9,y);ctx.stroke();}}
+   polygon(0,0,12,6,0);ctx.fillStyle='#102d3d';ctx.strokeStyle=accent;ctx.lineWidth=1.5;ctx.fill();ctx.stroke();
+   ctx.strokeStyle=accent;ctx.lineWidth=2;
+   if(w.kind===1){ctx.beginPath();ctx.moveTo(-8,0);ctx.lineTo(7,0);ctx.moveTo(2,-5);ctx.lineTo(7,0);ctx.lineTo(2,5);ctx.stroke();}
    else{ctx.beginPath();ctx.ellipse(0,0,9,5,-.5,0,Math.PI*2);ctx.stroke();}
    ctx.restore();ctx.font='600 10px system-ui';ctx.textAlign='center';ctx.fillStyle='#e4eced';
-   ctx.fillText(WRECK_NAMES[w.kind]+(w.hp>0?'  '+w.hp+'/50':'  ·  MAGNET'),0,-29);ctx.restore();
+   ctx.fillText(WRECK_NAMES[w.kind]+(w.hp>0?'  '+w.hp+'/50':'  ·  MAGNET'),0,w.hp>0?-35:-20);ctx.restore();
   }
  }
  function drawEventMarkers(){
