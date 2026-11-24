@@ -855,14 +855,14 @@ function reconcileScrap(previous,next,now){
   online.serverTime=next.time;
   next.time=next.finished?next.duration:sameRound?Math.max(previous.time,next.time):next.time;
   for(const actor of next.actors)actor.orbitDelay=(actor.orbitDelay||0)+(next.time-online.serverTime)*.75*(actor.shieldTightness||0);
-  if(!sameRound||!next.human.alive||motionLife(next.human)!==motionLife(old)){online.launchPreview=null;online.nextTriggerFlash=0;online.flashUntil=0;online.shot=data.shotAck||0;}
+  if(!sameRound||!next.human.alive||motionLife(next.human)!==motionLife(old)){online.launches=new Map();online.nextTriggerFlash=0;online.flashUntil=0;online.shot=data.shotAck||0;}
   if(sameRound){
    const prior=new Map(previous.shots.map(shot=>[shot.item.id,shot]));
    const lead=Math.min(.15,(online.rtt||0)/2000);
    for(const shot of next.shots){
     const last=prior.get(shot.item.id);
     if(!last||last.owner!==shot.owner||last.bounces!==shot.bounces)continue;
-    shot.launchOffset=last.launchOffset;
+    shot.visualLaunch=last.visualLaunch;
     // Retain visible forward progress along a confirmed trajectory.
     const speed2=shot.vx*shot.vx+shot.vy*shot.vy;
     const ahead=((last.x-shot.x)*shot.vx+(last.y-shot.y)*shot.vy)/(speed2||1);
@@ -874,24 +874,17 @@ function reconcileScrap(previous,next,now){
   // Apply ammo removal and the corresponding projectile from the same snapshot.
   if(sameRound&&next.human.alive&&motionLife(next.human)===motionLife(old)&&next.human.lastShot>old.lastShot){
    next.events.push({type:'shot'});
-   const preview=online.launchPreview;
-   if(preview){
-    const candidates=next.shots.filter(s=>s.owner===next.human.id&&!s.bounces&&s.life>.85&&!preview.existing.has(s.item.id));
-    for(const marker of preview.shots){
-     if(!candidates.length)break;
-     // Match by flight direction (including scatter), never by a guessed orbital ID.
-     candidates.sort((a,b)=>(b.vx*marker.vx+b.vy*marker.vy)-(a.vx*marker.vx+a.vy*marker.vy));
-     const shot=candidates.shift(),last=shotTrails.get(marker.item.id)?.at(-1);
-     if(last&&Math.hypot(last.x-shot.x,last.y-shot.y)<160){
-      shot.launchOffset={x:last.x-shot.x,y:last.y-shot.y,at:receivedAt};
-      shotTrails.set(shot.item.id,shotTrails.get(marker.item.id));
-     }
-    }
-    online.launchPreview=null;
-   }else{
-    online.flashUntil=receivedAt+85;
-    online.nextTriggerFlash=receivedAt+1000*Math.max(0,MM.fireDelay*(rapidRail(next.human,next.time)?.5:1)-(next.time-next.human.lastShot));
+  }
+  for(const [id,...items] of data.launchReceipts||[]){
+   const launch=online.launches.get(id);if(!launch)continue;
+   for(const [index,item] of items.entries()){
+    const shot=next.shots.find(s=>s.item.id===item&&s.owner===next.human.id&&!s.bounces);
+    const marker=launch.shots[index];if(!shot||!marker)continue;
+    if(!shot.seek)shot.visualLaunch=marker;
+    const trail=shotTrails.get(marker.item.id);
+    if(trail&&!shot.seek)shotTrails.set(item,trail);
    }
+   online.launches.delete(id);
   }
   online.playback.present(next,next.human.id,0);for(const a of next.actors)next.updateOrbits(a,true);
   if(sameRound)reconcileScrap(previous,next,receivedAt);
@@ -903,29 +896,27 @@ function reconcileScrap(previous,next,now){
  }
  function previewLaunch(){
   const pilot=game.human,now=performance.now();
-  if(online.launchPreview||now<(online.nextTriggerFlash||0)||online.socket?.readyState!==WebSocket.OPEN||
+  if(!online.launches||online.launches.size>=8||now<(online.nextTriggerFlash||0)||online.socket?.readyState!==WebSocket.OPEN||
      !pilot.alive||!pilot.pieces.length||game.finished||hasPower(pilot,'phase',game.time))return;
   const count=hasPower(pilot,'scatter',game.time)?Math.min(3,pilot.pieces.length):1,shots=[];
+  const id=++online.shot;
   for(let i=0;i<count;i++){
    const angle=pilot.aim+(i-(count-1)/2)*POWER.scatterSpread,dx=Math.cos(angle),dy=Math.sin(angle);
-   shots.push({item:{id:-1-i,color:'#c5d3d9'},owner:pilot.id,bounces:0,x:pilot.x+dx*26,y:pilot.y+dy*26,
+   shots.push({item:{id:-(id*3+i),color:'#c5d3d9'},owner:pilot.id,bounces:0,at:now,x:pilot.x+dx*26,y:pilot.y+dy*26,
     vx:dx*railSpeed(pilot)+pilot.vx*.12,vy:dy*railSpeed(pilot)+pilot.vy*.12});
-   shotTrails.delete(-1-i);
+
   }
-  online.launchPreview={shots,at:now,existing:new Set(game.shots.map(s=>s.item.id))};
+  online.launches.set(id,{shots,at:now,aim:pilot.aim});
   online.flashUntil=now+85;
   online.nextTriggerFlash=now+1000*MM.fireDelay*(rapidRail(pilot,game.time)?.5:1);
- }
- function requestShot(){
-  if(!online)return;
-  previewLaunch();
-  online.shot++;
   if(!online.failures)sendArenaInput(online);
+ }
+ function requestShot(){if(online)previewLaunch();
  }
 
  function arenaInput(session,requestSeq){
   if(state==='playing')input();const a=game.human,active=state==='playing'&&a.alive;
-  return {action:'input',protocol:2,wire:3,view:{width:width/cam.zoom,height:height/cam.zoom},commands:[],code:session.code,token:session.token,seq:requestSeq,knownVersion:session.version,round:session.round,life:a.spawnSeq,shot:session.shot,input:{x:active?a.moveX:0,y:active?a.moveY:0,aim:a.aim,fire:active&&a.fire,magnet:active&&a.magnet}};
+  return {action:'input',protocol:2,wire:3,view:{width:width/cam.zoom,height:height/cam.zoom},commands:[],code:session.code,token:session.token,seq:requestSeq,knownVersion:session.version,round:session.round,life:a.spawnSeq,shot:session.shot,launches:Array.from(session.launches||[],([id,l])=>[id,l.aim]),input:{x:active?a.moveX:0,y:active?a.moveY:0,aim:a.aim,fire:active&&a.fire,magnet:active&&a.magnet}};
  }
  async function socketLobby(body,signal){
   const response=await fetch(new URL('/lobby',arenaOrigin),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});
@@ -982,7 +973,7 @@ function reconcileScrap(previous,next,now){
   const a=game.human,active=state==='playing'&&a.alive&&!game.finished;
   if(!game.finished){
 
-   if(online.launchPreview&&performance.now()-online.launchPreview.at>350)online.launchPreview=null;
+   for(const [id,l] of online.launches||[])if(performance.now()-l.at>1200)online.launches.delete(id);
    if(active&&a.fire)previewLaunch();
    online.prediction.step(game,a,{x:active?a.moveX:0,y:active?a.moveY:0,aim:a.aim,fire:active&&a.fire,magnet:active&&a.magnet},dt);
    const now=performance.now();online.playback.advance(dt,now,online.rtt||0);
@@ -1314,17 +1305,19 @@ function reconcileScrap(previous,next,now){
  }
  function drawShots(){
   const live=new Set();
-  const preview=online?.launchPreview,now=performance.now();
-  const shots=preview?game.shots.concat(preview.shots):game.shots;
+  const now=performance.now(),shots=game.shots.slice();
+  for(const launch of online?.launches?.values()||[]){
+   if(now-launch.at<350)shots.push(...launch.shots);
+  }
   for(const shot of shots){
    let s=shot;
-   if(shot.item.id<0){
-    const age=Math.max(0,(now-preview.at)/1000);
-    s={...shot,x:shot.x+shot.vx*age,y:shot.y+shot.vy*age};
+   // A straight shot keeps the exact visual ray shown on the trigger frame.
+   // The room still determines the physical impact, armor loss and lifetime.
+   const launch=shot.item.id<0?shot:(!shot.bounces&&!shot.seek&&shot.visualLaunch);
+   if(launch){
+    const age=Math.max(0,(now-launch.at)/1000);
+    s={...shot,x:launch.x+launch.vx*age,y:launch.y+launch.vy*age,vx:launch.vx,vy:launch.vy};
     if(s.x<5||s.y<5||s.x>MM.width-5||s.y>MM.height-5)continue;
-   }else if(shot.launchOffset){
-    const weight=Math.max(0,1-(now-shot.launchOffset.at)/90);
-    if(weight)s={...shot,x:shot.x+shot.launchOffset.x*weight,y:shot.y+shot.launchOffset.y*weight};
    }
    const id=s.item.id;live.add(id);let trail=shotTrails.get(id);if(!trail||trail.bounces!==s.bounces){trail=[];trail.bounces=s.bounces;shotTrails.set(id,trail);}
    const tip=trail.at(-1);if(!tip||Math.hypot(tip.x-s.x,tip.y-s.y)>3){trail.push({x:s.x,y:s.y});if(trail.length>11)trail.shift();}
