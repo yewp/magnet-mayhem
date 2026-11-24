@@ -356,12 +356,10 @@ class MagnetWorld{
    item.vx=Math.cos(angle)*speed;item.vy=Math.sin(angle)*speed;item.pickupAt=this.time+.2;this.ground.push(item);
   }
  }
- launchComet(start,index,small){
-  const pilots=this.actors.filter(a=>a.human&&a.alive);
-  const focus=pilots[index%pilots.length]||this.human;
+ launchComet(start,small){
   const angle=this.random()*Math.PI*2,dx=Math.cos(angle),dy=Math.sin(angle);
-  const px=limit(focus.x+(this.random()-.5)*180,80,MM.width-80);
-  const py=limit(focus.y+(this.random()-.5)*180,80,MM.height-80);
+  const px=9+this.random()*(MM.width-18);
+  const py=9+this.random()*(MM.height-18);
   // Trace both halves of the same line to the inside edge of the arena.
   const edge=(vx,vy)=>{
    const horizontal=vx===0?Infinity:((vx>0?MM.width-8:8)-px)/vx;
@@ -404,10 +402,10 @@ class MagnetWorld{
   if(e?.kind==='comet' && this.time>=e.start){
    if(e.launched==null)this.updateComet(e); // Finish a single comet from an older saved round.
    else while(e.launched<16 && this.time>=e.start+e.launched){
-    const index=e.launched++;this.launchComet(e.start+index,index,index!==0);
+    const index=e.launched++;this.launchComet(e.start+index,index!==0);
    }
   }else if(!e && this.time>=this.soloCometAt && this.time+6.2<Math.min(this.nextEventAt,this.duration)){
-   this.launchComet(this.time,Math.floor(this.random()*8),true);
+   this.launchComet(this.time,true);
    this.soloCometAt=this.duration+1;
   }
   if(this.comets.length){
