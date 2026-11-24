@@ -88,10 +88,10 @@ const POWER=Object.freeze({first:20,recharge:25,radius:34,
 //  polarity  16 s where magnets push loose scrap away and nothing is pulled in;
 //            scrap is still collected by flying right into it
 const EVENTS=['rain','jackpot','blackout','polarity','comet'];
-const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY',comet:'SCRAP COMET'};
+const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY',comet:'ICE COMET SHOWER'};
 const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c',comet:'#80efff'};
 const EVENT=Object.freeze({first:20,gapMin:35,gapMax:45,warn:3,jackpotWarn:5,
- length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:6.2}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
+ length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:21.2}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
 const CRATE_RADIUS=28;
 const CRATE_NORMALS=[[1,0],[0,1],[-1,0],[0,-1]];
 const COMET={trail:48,burst:36,afterglow:1.2};
@@ -356,11 +356,22 @@ class MagnetWorld{
    item.vx=Math.cos(angle)*speed;item.vy=Math.sin(angle)*speed;item.pickupAt=this.time+.2;this.ground.push(item);
   }
  }
+ launchComet(start,index,small){
+  const pilots=this.actors.filter(a=>a.human&&a.alive);
+  const focus=pilots[index%pilots.length]||this.human;
+  const x=(index%2===0)?8:MM.width-8,toX=MM.width-x;
+  const targetY=limit(focus.y+(this.random()-.5)*180,80,MM.height-80);
+  const slope=(this.random()-.5)*.55;
+  const y=limit(targetY+slope*(x-focus.x),20,MM.height-20);
+  const toY=limit(targetY+slope*(toX-focus.x),20,MM.height-20);
+  this.comets.push({start,end:start+6.2,x,y,toX,toY,small,dropped:0,fired:false});
+ }
  updateComet(e){
   const flight=e.end-e.start-COMET.afterglow,dx=e.toX-e.x,dy=e.toY-e.y,length=Math.hypot(dx,dy);
   const tx=dx/length,ty=dy/length,age=this.time-e.start;
-  while(e.dropped<COMET.trail && age>=e.dropped*flight/COMET.trail){
-   const n=e.dropped++,p=cometPoint(e,n/COMET.trail);
+  const trail=e.small?8:COMET.trail,burst=e.small?8:COMET.burst;
+  while(e.dropped<trail && age>=e.dropped*flight/trail){
+   const n=e.dropped++,p=cometPoint(e,n/trail);
    const offset=(n%2?1:-1)*(6+this.random()*12);
    const item=this.scrap(limit(p.x-tx*12-ty*offset,8,MM.width-8),limit(p.y-ty*12+tx*offset,8,MM.height-8));
    item.vx=tx*length/flight*.81-ty*offset*3;item.vy=ty*length/flight*.81+tx*offset*3;this.ground.push(item);
@@ -368,8 +379,8 @@ class MagnetWorld{
   if(age<flight || e.fired)return;
   e.fired=true;
   const inward=e.toX>MM.width/2?-1:1;
-  for(let i=0;i<COMET.burst;i++){
-   const angle=((i+this.random())/COMET.burst-.5)*Math.PI*.94,speed=140+this.random()*300;
+  for(let i=0;i<burst;i++){
+   const angle=((i+this.random())/burst-.5)*Math.PI*.94,speed=140+this.random()*300;
    const item=this.scrap(e.toX,e.toY);item.vx=inward*Math.cos(angle)*speed;item.vy=Math.sin(angle)*speed;
    item.pickupAt=this.time+.15;this.ground.push(item);
   }
@@ -377,22 +388,31 @@ class MagnetWorld{
  eventActive(kind){const e=this.arenaEvent;return Boolean(e)&&e.kind===kind&&this.time>=e.start&&this.time<e.end;}
  updateEvents(){
   const e=this.arenaEvent;
-  if(e?.kind==='comet' && this.time>=e.start)this.updateComet(e);
+  this.comets??=[];
+  this.soloCometAt??=85+this.random()*65;
+  if(e?.kind==='comet' && this.time>=e.start){
+   if(e.launched==null)this.updateComet(e); // Finish a single comet from an older saved round.
+   else while(e.launched<16 && this.time>=e.start+e.launched){
+    const index=e.launched++;this.launchComet(e.start+index,index,index!==0);
+   }
+  }else if(!e && this.time>=this.soloCometAt && this.time+6.2<Math.min(this.nextEventAt,this.duration)){
+   this.launchComet(this.time,Math.floor(this.random()*8),true);
+   this.soloCometAt=this.duration+1;
+  }
+  if(this.comets.length){
+   for(const comet of this.comets)this.updateComet(comet);
+   this.comets=this.comets.filter(comet=>this.time<comet.end);
+  }
   if(e&&this.time>=e.end){if(e.kind==='jackpot')for(let side=0;side<4;side++){if(e.panels & (1<<side))this.spillCrate(e,side);}this.arenaEvent=null;this.nextEventAt=this.time+EVENT.gapMin+this.random()*(EVENT.gapMax-EVENT.gapMin);return;}
   if(!e){
    if(this.nextEventAt==null)this.nextEventAt=EVENT.first;
    if(this.time<this.nextEventAt)return;
-   const options=EVENTS.filter(k=>k!==this.lastEvent),kind=options[Math.floor(this.random()*options.length)];
+   const options=EVENTS.filter(k=>k!==this.lastEvent),kind=this.lastEvent&&!this.hadCometShower?'comet':options[Math.floor(this.random()*options.length)];
    const start=this.time+(kind==='jackpot'?EVENT.jackpotWarn:EVENT.warn),end=start+EVENT.length[kind];
    if(end>this.duration-2){this.nextEventAt=Infinity;return;}
    const next={kind,start,end,x:0,y:0,drops:[],fired:false};
    if(kind==='jackpot'){const p=this.freePoint(55);next.x=p.x;next.y=p.y;next.panels=15;}
-   if(kind==='comet'){
-    const flip=this.random()<.5;
-    next.x=flip?8:MM.width-8;next.toX=MM.width-next.x;
-    next.y=180+this.random()*(MM.height-360);next.toY=180+this.random()*(MM.height-360);
-    next.dropped=0;
-   }
+   if(kind==='comet'){next.launched=0;this.hadCometShower=true;}
    if(kind==='rain'){const alive=this.actors.filter(a=>a.alive);
     for(let i=0;i<EVENT.rainDrops;i++){let p;
      if(i%4===0&&alive.length){const a=alive[Math.floor(this.random()*alive.length)];p={x:limit(a.x+(this.random()-.5)*360,60,MM.width-60),y:limit(a.y+(this.random()-.5)*360,60,MM.height-60)};}
@@ -421,8 +441,10 @@ const wireVortices=w=>(w.vortices||[]).map(v=>[Math.round(v.x),Math.round(v.y),M
 const unwireVortices=list=>(list||[]).map(([x,y,until,owner])=>({x,y,until,owner}));
 // Arena event: [kind, start, end, x, y, [[dropX, dropY, dropTime], ...]] or 0.
 const r2=n=>Math.round(n*100)/100;
-const wireEvent=w=>{const e=w.arenaEvent;return e?[e.kind,r2(e.start),r2(e.end),Math.round(e.x),Math.round(e.y),(e.drops||[]).map(d=>[Math.round(d.x),Math.round(d.y),r2(d.t)]),e.panels??0,e.toX??0,e.toY??0]:0;};
-const unwireEvent=e=>e?{kind:e[0],start:e[1],end:e[2],x:e[3],y:e[4],drops:(e[5]||[]).map(([x,y,t])=>({x,y,t})),panels:e[6]??0,toX:e[7]??0,toY:e[8]??0,fired:false}:null;
+const wireComets=w=>(w.comets||[]).map(c=>[r2(c.start),r2(c.end),Math.round(c.x),Math.round(c.y),Math.round(c.toX),Math.round(c.toY)]);
+const unwireComets=list=>(list||[]).map(([start,end,x,y,toX,toY])=>({start,end,x,y,toX,toY}));
+const wireEvent=w=>{const e=w.arenaEvent;return e?[e.kind,r2(e.start),r2(e.end),Math.round(e.x),Math.round(e.y),(e.drops||[]).map(d=>[Math.round(d.x),Math.round(d.y),r2(d.t)]),e.panels??0,e.toX??0,e.toY??0,...(e.launched!=null?[1]:[])]:0;};
+const unwireEvent=e=>e?{kind:e[0],start:e[1],end:e[2],x:e[3],y:e[4],drops:(e[5]||[]).map(([x,y,t])=>({x,y,t})),panels:e[6]??0,toX:e[7]??0,toY:e[8]??0,fired:false,shower:!!e[9]}:null;
 const wireRound=n=>Math.round((Number(n)||0)*10)/10;
 function wireVisibility(w,selfId,view){
  const self=w.actors.find(a=>a.id===selfId),vw=Number(view?.width),vh=Number(view?.height);
@@ -432,14 +454,14 @@ function wireVisibility(w,selfId,view){
 }
 function encodeWireWorld(w,selfId,view){
  const visible=wireVisibility(w,selfId,view);
- return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),ev:wireEvent(w),
+ return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),cm:wireComets(w),ev:wireEvent(w),
   a:w.actors.map(a=>[WIRE_ACTOR_FIELDS.map(k=>a[k]??0),a.pieces.map(p=>[p.slot,p.item.id,p.item.kind])]),
   g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.origin?[Number(Boolean(p.hot)),p.repelUntil>w.time?r2(p.repelUntil):0,p.origin]:p.repelUntil>w.time?[Number(Boolean(p.hot)),r2(p.repelUntil)]:p.hot?[1]:[])]),
   s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.deflectTrailUntil>w.time?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil)]:s.seek?[1]:[])])};
 }
 function decodeWireWorld(w){
  if(w?.wire!==2)return w;
- return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],
+ return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],
   actors:w.a.map(([values,pieces])=>{const a=Object.fromEntries(WIRE_ACTOR_FIELDS.map((k,i)=>[k,values[i]]));a.pieces=pieces.map(([slot,id,kind])=>({slot,item:{id,kind,color:WIRE_METALS[kind]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0}));return a;}),
   ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
   shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0,deflectTrailUntil=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,seek:seek===1}))};
@@ -465,7 +487,7 @@ class WireSender{
  encode(w,selfId,view){
   const key=this.ticks++%WIRE3_KEYFRAME_TICKS===0,visible=wireVisibility(w,selfId,view),t=w.time;
   if(key)this.pieces.clear();
-  const out={wire:3,time:w.time,finished:w.finished,pads:wirePads(w),vx:wireVortices(w),ev:wireEvent(w)};
+  const out={wire:3,time:w.time,finished:w.finished,pads:wirePads(w),vx:wireVortices(w),cm:wireComets(w),ev:wireEvent(w)};
   if(key)Object.assign(out,{key:1,duration:w.duration,difficulty:w.difficulty,wells:w.wells,covers:w.covers});
   const feed=JSON.stringify(w.feed);if(key||feed!==this.feed){out.feed=w.feed;this.feed=feed;}
   const roster=w.actors.map(a=>[a.id,a.name,a.color,a.human?1:0]),rosterText=JSON.stringify(roster);
@@ -503,7 +525,7 @@ class WireReceiver{
    a.pieces=[];for(let i=0;i<pieces.length;i+=3)a.pieces.push({slot:pieces[i],item:{id:pieces[i+1],kind:pieces[i+2],color:WIRE_METALS[pieces[i+2]]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0});
    actors.push(a);
   }
-  return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],actors,
+  return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],actors,
    ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
    shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0,deflectTrailUntil=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,seek:seek===1}))};
  }
@@ -1355,6 +1377,7 @@ function reconcileScrap(previous,next,now){
   ctx.restore();
  }
  function drawEventMarkers(){
+  for(const comet of game.comets||[])drawScrapComet(comet);
   const e=game.arenaEvent;
   if(!e || game.time>=e.end)return;
   ctx.save();ctx.strokeStyle=EVENT_COLORS[e.kind];ctx.lineWidth=2;
@@ -1380,7 +1403,7 @@ function reconcileScrap(previous,next,now){
    }
    ctx.stroke();
   }
-  if(e.kind==='comet')drawScrapComet(e);
+  if(e.kind==='comet' && e.launched==null && !e.shower)drawScrapComet(e);
   if(e.kind==='rain')for(const drop of e.drops){
    const left=drop.t-game.time;
    if(left<-.35 || left>2 || !visible(drop.x,drop.y))continue;
