@@ -293,7 +293,7 @@ class MagnetWorld{
    if(this.eventActive('polarity')){
     for(const a of this.actors){if(!a.alive||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a);
      if(d<28&&canCollectScrap(a,item,this.time)){if(this.attach(a,item,true))item.dead=true;break;}
-     if(a.magnet&&d<magnetRange(a)){const push=EVENT.repel*(1-d/magnetRange(a))*dt/(d||1);item.repelUntil=this.time+.22;item.vx+=(item.x-a.x)*push;item.vy+=(item.y-a.y)*push;}}
+     if(a.magnet&&!hotForPilot(a,item,this.time)&&d<magnetRange(a)){const push=EVENT.repel*(1-d/magnetRange(a))*dt/(d||1);item.repelUntil=this.time+.22;item.vx+=(item.x-a.x)*push;item.vy+=(item.y-a.y)*push;}}
     const speed=Math.hypot(item.vx,item.vy);if(speed>540){item.vx*=540/speed;item.vy*=540/speed;}
     continue;
    }
