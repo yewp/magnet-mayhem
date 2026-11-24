@@ -359,12 +359,18 @@ class MagnetWorld{
  launchComet(start,index,small){
   const pilots=this.actors.filter(a=>a.human&&a.alive);
   const focus=pilots[index%pilots.length]||this.human;
-  const x=(index%2===0)?8:MM.width-8,toX=MM.width-x;
-  const targetY=limit(focus.y+(this.random()-.5)*180,80,MM.height-80);
-  const slope=(this.random()-.5)*.55;
-  const y=limit(targetY+slope*(x-focus.x),20,MM.height-20);
-  const toY=limit(targetY+slope*(toX-focus.x),20,MM.height-20);
-  this.comets.push({start,end:start+6.2,x,y,toX,toY,small,dropped:0,fired:false});
+  const angle=this.random()*Math.PI*2,dx=Math.cos(angle),dy=Math.sin(angle);
+  const px=limit(focus.x+(this.random()-.5)*180,80,MM.width-80);
+  const py=limit(focus.y+(this.random()-.5)*180,80,MM.height-80);
+  // Trace both halves of the same line to the inside edge of the arena.
+  const edge=(vx,vy)=>{
+   const horizontal=vx===0?Infinity:((vx>0?MM.width-8:8)-px)/vx;
+   const vertical=vy===0?Infinity:((vy>0?MM.height-8:8)-py)/vy;
+   const t=Math.min(horizontal,vertical);
+   return {x:px+t*vx,y:py+t*vy};
+  };
+  const from=edge(-dx,-dy),to=edge(dx,dy);
+  this.comets.push({start,end:start+6.2,x:from.x,y:from.y,toX:to.x,toY:to.y,small,dropped:0,fired:false});
  }
  updateComet(e){
   const flight=e.end-e.start-COMET.afterglow,dx=e.toX-e.x,dy=e.toY-e.y,length=Math.hypot(dx,dy);
@@ -378,10 +384,15 @@ class MagnetWorld{
   }
   if(age<flight || e.fired)return;
   e.fired=true;
-  const inward=e.toX>MM.width/2?-1:1;
+  const xWall=Math.min(e.toX,MM.width-e.toX),yWall=Math.min(e.toY,MM.height-e.toY);
+  const normal=xWall<=yWall?(e.toX>MM.width/2?Math.PI:0):(e.toY>MM.height/2?-Math.PI/2:Math.PI/2);
   for(let i=0;i<burst;i++){
-   const angle=((i+this.random())/burst-.5)*Math.PI*.94,speed=140+this.random()*300;
-   const item=this.scrap(e.toX,e.toY);item.vx=inward*Math.cos(angle)*speed;item.vy=Math.sin(angle)*speed;
+   const angle=normal+((i+this.random())/burst-.5)*Math.PI*.94,speed=140+this.random()*300;
+   const item=this.scrap(e.toX,e.toY);item.vx=Math.cos(angle)*speed;item.vy=Math.sin(angle)*speed;
+   if(Math.abs(xWall-yWall)<1e-6){
+    item.vx=Math.abs(item.vx)*(e.toX>MM.width/2?-1:1);
+    item.vy=Math.abs(item.vy)*(e.toY>MM.height/2?-1:1);
+   }
    item.pickupAt=this.time+.15;this.ground.push(item);
   }
  }
