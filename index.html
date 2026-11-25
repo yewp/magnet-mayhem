@@ -70,7 +70,8 @@ const newWrecks=()=>[{x:960,y:1120,kind:1},{x:1840,y:1080,kind:2}].map(w=>({...w
 const armorCapacity=a=>MM.maxArmor+(a?.wreckMod===2?8:0);
 // Power-ups spawn on fixed pads; a pilot holds one timed ability at a time.
 //  rapid      fire twice as fast
-//  leech      drain one armor piece from the nearest rival in range every half second
+//  leech      latch onto the nearest rival in range and pull one armor piece down the tether
+//             every half second; the latch holds until they get out of hold range
 //  deflector  shots that hit your armor bounce back at the shooter; you keep the piece
 //  seeker     your shots curve toward the nearest enemy core ahead of them
 //  phase      shots pass straight through you, but you cannot fire
@@ -81,7 +82,7 @@ const POWER_LABELS={rapid:'RAPID RAIL',leech:'LEECH',deflector:'DEFLECTOR',seeke
 const POWER_COLORS={rapid:'#ff6b4a',leech:'#9cf04a',deflector:'#5fd4ff',seeker:'#ff5fd2',phase:'#b9a6ff',scatter:'#ffc94a',vortex:'#7a8cff'};
 const POWER=Object.freeze({first:20,recharge:25,radius:34,
  duration:Object.freeze({rapid:8,leech:6,deflector:6,seeker:8,phase:4,scatter:8,vortex:0}),
- leechRange:230,leechEvery:.5,seekRange:460,seekCone:1.2,seekTurn:2.6,scatterSpread:.2,vortexLife:6,vortexRadius:280});
+ leechRange:230,leechHold:1.4,leechEvery:.5,leechFlight:1.5,leechSpeed:720,seekRange:460,seekCone:1.2,seekTurn:2.6,scatterSpread:.2,vortexLife:6,vortexRadius:280});
 // Arena events: the first is announced 20 s in, then one every 35-45 s (never the
 // same kind twice in a row), each announced a few seconds before it starts.
 //  rain      scrap falls at marked spots over 6 s, some of it where players are
@@ -147,7 +148,7 @@ class MagnetWorld{
  spawn(a,initial=false,index=0){
   a.wreckMod=0;a.spawnSeq=(a.spawnSeq||0)+1;
   let p;if(initial&&a.human)p={x:1400,y:1100};else if(initial){const angle=index/MM.bots*Math.PI*2,r=740+this.random()*180;p={x:limit(1400+Math.cos(angle)*r,120,MM.width-120),y:limit(1100+Math.sin(angle)*r,120,MM.height-120)};}else p=this.safeSpawn(a);
-  a.x=a.prevX=p.x;a.y=a.prevY=p.y;a.vx=a.vy=0;a.hp=3;a.alive=true;a.pieces=[];a.fire=a.magnet=false;a.shieldTightness=0;a.orbitDelay=0;a.moveX=a.moveY=0;a.shieldUntil=this.time+(a.human?3.5:2);a.hurtUntil=0;a.repair=0;a.powerUntil=0;a.leechAt=0;a.rushStart=a.rushUntil=0;a.nextShot=this.time+(a.human?0:.3);a.think=0;
+  a.x=a.prevX=p.x;a.y=a.prevY=p.y;a.vx=a.vy=0;a.hp=3;a.alive=true;a.pieces=[];a.fire=a.magnet=false;a.shieldTightness=0;a.orbitDelay=0;a.moveX=a.moveY=0;a.shieldUntil=this.time+(a.human?3.5:2);a.hurtUntil=0;a.repair=0;a.powerUntil=0;a.leechAt=0;a.leechId=0;a.rushStart=a.rushUntil=0;a.nextShot=this.time+(a.human?0:.3);a.think=0;
   const count=initial?(a.human?8:[6,9,12,15,18,20,7,11,14,22][index]):6;
   for(let i=0;i<count;i++){const item=this.scrap(a.x,a.y);item.origin=a.id;a.seen.add(item.id);this.attach(a,item,false);}
   this.bound(a);this.updateOrbits(a,true);if(a.human&&!initial)this.event('respawn');
@@ -304,7 +305,7 @@ class MagnetWorld{
    for(const v of this.vortices){const dx=v.x-item.x,dy=v.y-item.y,d=Math.hypot(dx,dy)||1;if(d>POWER.vortexRadius)continue;
     const pull=(120+900*(1-d/POWER.vortexRadius))*dt;item.vx+=(dx/d-dy/d*.6)*pull;item.vy+=(dy/d+dx/d*.6)*pull;
     if(d<45){item.vx*=Math.exp(-6*dt);item.vy*=Math.exp(-6*dt);}const speed=Math.hypot(item.vx,item.vy);if(speed>420){item.vx*=420/speed;item.vy*=420/speed;}}
-   if(item.expiresAt<=this.time){item.dead=true;continue;}if(this.time<item.pickupAt)continue;
+   if(item.expiresAt<=this.time){item.dead=true;continue;}if(item.leechTo&&this.leechFlight(item,dt))continue;if(this.time<item.pickupAt)continue;
    if(this.eventActive('polarity')){
     for(const a of this.actors){if(!a.alive||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a);
      if(d<28&&canCollectScrap(a,item,this.time)){if(this.attach(a,item,true))item.dead=true;break;}
@@ -376,21 +377,39 @@ class MagnetWorld{
   this.burst(a.x,a.y,POWER_COLORS[kind],24,200);this.label(a.x,a.y-30,POWER_LABELS[kind],POWER_COLORS[kind]);
   if(a===this.human)this.event('power',{kind});
  }
- // The rival a leeching pilot drains: the nearest one in range with armor to take.
+ // The rival a leeching pilot is latched onto. The latch holds while they stay within hold
+ // range (and still have armor); otherwise it grabs the nearest rival within leech range.
  leechTarget(a){
+  const open=b=>b&&b!==a&&b.alive&&b.pieces.length&&!(b.shieldUntil>this.time)&&!hasPower(b,'phase',this.time);
+  const held=a.leechId?this.actors.find(b=>b.id===a.leechId):null;
+  if(open(held)&&distance(a,held)<=POWER.leechRange*POWER.leechHold)return held;
   let target=null,best=POWER.leechRange;
-  for(const b of this.actors){if(b===a||!b.alive||!b.pieces.length||b.shieldUntil>this.time||hasPower(b,'phase',this.time))continue;const d=distance(a,b);if(d<best){best=d;target=b;}}
+  for(const b of this.actors){if(!open(b))continue;const d=distance(a,b);if(d<best){best=d;target=b;}}
   return target;
  }
+ // Stolen pieces fly down the tether to the leecher. Nobody else can grab them on the way;
+ // a full leecher banks them as salvage points instead of armor.
  updateLeech(){
   for(const a of this.actors){
-   if(!a.alive||!hasPower(a,'leech',this.time)||this.time<(a.leechAt||0)||a.pieces.length>=armorCapacity(a))continue;
-   const target=this.leechTarget(a);if(!target)continue;
+   if(!a.alive||!hasPower(a,'leech',this.time)){a.leechId=0;continue;}
+   const target=this.leechTarget(a);a.leechId=target?target.id:0;
+   if(!target||this.time<(a.leechAt||0))continue;
    const p=target.pieces.pop();a.leechAt=this.time+POWER.leechEvery;
    this.burst(p.x,p.y,POWER_COLORS.leech,6,90);
-   if(!this.attach(a,p.item,true))this.drop(p.item,p.x,p.y,0,0,target.id,HOT_SCRAP_SECONDS,true);
+   const dx=a.x-p.x,dy=a.y-p.y,d=Math.hypot(dx,dy)||1;
+   this.drop(p.item,p.x,p.y,dx/d*POWER.leechSpeed*.5,dy/d*POWER.leechSpeed*.5,target.id,HOT_SCRAP_SECONDS,true);
+   p.item.pickupAt=this.time;p.item.leechTo=a.id;p.item.leechUntil=this.time+POWER.leechFlight;
    if(a===this.human)this.event('leech');else if(target===this.human)this.event('leeched');
   }
+ }
+ // One step of a stolen piece homing in on its leecher; returns false once it is ordinary scrap again.
+ leechFlight(item,dt){
+  const a=this.time<item.leechUntil?this.actors.find(b=>b.id===item.leechTo):null;
+  if(!a||!a.alive){item.leechTo=0;return false;}
+  const dx=a.x-item.x,dy=a.y-item.y,d=Math.hypot(dx,dy)||1;
+  if(d<28){item.ignoreUntil=Math.min(item.ignoreUntil,this.time);if(this.attach(a,item,true)){item.dead=true;return true;}item.leechTo=0;return false;}
+  const k=Math.min(1,dt*10);item.vx+=(dx/d*POWER.leechSpeed-item.vx)*k;item.vy+=(dy/d*POWER.leechSpeed-item.vy)*k;
+  return true;
  }
  // Seeker shots turn toward the nearest enemy core within reach and roughly ahead.
  steerSeeker(s,dt){
@@ -545,7 +564,7 @@ class MagnetWorld{
 // Orbit positions, particle effects, and colors are rebuilt locally rather than
 // transferred as hundreds of redundant objects on every update.
 const WIRE_METALS=['#9dbbd5','#efae72','#ffda79'];
-const WIRE_ACTOR_FIELDS=['id','name','color','human','x','y','vx','vy','hp','alive','phase','score','kills','deaths','steals','aim','fire','magnet','shieldUntil','hurtUntil','lastShot','lastHurt','repair','respawnAt','flashUntil','spawnSeq','moveX','moveY','pullRank','orbitRank','railRank','shieldTightness','orbitDelay','bankedLevel','powerUntil','powerKind','powerAt','fullSalvage','wreckMod','rushStart','rushUntil'];
+const WIRE_ACTOR_FIELDS=['id','name','color','human','x','y','vx','vy','hp','alive','phase','score','kills','deaths','steals','aim','fire','magnet','shieldUntil','hurtUntil','lastShot','lastHurt','repair','respawnAt','flashUntil','spawnSeq','moveX','moveY','pullRank','orbitRank','railRank','shieldTightness','orbitDelay','bankedLevel','powerUntil','powerKind','powerAt','fullSalvage','wreckMod','rushStart','rushUntil','leechId'];
 const wireDust=(w,visible)=>(w.stardust||[]).filter(visible).map(m=>[m.id,Math.round(m.x),Math.round(m.y)]);
 const unwireDust=list=>(list||[]).map(([id,x,y])=>({id,x,y}));
 // Power-up pads: [x, y, kind (-1 while charging), readyAt].
@@ -620,7 +639,7 @@ class WireSender{
   });
   // Pickup and ignore windows that already ended are sent as zero.
   out.sd=wireDust(w,visible);out.g=w.ground.filter(visible).map(p=>{const ignoring=p.ignoreUntil>t;return wireTrim([p.id,wireDigits(p.x,1),wireDigits(p.y,1),p.kind,wireDigits(p.expiresAt,1),
-   wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0,p.repelUntil>t?r2(p.repelUntil):0,p.origin||0]);});
+   wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0,p.repelUntil>t?r2(p.repelUntil):0,p.origin||0,...(p.leechTo&&p.leechUntil>t?[p.leechTo,r2(p.leechUntil)]:[])]);});
   out.s=w.shots.filter(visible).map(s=>wireTrim([s.item.id,s.item.kind,s.owner,wireDigits(s.x,1),wireDigits(s.y,1),wireDigits(s.vx,1),wireDigits(s.vy,1),wireDigits(s.life,3),s.bounces,s.seek?1:0,s.deflectTrailUntil>t?r2(s.deflectTrailUntil):0,s.pierce?1:0]));
   return out;
  }
@@ -645,7 +664,7 @@ class WireReceiver{
    actors.push(a);
   }
   return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(this.wrecks),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],actors,
-   stardust:unwireDust(w.sd),ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
+   stardust:unwireDust(w.sd),ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0,leechTo=0,leechUntil=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil,leechTo,leechUntil})),
    shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
  }
 }
@@ -1293,13 +1312,13 @@ function reconcileScrap(previous,next,now){
     ctx.fillStyle='#7fa3b8b0';ctx.font='600 9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillText(Math.ceil(left)+'s',pad.x,pad.y+46);}
    ctx.restore();}
  }
- const POWER_HINTS={rapid:'Double fire rate',leech:'Draining the nearest rival',deflector:'Shots bounce off your armor',seeker:'Shots curve toward enemies',phase:'Untouchable, cannot fire',scatter:'Three pieces per shot',vortex:'Scrap swirls to the pad'};
- const POWER_TOASTS={rapid:'RAPID RAIL: fire twice as fast.',leech:'LEECH: you drain armor from the nearest rival in range.',deflector:'DEFLECTOR: shots that hit your armor bounce back.',seeker:'SEEKER ROUNDS: your shots curve toward enemies.',phase:'PHASE: shots pass through you, but you cannot fire.',scatter:'SCATTER SHOT: every shot fires three pieces.',vortex:'SCRAP VORTEX: loose scrap is swirling into the pad. Go claim it!'};
+ const POWER_HINTS={rapid:'Double fire rate',leech:'Latched on: stealing their armor',deflector:'Shots bounce off your armor',seeker:'Shots curve toward enemies',phase:'Untouchable, cannot fire',scatter:'Three pieces per shot',vortex:'Scrap swirls to the pad'};
+ const POWER_TOASTS={rapid:'RAPID RAIL: fire twice as fast.',leech:'LEECH: latch onto a nearby rival and pull their armor down the tether.',deflector:'DEFLECTOR: shots that hit your armor bounce back.',seeker:'SEEKER ROUNDS: your shots curve toward enemies.',phase:'PHASE: shots pass through you, but you cannot fire.',scatter:'SCATTER SHOT: every shot fires three pieces.',vortex:'SCRAP VORTEX: loose scrap is swirling into the pad. Go claim it!'};
  function powerAuras(){
   for(const a of game.actors){if(!a.alive||!holdsPower(a,game.time)||!visible(a.x,a.y,260))continue;const kind=POWERS[a.powerKind];if(!kind)continue;const color=POWER_COLORS[kind],t=performance.now()/1000;
    ctx.save();ctx.strokeStyle=color;ctx.globalAlpha=.45+Math.sin(t*8)*.2;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(a.x,a.y,24,0,Math.PI*2);ctx.stroke();
    if(kind==='deflector'){const outer=a.pieces.length?shieldRadius(a,Math.max(...a.pieces.map(p=>orbitSlot(p.slot).radius)))+14:40;ctx.globalAlpha=.35+.15*Math.sin(t*5);ctx.lineWidth=2;polygon(a.x,a.y,outer,6,t*.4);ctx.stroke();}
-   if(kind==='leech'){const target=game.leechTarget?.(a);if(target){ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
+   if(kind==='leech'){const target=a.leechId?game.actors.find(b=>b.id===a.leechId&&b.alive):null;if(target){ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
     for(const [w,al] of [[6,.12],[2,.6]]){ctx.lineWidth=w;ctx.globalAlpha=al;ctx.beginPath();ctx.moveTo(target.x,target.y);
      for(let k=1;k<=12;k++){const f=k/12,wob=Math.sin(f*Math.PI*3-t*14)*8*Math.sin(f*Math.PI),dx=a.x-target.x,dy=a.y-target.y,len=Math.hypot(dx,dy)||1;ctx.lineTo(target.x+dx*f-dy/len*wob,target.y+dy*f+dx/len*wob);}ctx.stroke();}}}
    if(kind==='scatter'||kind==='seeker'||kind==='rapid'){ctx.globalAlpha=.5;ctx.lineWidth=2;for(let k=0;k<3;k++){const ang=a.aim+(k-1)*(kind==='scatter'?.2:0);ctx.beginPath();ctx.moveTo(a.x+Math.cos(ang)*30,a.y+Math.sin(ang)*30);ctx.lineTo(a.x+Math.cos(ang)*(38+k*(kind==='scatter'?0:4)),a.y+Math.sin(ang)*(38+k*(kind==='scatter'?0:4)));ctx.stroke();if(kind!=='scatter')break;}}
@@ -1601,8 +1620,7 @@ function reconcileScrap(previous,next,now){
   ctx.fillStyle=color;ctx.fillRect(x+8,y+25,(w-16)*frac,2);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,width/2,y+14);ctx.restore();}
  // Comet route previews: a dashed line across the arena and an arrow at the entry point.
  function cometPreview(e){const lead=e.start-game.time;if(lead<=0||lead>COMET.preview+.05)return;const k=1-lead/COMET.preview,dx=e.toX-e.x,dy=e.toY-e.y,len=Math.hypot(dx,dy)||1;
-  ctx.save();ctx.strokeStyle=EVENT_COLORS.comet;ctx.globalAlpha=.12+.4*k;ctx.lineWidth=2;ctx.setLineDash([14,12]);ctx.lineDashOffset=-performance.now()/25;
-  ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(e.x+dx*k,e.y+dy*k);ctx.stroke();ctx.setLineDash([]);
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.25+.55*k;const glow=26+30*k;ctx.drawImage(softSprite('rgba(244,247,255,1)'),e.x-glow,e.y-glow,glow*2,glow*2);ctx.globalCompositeOperation='source-over';
   ctx.globalAlpha=.5+.5*k;ctx.fillStyle=EVENT_COLORS.comet;ctx.translate(e.x+dx/len*40,e.y+dy/len*40);ctx.rotate(Math.atan2(dy,dx));ctx.beginPath();ctx.moveTo(14,0);ctx.lineTo(-8,-9);ctx.lineTo(-3,0);ctx.lineTo(-8,9);ctx.closePath();ctx.fill();ctx.restore();}
  // Arrows at the screen edge for comets about to enter from off screen.
  function cometIndicators(){if(state==='menu')return;const margin=34;
@@ -1620,8 +1638,8 @@ function reconcileScrap(previous,next,now){
   if(!game.eventActive('blackout'))return;
   const e=game.arenaEvent,fade=Math.min(1,(game.time-e.start)/.6,(e.end-game.time)/.6);ctx.save();ctx.globalAlpha=fade;
   const x=width/2+(game.human.x-cam.x)*cam.zoom,y=height/2+(game.human.y-cam.y)*cam.zoom;
-  const shade=ctx.createRadialGradient(x,y,45,x,y,260*cam.zoom);
-  shade.addColorStop(0,'transparent');shade.addColorStop(1,'rgba(2,5,16,.89)');
+  const shade=ctx.createRadialGradient(x,y,40,x,y,230*cam.zoom);
+  shade.addColorStop(0,'transparent');shade.addColorStop(.55,'rgba(2,5,16,.75)');shade.addColorStop(1,'rgba(2,5,16,.993)');
   ctx.fillStyle=shade;ctx.fillRect(0,0,width,height);
   // Rivals stay visible as glowing outlines in the dark.
   ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);ctx.globalCompositeOperation='lighter';
