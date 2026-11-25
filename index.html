@@ -264,7 +264,6 @@ class MagnetWorld{
   const killer=this.actors.find(b=>b.id===owner);if(killer&&killer!==a){killer.kills++;killer.score+=KNOCKOUT_REWARD;
    if(killer.alive && killer.hp<3){
     killer.hp=Math.min(3,killer.hp+1);
-    this.label(killer.x,killer.y-32,'+1 HP','#7af2d0');
    }
    this.feed.unshift({killer:killer.name,victim:a.name,color:killer.color,time:this.time});this.feed=this.feed.slice(0,4);if(killer.human)this.event('kill',{name:a.name});}
   this.burst(a.x,a.y,a.color,35,260);if(a.human)this.event('death',{name:killer?.name||'a rival'});
@@ -367,7 +366,7 @@ class MagnetWorld{
   this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateStardust(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
   for(const a of this.actors){if(!a.alive){if(this.time>=a.respawnAt)this.spawn(a);continue;}
    const canRepair=a.hp<3&&this.time-a.lastHurt>2&&this.time-a.lastShot>1.5&&this.wells.some(w=>distance(a,w)<w.r-9);
-   if(canRepair){a.repair+=dt;if(a.repair>=3){a.hp++;a.repair=0;this.burst(a.x,a.y,'#7af2d0',12,80);if(a.human)this.event('repair');}}else a.repair=0;
+   if(canRepair){a.repair+=dt;if(a.repair>=3){a.hp++;a.repair=0;if(a.human)this.event('repair');}}else a.repair=0;
   }
   for(const p of this.effects){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=Math.exp(-dt*3);p.vy*=Math.exp(-dt*3);p.life-=dt;}this.effects=this.effects.filter(p=>p.life>0);
   for(const p of this.labels){p.y-=dt*22;p.life-=dt;}this.labels=this.labels.filter(p=>p.life>0);
@@ -1429,11 +1428,12 @@ function reconcileScrap(previous,next,now){
  }
  // Hit feedback. Hits are detected by a ship's lastHurt changing and knockouts by new
  // kill-feed entries, so the same code works offline and with online snapshots.
- const GLITCH_MS=340,POP_MS=1100,glitchAt=new Map(),lastHurtSeen=new Map(),popsSeen=new Set(),pops=[];
+ const GLITCH_MS=340,POP_MS=1100,HEAL_MS=1200,glitchAt=new Map(),lastHurtSeen=new Map(),hpSeen=new Map(),healAt=new Map(),popsSeen=new Set(),pops=[];
  let glitchBuf=null;
  function watchCombat(now){
   for(const a of game.actors){const seen=lastHurtSeen.get(a.id);lastHurtSeen.set(a.id,a.lastHurt);
-   if(seen!=null&&a.lastHurt>seen&&game.time-a.lastHurt<.5)glitchAt.set(a.id,now);}
+   if(seen!=null&&a.lastHurt>seen&&game.time-a.lastHurt<.5)glitchAt.set(a.id,now);
+   const was=hpSeen.get(a.id);hpSeen.set(a.id,{hp:a.hp,alive:a.alive});if(was&&was.alive&&a.alive&&a.hp>was.hp)healAt.set(a.id,now);}
   for(const e of game.feed||[]){const key=e.time.toFixed(2)+'|'+e.killer+'|'+e.victim;if(popsSeen.has(key))continue;popsSeen.add(key);
    if(game.time-e.time>1.5)continue;
    const victim=game.actors.find(a=>a.name===e.victim&&!a.alive)||game.actors.find(a=>a.name===e.victim);if(!victim)continue;
@@ -1462,6 +1462,19 @@ function reconcileScrap(previous,next,now){
    ctx.drawImage(canvas,x0,by,w,bh,x0+shift,by,w,bh);
    if(Math.random()<.5){ctx.fillStyle=Math.random()<.5?'#ff2d6f':'#2df2ff';ctx.globalAlpha=.35*k;ctx.fillRect(x0+shift,by,w,Math.max(1,bh/3));ctx.globalAlpha=1;}}
   ctx.restore();
+ }
+ function drawHeals(now){
+  for(const [id,at] of healAt){const life=(now-at)/HEAL_MS;if(life>=1){healAt.delete(id);continue;}const f=Math.min(1,(now-at)/900);
+   const a=game.actors.find(b=>b.id===id);if(!a||!a.alive||!visible(a.x,a.y,80))continue;
+   ctx.save();ctx.globalCompositeOperation='lighter';
+   const flash=Math.max(0,1-f*2);if(flash>0){ctx.globalAlpha=.8*flash;ctx.drawImage(softSprite('rgba(122,242,208,1)'),a.x-30,a.y-30,60,60);}
+   ctx.lineCap='round';ctx.lineWidth=2;ctx.strokeStyle='#7af2d0';
+   for(let i=0;i<6;i++){const ang=i/6*Math.PI*2+.4+a.id,d=12+f*46,x=a.x+Math.cos(ang)*d,y=a.y+Math.sin(ang)*d-f*8,s=4*(1-f*.3);
+    ctx.globalAlpha=1-f;ctx.beginPath();ctx.moveTo(x-s,y);ctx.lineTo(x+s,y);ctx.moveTo(x,y-s);ctx.lineTo(x,y+s);ctx.stroke();}
+   ctx.restore();
+   // A small +1 rises above the ship and fades.
+   ctx.save();ctx.globalAlpha=Math.min(1,(1-life)/.35);ctx.font='700 14px Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+   const ty=a.y-30-life*20;ctx.lineWidth=3;ctx.strokeStyle='#07111dcc';ctx.strokeText('+1',a.x,ty);ctx.fillStyle='#7af2d0';ctx.fillText('+1',a.x,ty);ctx.restore();}
  }
  function drawPops(now){
   for(const p of pops){const t=(now-p.start)/1000,size=p.big?28:17;
@@ -1685,7 +1698,7 @@ function reconcileScrap(previous,next,now){
   for(const a of game.actors){if(!a.alive||a===game.human||!visible(a.x,a.y,40))continue;polygon(a.x,a.y,18,6,a.aim);ctx.strokeStyle=a.color;ctx.globalAlpha=.22*fade;ctx.lineWidth=6;ctx.stroke();ctx.globalAlpha=.7*fade;ctx.lineWidth=2;ctx.stroke();}
   ctx.restore();
  }
- function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);if(state!=='menu'){watchEvent();watchRush();}ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();drawWrecks();drawEventMarkers();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawStardust();drawSmoke();powerAuras();drawRush();drawPilots();drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();drawBlackout();cometIndicators();vignette();eventBanner();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
+ function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);if(state!=='menu'){watchEvent();watchRush();}ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();drawWrecks();drawEventMarkers();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawStardust();drawSmoke();powerAuras();drawRush();drawPilots();drawHeals(drawNow);drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();drawBlackout();cometIndicators();vignette();eventBanner();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
  function frame(now){frames++;if(now-framesAt>=1000){
   const fps=frames*1000/(now-framesAt);
   if(online&&state==='playing'&&!document.hidden&&frames>8&&fps<45&&dpr>.75){pixelRatioCap=Math.max(.75,dpr-.25);resize();}
