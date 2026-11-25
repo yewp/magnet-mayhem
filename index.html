@@ -671,6 +671,9 @@ function decodeWireWorld(w){
 // prediction replays from it), and names, colors, the map, the kill feed and each
 // ship's orbiting scrap are sent only when they change. Every KEYFRAME_TICKS
 // messages carry everything, so a receiver can always resynchronize.
+// Clients that ask for it ({delta: true}) also get still scrap and unchanged ship values
+// left out between keyframes. Those updates are numbered (n), so a receiver that ever
+// misses one waits for the next keyframe instead of building on stale state.
 const WIRE3_KEYFRAME_TICKS=40;
 const WIRE3_ACTOR_FIELDS=WIRE_ACTOR_FIELDS.filter(k=>!['name','color','human','skin','core','tail'].includes(k));
 const WIRE3_BOOLEANS=new Set(['alive','fire','magnet']);
@@ -681,54 +684,85 @@ const wireDigits=(n,d)=>{const f=10**d;return Math.round((Number(n)||0)*f)/f;};
 // Trailing zeros are implied by the decoder's defaults.
 const wireTrim=list=>{let end=list.length;while(end>1&&!list[end-1])end--;return end===list.length?list:list.slice(0,end);};
 class WireSender{
- constructor(){this.ticks=0;this.feed=null;this.roster=null;this.pieces=new Map();}
+ constructor({delta=false}={}){this.delta=delta;this.ticks=0;this.feed=null;this.roster=null;this.pieces=new Map();this.values=new Map();this.ground=new Map();}
  encode(w,selfId,view){
-  const key=this.ticks++%WIRE3_KEYFRAME_TICKS===0,visible=wireVisibility(w,selfId,view),t=w.time;
-  if(key)this.pieces.clear();
+  const key=this.ticks++%WIRE3_KEYFRAME_TICKS===0,visible=wireVisibility(w,selfId,view),t=w.time,delta=this.delta;
+  if(key){this.pieces.clear();this.values.clear();this.ground.clear();}
   const out={wire:3,time:w.time,finished:w.finished,pads:wirePads(w),vx:wireVortices(w),cm:wireComets(w),ev:wireEvent(w)};
+  if(delta)out.n=this.ticks;
   const wrecks=wireWrecks(w),wreckText=JSON.stringify(wrecks);
   if(key||this.wreckText!==wreckText){out.wr=wrecks;this.wreckText=wreckText;}
   if(key)Object.assign(out,{key:1,duration:w.duration,difficulty:w.difficulty,wells:w.wells,covers:w.covers});
   const feed=JSON.stringify(w.feed);if(key||feed!==this.feed){out.feed=w.feed;this.feed=feed;}
   const roster=w.actors.map(a=>[a.id,a.name,a.color,a.human?1:0,a.skin||0,a.core||0,a.tail||0]),rosterText=JSON.stringify(roster);
-  if(key||rosterText!==this.roster){out.roster=roster;this.roster=rosterText;}
+  const rosterChanged=key||rosterText!==this.roster;
+  if(rosterChanged){out.roster=roster;this.roster=rosterText;}
+  // Between keyframes, while the same ships are in the room, each ship sends only the
+  // values that changed, as [index, value, index, value, ...] (marked by ad: 1).
+  if(delta&&!rosterChanged&&w.actors.every(a=>this.values.has(a.id)))out.ad=1;
   out.a=w.actors.map(a=>{
    const self=a.id===selfId,values=WIRE3_ACTOR_FIELDS.map(k=>{const v=a[k]??0;
     if(WIRE3_BOOLEANS.has(k))return v?1:0;
     return k in WIRE3_DIGITS&&!(self&&WIRE3_EXACT.has(k))?wireDigits(v,WIRE3_DIGITS[k]):v;});
+   const before=this.values.get(a.id);this.values.set(a.id,values);
+   let sent=values;
+   if(out.ad){sent=[];for(let i=0;i<values.length;i++)if(values[i]!==before[i])sent.push(i,values[i]);}
    const flat=a.pieces.flatMap(p=>[p.slot,p.item.id,p.item.kind]),text=flat.join(',');
-   if(this.pieces.get(a.id)===text)return [values];
-   this.pieces.set(a.id,text);return [values,flat];
+   if(this.pieces.get(a.id)===text)return [sent];
+   this.pieces.set(a.id,text);return [sent,flat];
   });
+  // Loose scrap: between keyframes only new or changed pieces are sent (g), plus the ids
+  // of pieces that left view or were collected (gx). Still scrap costs nothing.
   // Pickup and ignore windows that already ended are sent as zero.
-  out.sd=wireDust(w,visible);out.g=w.ground.filter(visible).map(p=>{const ignoring=p.ignoreUntil>t;return wireTrim([p.id,wireDigits(p.x,1),wireDigits(p.y,1),p.kind,wireDigits(p.expiresAt,1),
-   wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0,p.repelUntil>t?r2(p.repelUntil):0,p.origin||0,...(p.leechTo&&p.leechUntil>t?[p.leechTo,r2(p.leechUntil)]:[])]);});
+  out.sd=wireDust(w,visible);out.g=[];const seen=new Set();
+  for(const p of w.ground){if(!visible(p))continue;
+   const ignoring=p.ignoreUntil>t,entry=wireTrim([p.id,wireDigits(p.x,1),wireDigits(p.y,1),p.kind,wireDigits(p.expiresAt,1),
+    wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0,p.repelUntil>t?r2(p.repelUntil):0,p.origin||0,...(p.leechTo&&p.leechUntil>t?[p.leechTo,r2(p.leechUntil)]:[])]),text=entry.join(',');
+   if(!delta){out.g.push(entry);continue;}
+   seen.add(p.id);if(this.ground.get(p.id)===text)continue;
+   this.ground.set(p.id,text);out.g.push(entry);}
+  const gone=[];for(const id of this.ground.keys())if(!seen.has(id)){gone.push(id);this.ground.delete(id);}
+  if(gone.length)out.gx=gone;
   out.s=w.shots.filter(visible).map(s=>wireTrim([s.item.id,s.item.kind,s.owner,wireDigits(s.x,1),wireDigits(s.y,1),wireDigits(s.vx,1),wireDigits(s.vy,1),wireDigits(s.life,3),s.bounces,s.seek?1:0,s.deflectTrailUntil>t?r2(s.deflectTrailUntil):0,s.pierce?1:0]));
   return out;
  }
 }
 class WireReceiver{
- constructor(){this.statics=null;this.feed=[];this.roster=new Map();this.pieces=new Map();}
+ constructor(){this.statics=null;this.feed=[];this.roster=new Map();this.pieces=new Map();this.values=new Map();this.ground=new Map();}
  // Returns null when a message refers to state this receiver never got; the next keyframe recovers.
  decode(w){
   if(w?.wire!==3)return decodeWireWorld(w);
-  if(w.key){this.statics={duration:w.duration,difficulty:w.difficulty,wells:w.wells,covers:w.covers};this.pieces.clear();}
+  if(w.key){this.statics={duration:w.duration,difficulty:w.difficulty,wells:w.wells,covers:w.covers};this.pieces.clear();this.values.clear();this.ground.clear();}
   if(!this.statics)return null;
+  if(w.n!=null){if(!w.key&&w.n!==this.n+1)return this.lost();this.n=w.n;}
   if(w.key||w.wr)this.wrecks=w.wr||[];
   if(w.feed)this.feed=w.feed;
   if(w.roster)this.roster=new Map(w.roster.map(([id,name,color,human,skin=0,core=0,tail=0])=>[id,{name,color,human:human===1,skin,core,tail}]));
-  const actors=[];
-  for(const [values,flat] of w.a){
+  const actors=[],ids=[...this.roster.keys()];
+  if(w.ad&&ids.length!==w.a.length)return this.lost();
+  for(let n=0;n<w.a.length;n++){
+   const [sent,flat]=w.a[n];let values=sent;
+   if(w.ad){const before=this.values.get(ids[n]);if(!before)return this.lost();values=before.slice();for(let i=0;i<sent.length;i+=2)values[sent[i]]=sent[i+1];}
+   this.values.set(values[0],values);
    const a=Object.fromEntries(WIRE3_ACTOR_FIELDS.map((k,i)=>[k,WIRE3_BOOLEANS.has(k)?values[i]===1:values[i]]));
-   const who=this.roster.get(a.id);if(!who)return null;Object.assign(a,who);
+   const who=this.roster.get(a.id);if(!who)return this.lost();Object.assign(a,who);
    if(flat)this.pieces.set(a.id,flat);
-   const pieces=this.pieces.get(a.id);if(!pieces)return null;
+   const pieces=this.pieces.get(a.id);if(!pieces)return this.lost();
    a.pieces=[];for(let i=0;i<pieces.length;i+=3)a.pieces.push({slot:pieces[i],item:{id:pieces[i+1],kind:pieces[i+2],color:WIRE_METALS[pieces[i+2]]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0});
    actors.push(a);
   }
   return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(this.wrecks),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],actors,
-   stardust:unwireDust(w.sd),ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0,leechTo=0,leechUntil=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil,leechTo,leechUntil})),
+   stardust:unwireDust(w.sd),ground:this.groundList(w).map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0,leechTo=0,leechUntil=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil,leechTo,leechUntil})),
    shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
+ }
+ // After any gap, ignore updates until the next keyframe rather than building on stale state.
+ lost(){this.statics=null;return null;}
+ // Loose scrap the receiver knows about: keyframes replace it, other updates add, change and remove pieces.
+ groundList(w){
+  if(w.n==null)return w.g;
+  for(const id of w.gx||[])this.ground.delete(id);
+  for(const entry of w.g)this.ground.set(entry[0],entry);
+  return [...this.ground.values()];
  }
 }
 // Shared fixed-step movement. Render interpolation never changes this state.
@@ -1037,7 +1071,7 @@ function reconcileScrap(previous,next,now){
 
  function arenaInput(session,requestSeq){
   if(state==='playing')input();const a=game.human,active=state==='playing'&&a.alive;
-  return {action:'input',protocol:2,wire:3,view:{width:width/cam.zoom,height:height/cam.zoom},commands:[],code:session.code,token:session.token,seq:requestSeq,knownVersion:session.version,round:session.round,life:a.spawnSeq,shot:session.shot,input:{x:active?a.moveX:0,y:active?a.moveY:0,aim:a.aim,fire:active&&a.fire,magnet:active&&a.magnet}};
+  return {action:'input',protocol:2,wire:3,delta:1,view:{width:width/cam.zoom,height:height/cam.zoom},commands:[],code:session.code,token:session.token,seq:requestSeq,knownVersion:session.version,round:session.round,life:a.spawnSeq,shot:session.shot,input:{x:active?a.moveX:0,y:active?a.moveY:0,aim:a.aim,fire:active&&a.fire,magnet:active&&a.magnet}};
  }
  async function socketLobby(body,signal){
   const response=await fetch(new URL('/lobby',arenaOrigin),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});
