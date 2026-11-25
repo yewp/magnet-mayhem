@@ -41,7 +41,18 @@
 .overlay .result-grid div{background:#06101c90;border-color:#a0dcff26}
 .overlay .finish-rank{background:#64eee014;border-color:#64eee040}
 .wordmark{font-family:Fredoka,Inter,ui-sans-serif,sans-serif;font-weight:600;font-size:21px;letter-spacing:.01em}.wordmark span{color:var(--cyan)}
-body:has(#menuScreen:not([hidden])) .brand{visibility:hidden}
+body:has(#menuScreen:not([hidden])) .brand,body:has(#customizeScreen:not([hidden])) .brand{visibility:hidden}
+.level-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}.level-badge{font-size:12px;color:var(--muted);letter-spacing:.08em;white-space:nowrap}.level-badge b{font-size:18px;color:var(--text);font-weight:600;margin-left:2px}
+.level-bar{flex:1;height:6px;border-radius:3px;background:#ffffff14;overflow:hidden}.level-bar i{display:block;height:100%;width:0;border-radius:3px;background:var(--cyan);transition:width .6s}
+.level-next{font-size:11px;color:var(--muted);margin-bottom:12px}
+.customize{width:min(100%,560px)}.cz-head{font-size:13px;font-weight:500;color:#c3d6e8;margin:16px 0 8px;letter-spacing:.04em}
+.cz-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.cz-tile{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:12px;background:#ffffff08;border:1px solid #a0dcff22;color:var(--text);font-size:12px}
+.cz-tile canvas{width:64px;height:64px}.cz-tile small{font-size:10px;color:var(--muted)}
+.cz-tile:hover{background:#ffffff14}.cz-tile[aria-pressed="true"]{border-color:var(--cyan);background:#64eee012}.cz-tile[aria-pressed="true"] small{color:var(--cyan)}
+.cz-tile.locked{opacity:.45}.cz-tile.locked canvas{filter:grayscale(1)}
+.xp-box{margin:16px 0 4px;padding:12px 14px;border-radius:12px;background:#06101c80;border:1px solid #a0dcff22}.xp-row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px}.xp-row b{color:var(--cyan);font-weight:600}.xp-row span{color:var(--muted)}.xp-unlock{margin-top:8px;font-size:12px;color:var(--gold)}
+@media(max-width:520px){.cz-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .menu-layout{width:min(100%,1000px);display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:48px;align-items:center}
 .hero .logo{font-size:clamp(56px,8vw,96px);line-height:.95;font-weight:600;letter-spacing:-.02em;margin:14px 0 14px}.hero .logo span{color:var(--cyan)}
 .hero .intro{font-size:17px;color:#c3d6e8;max-width:380px;margin:0}
@@ -66,7 +77,7 @@ body:has(#menuScreen:not([hidden])) .brand{visibility:hidden}
 <div id="toast" role="status" aria-live="polite"></div>
 <div class="overlay menu-overlay" id="menuScreen"><main class="menu-layout">
 <section class="hero"><div class="eyebrow">ORBIT · STEAL · SURVIVE</div><h1 class="logo">orbbitz<span>.io</span></h1><p class="intro">Your armor is your ammo. Pull scrap into orbit, fire it, and steal theirs.</p></section>
-<form id="startForm" class="glass menu-card"><div class="form-row"><div class="field"><label for="playerName">Pilot name</label><input id="playerName" value="You" maxlength="16" autocomplete="off" spellcheck="false"></div><div class="field"><label for="difficulty">AI difficulty</label><select id="difficulty"><option value="easy">Relaxed</option><option value="normal" selected>Standard</option><option value="hard">Relentless</option></select></div></div>
+<form id="startForm" class="glass menu-card"><div class="level-row"><div class="level-badge">LV <b id="levelValue">1</b></div><div class="level-bar" aria-hidden="true"><i id="levelFill"></i></div><button type="button" class="text-btn" id="customizeBtn">Customize</button></div><div class="level-next" id="levelNext"></div><div class="form-row"><div class="field"><label for="playerName">Pilot name</label><input id="playerName" value="You" maxlength="16" autocomplete="off" spellcheck="false"></div><div class="field"><label for="difficulty">AI difficulty</label><select id="difficulty"><option value="easy">Relaxed</option><option value="normal" selected>Standard</option><option value="hard">Relentless</option></select></div></div>
 <button class="primary" id="onlinePlayBtn" type="submit">Play online</button><button class="secondary" type="button" id="offlineBtn">Practice offline</button><button class="secondary" type="button" id="roomToggle" aria-expanded="false" aria-controls="roomSheet">Private room</button>
 <div class="room-sheet" id="roomSheet" hidden><button class="secondary" type="button" id="createRoomBtn">Create a room</button><div class="join-row"><label class="sr-only" for="roomCode">Room code</label><input id="roomCode" placeholder="ROOM CODE" maxlength="6" autocomplete="off" spellcheck="false"><button class="secondary" id="joinRoomBtn" type="button">Join</button></div></div>
 <p id="lobbyStatus" class="lobby-status" role="status" aria-live="polite">Play with others, or create a room and invite friends.</p>
@@ -74,7 +85,8 @@ body:has(#menuScreen:not([hidden])) .brand{visibility:hidden}
 </main><div class="fine">3-MINUTE ROUNDS · UP TO 8 PLAYERS · BOTS FILL EMPTY SPOTS</div></div>
 <div class="overlay" id="pauseScreen" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><div class="eyebrow">PAUSED</div><h2 id="pauseTitle">Hold that orbit.</h2><p class="copy" id="pauseCopy">Your core, armor, and round timer are waiting for you.</p><button class="primary" id="resumeBtn">Resume</button><button class="secondary" id="restartBtn">Start a fresh round</button><button class="secondary" id="returnMenuBtn">Change pilot or difficulty</button></section></div>
 <div class="overlay" id="helpScreen" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle"><div class="eyebrow">HOW TO PLAY</div><h2 id="helpTitle">Keep your core covered.</h2><div class="help-copy"><div class="key-table"><kbd>Mouse / WASD</kbd><span>Move. With WASD, aim separately using your mouse.</span><kbd>Click / SPACE</kbd><span>Hold to launch pieces of your orbiting armor.</span><kbd>Right click / E</kbd><span>Hold to pull loose scrap. You move slower while pulling.</span><kbd>P / Escape</kbd><span>Pause your controls. The online arena keeps running; offline practice pauses completely.</span></div><p><b>Armor absorbs shots.</b> A hit knocks a shield piece loose. Shots that slip through your orbit damage your core. Three core hits scrap you.</p><p><b>Pick up what others lose.</b> Each new piece earns salvage points once per pilot; reclaiming the same piece rebuilds armor without farming points. Copper and gold scrap score more. Eliminations earn <b>75 points</b>.</p><p><b>Repair at the cyan wells.</b> Stay inside a + circle without firing. After combat settles, every three seconds restores one core segment.</p><p><b>Knocked out?</b> You lose 20% of your score and return after 2.8 seconds with six armor pieces. Highest score after three minutes wins.</p><p>On touchscreens, drag to move and hold the Fire button to auto-aim at nearby rivals. Online rooms support eight human players, with bots filling the arena. Use Copy link to invite friends. Practice offline runs entirely in your browser.</p></div><button class="primary" id="closeHelpBtn">Got it</button></section></div>
-<div class="overlay" id="finishScreen" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="finishTitle"><div class="eyebrow">ROUND OVER</div><h2 id="finishTitle">Round over.</h2><p class="copy" id="finishCopy">The final scrap has settled.</p><div class="finish-rank"><b id="finishRank">#1</b><span id="finishRankText">of 11 pilots</span></div><div class="result-grid"><div><strong id="resultScore">0</strong><small>Final score</small></div><div><strong id="resultKills">0</strong><small>Rivals scrapped</small></div><div><strong id="resultSteals">0</strong><small>Pieces stolen</small></div></div><button class="primary" id="againBtn">One more round</button><button class="secondary" id="finishMenuBtn">Change pilot or difficulty</button></section></div>
+<div class="overlay" id="finishScreen" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="finishTitle"><div class="eyebrow">ROUND OVER</div><h2 id="finishTitle">Round over.</h2><p class="copy" id="finishCopy">The final scrap has settled.</p><div class="finish-rank"><b id="finishRank">#1</b><span id="finishRankText">of 11 pilots</span></div><div class="xp-box"><div class="xp-row"><b id="xpGain">+0 XP</b><span id="xpLevel">Level 1</span></div><div class="level-bar"><i id="xpFill"></i></div><div class="xp-unlock" id="xpUnlock" hidden></div></div><div class="result-grid"><div><strong id="resultScore">0</strong><small>Final score</small></div><div><strong id="resultKills">0</strong><small>Rivals scrapped</small></div><div><strong id="resultSteals">0</strong><small>Pieces stolen</small></div></div><button class="primary" id="againBtn">One more round</button><button class="secondary" id="finishMenuBtn">Change pilot or difficulty</button></section></div>
+<div class="overlay menu-overlay" id="customizeScreen" hidden><section class="modal customize" role="dialog" aria-modal="true" aria-labelledby="customizeTitle"><div class="eyebrow">CUSTOMIZE</div><h2 id="customizeTitle">Your ship</h2><p class="copy" id="customizeLevel"></p><h3 class="cz-head">Orbit skin</h3><div class="cz-grid" id="skinGrid"></div><h3 class="cz-head">Core style</h3><div class="cz-grid" id="coreGrid"></div><button class="primary" id="customizeDone" type="button">Done</button></section></div>
 <div class="rebuilding" id="rebuildPanel" hidden><div class="small">CORE SCRAPPED</div><strong id="rebuildTime">2.8</strong><p>Rebuilding with six armor pieces.<br>20% of your score was lost.</p></div>
 <script>
 
@@ -82,6 +94,16 @@ body:has(#menuScreen:not([hidden])) .brand{visibility:hidden}
 /* ENGINE_START */
 const MM=Object.freeze({width:2800,height:2200,bots:10,ground:230,maxArmor:30,duration:180,coreRadius:15,shotSpeed:790,fireDelay:.23,pullRadius:315});
 const METAL=['#9dbbd5','#efae72','#ffda79'];
+// Cosmetics. Orbit skins change the shape of your armor pieces (steel, copper and gold keep
+// their colors); core styles change the center of your ship. Each one unlocks at a level.
+const SKINS=Object.freeze([{name:'Plain',level:1},{name:'Gears',level:8},{name:'Bolts',level:3},{name:'Crystals',level:20},{name:'Hex plates',level:14}]);
+const CORES=Object.freeze([{name:'Dot',level:1},{name:'Ring',level:5},{name:'Star',level:11},{name:'Eye',level:17},{name:'Reactor',level:25}]);
+// Levels: going from level L to L+1 takes 300 + 100*(L-1) XP; a finished round is worth its score + 100.
+const xpForLevel=level=>{let xp=0;for(let l=1;l<level;l++)xp+=300+100*(l-1);return xp;};
+const levelFromXp=xp=>{let level=1;while(xp>=xpForLevel(level+1))level++;return level;};
+const roundXp=score=>Math.max(0,Math.floor(score||0))+100;
+const cleanLook=look=>{const pick=(v,list)=>Number.isInteger(v)&&v>=0&&v<list.length?v:0;return {skin:pick(look?.skin,SKINS),core:pick(look?.core,CORES)};};
+const botLook=i=>({skin:(i*2+1)%SKINS.length,core:(i*3+2)%CORES.length});
 const PALETTE=['#ff927f','#b29eff','#f2b768','#79bafa','#eaa0d4','#a9ce75','#e6d481','#9eaddf','#efa4a0','#88c9b0'];
 const PILOTS=['Rivet','Junkratchet','Polarity','Tin Can','Scrapjack','Flux','Copperhead','Orbit','Loose Bolt','Iron Moth'];
 const limit=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -173,12 +195,12 @@ class MagnetWorld{
   this.pads=PAD_SPOTS.map(p=>({...p,kind:-1,readyAt:POWER.first}));this.vortices=[];this.stardust=[];this.arenaEvent=null;this.nextEventAt=EVENT.first;this.lastEvent=null;
   this.covers=[{x:1010,y:880,r:43},{x:1790,y:1320,r:43},{x:680,y:1580,r:51},{x:2120,y:620,r:51},{x:1720,y:480,r:38},{x:1080,y:1720,r:38},{x:380,y:1050,r:45},{x:2420,y:1150,r:45}];
   this.human=this.actor(name,'#64eee0',true);this.actors=[this.human];this.spawn(this.human,true,0);
-  for(let i=0;i<MM.bots;i++){const a=this.actor(PILOTS[i],PALETTE[i],false);this.actors.push(a);this.spawn(a,true,i);}
+  for(let i=0;i<MM.bots;i++){const a=this.actor(PILOTS[i],PALETTE[i],false);Object.assign(a,botLook(i));this.actors.push(a);this.spawn(a,true,i);}
   for(let i=0;i<MM.ground;i++)this.ground.push(this.scrap());
   // A ring of easy salvage teaches collection on the first run.
   for(let i=0;i<22;i++){const a=i*.47,r=105+i*5;this.ground[i].x=1400+Math.cos(a)*r;this.ground[i].y=1100+Math.sin(a)*r;}
  }
- actor(name,color,human){return{id:this.nextId++,name,color,human,x:0,y:0,prevX:0,prevY:0,vx:0,vy:0,hp:3,alive:true,pieces:[],phase:this.random()*Math.PI*2,score:0,kills:0,deaths:0,steals:0,seen:new Set(),moveX:0,moveY:0,aim:-Math.PI/2,fire:false,magnet:false,nextShot:0,shieldUntil:0,hurtUntil:0,lastShot:-99,lastHurt:-99,repair:0,think:0,respawnAt:0,flashUntil:0,powerUntil:0,powerKind:-1,powerAt:0,leechAt:0};}
+ actor(name,color,human){return{id:this.nextId++,name,color,human,x:0,y:0,prevX:0,prevY:0,vx:0,vy:0,hp:3,alive:true,pieces:[],phase:this.random()*Math.PI*2,score:0,kills:0,deaths:0,steals:0,seen:new Set(),moveX:0,moveY:0,aim:-Math.PI/2,fire:false,magnet:false,nextShot:0,shieldUntil:0,hurtUntil:0,lastShot:-99,lastHurt:-99,repair:0,think:0,respawnAt:0,flashUntil:0,powerUntil:0,powerKind:-1,powerAt:0,leechAt:0,skin:0,core:0};}
  scrap(x,y,kind=null){if(x==null||y==null){const p=this.freePoint();x=p.x;y=p.y;}if(kind==null){const n=this.random();kind=n>.94?2:n>.72?1:0;}return{id:this.nextId++,x,y,kind,color:METAL[kind],origin:0,vx:0,vy:0,pickupAt:0,ignoreId:0,ignoreUntil:0,expiresAt:this.time+65+this.random()*35,dead:false};}
  freePoint(clearance=25){let p={x:1400,y:1100};for(let i=0;i<80;i++){p={x:70+this.random()*(MM.width-140),y:70+this.random()*(MM.height-140)};if(this.covers.every(c=>distance(c,p)>c.r+clearance))break;}return p;}
  safeSpawn(actor){let best=this.freePoint(),bestScore=-1;for(let i=0;i<45;i++){const p=this.freePoint();let d=Infinity;for(const a of this.actors)if(a!==actor&&a.alive)d=Math.min(d,distance(a,p));if(d>bestScore){best=p;bestScore=d;}if(d>550)break;}return best;}
@@ -600,7 +622,7 @@ class MagnetWorld{
 // Orbit positions, particle effects, and colors are rebuilt locally rather than
 // transferred as hundreds of redundant objects on every update.
 const WIRE_METALS=['#9dbbd5','#efae72','#ffda79'];
-const WIRE_ACTOR_FIELDS=['id','name','color','human','x','y','vx','vy','hp','alive','phase','score','kills','deaths','steals','aim','fire','magnet','shieldUntil','hurtUntil','lastShot','lastHurt','repair','respawnAt','flashUntil','spawnSeq','moveX','moveY','pullRank','orbitRank','railRank','shieldTightness','orbitDelay','bankedLevel','powerUntil','powerKind','powerAt','fullSalvage','wreckMod','rushStart','rushUntil','leechId'];
+const WIRE_ACTOR_FIELDS=['id','name','color','human','x','y','vx','vy','hp','alive','phase','score','kills','deaths','steals','aim','fire','magnet','shieldUntil','hurtUntil','lastShot','lastHurt','repair','respawnAt','flashUntil','spawnSeq','moveX','moveY','pullRank','orbitRank','railRank','shieldTightness','orbitDelay','bankedLevel','powerUntil','powerKind','powerAt','fullSalvage','wreckMod','rushStart','rushUntil','leechId','skin','core'];
 const wireDust=(w,visible)=>(w.stardust||[]).filter(visible).map(m=>[m.id,Math.round(m.x),Math.round(m.y)]);
 const unwireDust=list=>(list||[]).map(([id,x,y])=>({id,x,y}));
 // Power-up pads: [x, y, kind (-1 while charging), readyAt].
@@ -645,7 +667,7 @@ function decodeWireWorld(w){
 // ship's orbiting scrap are sent only when they change. Every KEYFRAME_TICKS
 // messages carry everything, so a receiver can always resynchronize.
 const WIRE3_KEYFRAME_TICKS=40;
-const WIRE3_ACTOR_FIELDS=WIRE_ACTOR_FIELDS.filter(k=>!['name','color','human'].includes(k));
+const WIRE3_ACTOR_FIELDS=WIRE_ACTOR_FIELDS.filter(k=>!['name','color','human','skin','core'].includes(k));
 const WIRE3_BOOLEANS=new Set(['alive','fire','magnet']);
 const WIRE3_DIGITS={x:2,y:2,vx:1,vy:1,phase:3,aim:3,moveX:3,moveY:3,shieldTightness:3,orbitDelay:3,
  shieldUntil:2,hurtUntil:2,lastShot:2,lastHurt:2,repair:2,respawnAt:2,flashUntil:2,powerUntil:2,powerAt:2,rushStart:2,rushUntil:2};
@@ -663,7 +685,7 @@ class WireSender{
   if(key||this.wreckText!==wreckText){out.wr=wrecks;this.wreckText=wreckText;}
   if(key)Object.assign(out,{key:1,duration:w.duration,difficulty:w.difficulty,wells:w.wells,covers:w.covers});
   const feed=JSON.stringify(w.feed);if(key||feed!==this.feed){out.feed=w.feed;this.feed=feed;}
-  const roster=w.actors.map(a=>[a.id,a.name,a.color,a.human?1:0]),rosterText=JSON.stringify(roster);
+  const roster=w.actors.map(a=>[a.id,a.name,a.color,a.human?1:0,a.skin||0,a.core||0]),rosterText=JSON.stringify(roster);
   if(key||rosterText!==this.roster){out.roster=roster;this.roster=rosterText;}
   out.a=w.actors.map(a=>{
    const self=a.id===selfId,values=WIRE3_ACTOR_FIELDS.map(k=>{const v=a[k]??0;
@@ -689,7 +711,7 @@ class WireReceiver{
   if(!this.statics)return null;
   if(w.key||w.wr)this.wrecks=w.wr||[];
   if(w.feed)this.feed=w.feed;
-  if(w.roster)this.roster=new Map(w.roster.map(([id,name,color,human])=>[id,{name,color,human:human===1}]));
+  if(w.roster)this.roster=new Map(w.roster.map(([id,name,color,human,skin=0,core=0])=>[id,{name,color,human:human===1,skin,core}]));
   const actors=[];
   for(const [values,flat] of w.a){
    const a=Object.fromEntries(WIRE3_ACTOR_FIELDS.map((k,i)=>[k,WIRE3_BOOLEANS.has(k)?values[i]===1:values[i]]));
@@ -887,9 +909,9 @@ function reconcileScrap(previous,next,now){
 
 (()=>{
  const $=id=>document.getElementById(id),canvas=$('arena'),ctx=canvas.getContext('2d',{alpha:false}),mini=$('minimap'),mc=mini.getContext('2d');
- let game=new MagnetWorld(),state='menu',helpFrom='menu',width=innerWidth,height=innerHeight,dpr=1,cam={x:1400,y:1100,zoom:1},last=0,acc=0,hudAt=0,toastUntil=0,best=0,storedBest=0;
+ let game=new MagnetWorld(),state='menu',helpFrom='menu',width=innerWidth,height=innerHeight,dpr=1,cam={x:1400,y:1100,zoom:1},last=0,acc=0,hudAt=0,toastUntil=0,best=0,storedBest=0,xp=0,look={skin:0,core:0},xpAwarded=null;
  let pointer={x:innerWidth/2,y:innerHeight/2-160,active:false},touch=null,touchMode=false,sound=false,audio=null,lastSound=0;
- const keys=new Set(),fireSources=new Set(),magnetSources=new Set(),panels=['hud','board','feed','mapPanel','bottomNote','statusLine','controls'],screens=['menuScreen','pauseScreen','helpScreen','finishScreen'];
+ const keys=new Set(),fireSources=new Set(),magnetSources=new Set(),panels=['hud','board','feed','mapPanel','bottomNote','statusLine','controls'],screens=['menuScreen','pauseScreen','helpScreen','finishScreen','customizeScreen'];
  let mapAt=0,frames=0,framesAt=performance.now(),leaderKey='',feedKey='';const spriteCache=new Map();
  const fmt=n=>Math.floor(n).toLocaleString(),clock=t=>`${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
   const arenaOrigin=document.querySelector('meta[name=arena-origin]')?.content;
@@ -908,7 +930,7 @@ function reconcileScrap(previous,next,now){
   if(!arenaOrigin){lobbyStatus.classList.add('error');lobbyStatus.textContent='Online play is not configured for this build.';return;}
   disconnectOnline();lobbyBusy(true);lobbyStatus.classList.remove('error');lobbyStatus.textContent=action==='create'?'Creating your room…':'Finding your arena…';
   try{
-   const data=await socketLobby({action,code,protocol:2,wire:2,name:$('playerName').value.trim()||'Pilot',difficulty:$('difficulty').value,token:resume?.token},AbortSignal.timeout(12000));
+   const data=await socketLobby({action,code,protocol:2,wire:2,name:$('playerName').value.trim()||'Pilot',difficulty:$('difficulty').value,skin:look.skin,core:look.core,token:resume?.token},AbortSignal.timeout(12000));
    const session={code:data.code,token:data.token,seq:Math.max(resume?.seq||0,data.ack||0),shot:Math.max(resume?.shot||0,data.shotAck||0),round:0,version:0,lastSnapshot:performance.now(),timer:null,sentMove:0,sentPrediction:null,failures:0,prediction:null,playback:new SnapshotPlayback()};online=session;
    try{sessionStorage.setItem('magnet-online-session',JSON.stringify({code:session.code,token:session.token,seq:session.seq,shot:session.shot}));}catch{}
    preferredRoom='';onlineButton.textContent='Play online';joinInput.value=data.code;const url=new URL(location.href);url.searchParams.set('room',data.code);history.replaceState(null,'',url.pathname+url.search);
@@ -1088,19 +1110,19 @@ function reconcileScrap(previous,next,now){
  }
 
  for(let i=0;i<MM.maxArmor;i++)$('armorDots').append(document.createElement('i'));
- try{best=Number(localStorage.getItem('magnet-mayhem-best'))||0;storedBest=best;$('menuBest').textContent=Math.floor(best).toLocaleString();const name=localStorage.getItem('magnet-mayhem-pilot');if(name)$('playerName').value=name.slice(0,16);const difficulty=localStorage.getItem('magnet-mayhem-difficulty');if(['easy','normal','hard'].includes(difficulty))$('difficulty').value=difficulty;}catch{}
- function save(){try{localStorage.setItem('magnet-mayhem-best',String(Math.floor(best)));localStorage.setItem('magnet-mayhem-pilot',$('playerName').value.trim()||'You');localStorage.setItem('magnet-mayhem-difficulty',$('difficulty').value);storedBest=best;}catch{}}
+ try{best=Number(localStorage.getItem('magnet-mayhem-best'))||0;storedBest=best;xp=Math.max(0,Number(localStorage.getItem('orbbitz-xp'))||0);try{look=cleanLook(JSON.parse(localStorage.getItem('orbbitz-look')||'{}'));}catch{look={skin:0,core:0};}const lv=levelFromXp(xp);if(SKINS[look.skin].level>lv)look.skin=0;if(CORES[look.core].level>lv)look.core=0;$('menuBest').textContent=Math.floor(best).toLocaleString();const name=localStorage.getItem('magnet-mayhem-pilot');if(name)$('playerName').value=name.slice(0,16);const difficulty=localStorage.getItem('magnet-mayhem-difficulty');if(['easy','normal','hard'].includes(difficulty))$('difficulty').value=difficulty;}catch{}
+ function save(){try{localStorage.setItem('magnet-mayhem-best',String(Math.floor(best)));localStorage.setItem('magnet-mayhem-pilot',$('playerName').value.trim()||'You');localStorage.setItem('magnet-mayhem-difficulty',$('difficulty').value);xp=Math.max(xp,Number(localStorage.getItem('orbbitz-xp'))||0);localStorage.setItem('orbbitz-xp',String(xp));localStorage.setItem('orbbitz-look',JSON.stringify(look));storedBest=best;}catch{}}
  let pixelRatioCap=1.5;
  function resize(){width=innerWidth;height=innerHeight;dpr=Math.min(devicePixelRatio||1,pixelRatioCap);canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);}
  addEventListener('resize',resize);resize();
  function toast(text){$('toast').textContent=text;$('toast').classList.add('show');toastUntil=performance.now()+3000;}
  function clearInput(){keys.clear();fireSources.clear();magnetSources.clear();touch=null;pointer.active=false;game.human.fire=game.human.magnet=false;game.human.moveX=game.human.moveY=0;$('fireBtn').classList.remove('engaged');$('magnetBtn').classList.remove('engaged');$('magnetBtn').setAttribute('aria-pressed','false');}
- function show(next){state=next;if(next==='menu')$('menuBest').textContent=Math.floor(best).toLocaleString();for(const id of screens)$(id).hidden=true;const active={menu:'menuScreen',paused:'pauseScreen',help:'helpScreen',finished:'finishScreen'}[next];if(active)$(active).hidden=false;for(const id of panels)$(id).hidden=next==='menu';$('rebuildPanel').hidden=true;$('pauseBtn').disabled=!['playing','paused'].includes(next);$('pauseBtn').setAttribute('aria-label',next==='paused'?'Resume game':'Pause game');$('pauseBtn').title=next==='paused'?'Resume (P)':'Pause (P)';$('roomStrip').hidden=!online||next==='menu';$('pauseCopy').textContent=online?'Your controls are paused. The online arena keeps running, so rivals can still hit your core.':'Your core, armor, and round timer are waiting for you.';$('restartBtn').textContent=online?'Start a new room':'Start a fresh round';$('againBtn').textContent=online?'Leave to lobby':'One more round';document.body.classList.toggle('in-match',next==='playing'||next==='paused');if(next==='playing'||next==='paused')window.getSelection()?.removeAllRanges();clearInput();acc=0;if(next==='paused')$('resumeBtn').focus();if(next==='finished')$('againBtn').focus();if(next==='help')$('closeHelpBtn').focus();}
- function start(){$('rivalsLabel').textContent='10 AI RIVALS';disconnectOnline();game=new MagnetWorld({name:$('playerName').value.trim()||'You',difficulty:$('difficulty').value});cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};pointer={x:width/2,y:height/2-160,active:false};hudAt=0;show('playing');save();updateHUD();toast('Your armor is ammo. Hold click to fire; right click or E to reclaim.');play('start');document.activeElement?.blur();}
+ function show(next){state=next;if(next==='menu')$('menuBest').textContent=Math.floor(best).toLocaleString();for(const id of screens)$(id).hidden=true;const active={menu:'menuScreen',paused:'pauseScreen',help:'helpScreen',finished:'finishScreen',customize:'customizeScreen'}[next];if(active)$(active).hidden=false;for(const id of panels)$(id).hidden=next==='menu'||next==='customize';if(next==='menu'||next==='customize')updateProgressUI();$('rebuildPanel').hidden=true;$('pauseBtn').disabled=!['playing','paused'].includes(next);$('pauseBtn').setAttribute('aria-label',next==='paused'?'Resume game':'Pause game');$('pauseBtn').title=next==='paused'?'Resume (P)':'Pause (P)';$('roomStrip').hidden=!online||next==='menu'||next==='customize';$('pauseCopy').textContent=online?'Your controls are paused. The online arena keeps running, so rivals can still hit your core.':'Your core, armor, and round timer are waiting for you.';$('restartBtn').textContent=online?'Start a new room':'Start a fresh round';$('againBtn').textContent=online?'Leave to lobby':'One more round';document.body.classList.toggle('in-match',next==='playing'||next==='paused');if(next==='playing'||next==='paused')window.getSelection()?.removeAllRanges();clearInput();acc=0;if(next==='paused')$('resumeBtn').focus();if(next==='finished')$('againBtn').focus();if(next==='help')$('closeHelpBtn').focus();}
+ function start(){$('rivalsLabel').textContent='10 AI RIVALS';disconnectOnline();game=new MagnetWorld({name:$('playerName').value.trim()||'You',difficulty:$('difficulty').value});Object.assign(game.human,look);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};pointer={x:width/2,y:height/2-160,active:false};hudAt=0;show('playing');save();updateHUD();toast('Your armor is ammo. Hold click to fire; right click or E to reclaim.');play('start');document.activeElement?.blur();}
  function pause(){if(state==='playing'){show('paused');save();}else if(state==='paused'){show('playing');toast('Back in orbit.');}}
  function menu(){save();disconnectOnline();lobbyStatus.textContent='Play with others, or create a room and invite friends.';lobbyStatus.classList.remove('error');$('toast').classList.remove('show');toastUntil=0;preferredRoom='';onlineButton.textContent='Play online';history.replaceState(null,'',location.pathname);show('menu');$('playerName').focus();}
  $('startForm').addEventListener('submit',e=>{e.preventDefault();connectOnline(preferredRoom?'join':'quick',preferredRoom);});$('againBtn').onclick=()=>online?menu():start();$('restartBtn').onclick=()=>online?connectOnline('create'):start();$('resumeBtn').onclick=pause;$('pauseBtn').onclick=pause;$('returnMenuBtn').onclick=menu;$('finishMenuBtn').onclick=menu;
- $('helpBtn').onclick=()=>{if(state==='help')return;helpFrom=state;show('help');};$('menuHelpBtn').onclick=()=>$('helpBtn').onclick();
+ $('helpBtn').onclick=()=>{if(state==='help')return;helpFrom=state;show('help');};$('menuHelpBtn').onclick=()=>$('helpBtn').onclick();buildCustomize();updateProgressUI();$('customizeBtn').onclick=()=>show('customize');$('customizeDone').onclick=()=>show('menu');
  $('roomToggle').onclick=()=>{const open=$('roomSheet').hidden;$('roomSheet').hidden=!open;$('roomToggle').setAttribute('aria-expanded',String(open));if(open)$('roomCode').focus();};$('closeHelpBtn').onclick=()=>show(helpFrom);
  function getAudio(){if(!audio){const AC=window.AudioContext||window.webkitAudioContext;if(AC)try{audio=new AC();}catch{}}if(audio?.state==='suspended')audio.resume().catch(()=>{});return audio;}
  function play(type){if(!sound)return;const ac=getAudio();if(!ac)return;const now=ac.currentTime;if((type==='collect'||type==='strip')&&now-lastSound<.065)return;lastSound=now;try{const o=ac.createOscillator(),g=ac.createGain();o.type=['hurt','death'].includes(type)?'triangle':'sine';const f={stardust:1480,comet:1250,power:880,shot:330,collect:720,steal:980,strip:180,hurt:95,death:65,kill:490,repair:620,start:430,finish:560}[type]||440;o.frequency.setValueAtTime(f,now);o.frequency.exponentialRampToValueAtTime(type==='death'?25:type==='shot'?105:f*1.5,now+.11);g.gain.setValueAtTime(type==='shot'?.022:type==='collect'?.02:.05,now);g.gain.exponentialRampToValueAtTime(.001,now+.19);o.connect(g);g.connect(ac.destination);o.start(now);o.stop(now+.2);}catch{}}
@@ -1160,7 +1182,7 @@ function reconcileScrap(previous,next,now){
   const controlsBox=innerWidth>720&&document.querySelector('.controls');$('statusLine').style.bottom=!controlsBox?'':Math.round(innerHeight-controlsBox.getBoundingClientRect().top+8)+'px';
   $('rebuildPanel').hidden=a.alive||state!=='playing';if(!a.alive)$('rebuildTime').textContent=Math.max(0,a.respawnAt-game.time).toFixed(1);if(best>storedBest&&Math.floor(game.time)%5===0)save();
  }
- function finish(){const rank=game.ranking().indexOf(game.human)+1;best=Math.max(best,game.human.score);save();$('finishTitle').textContent=rank===1?'You ruled the orbit.':'Round over.';$('finishCopy').textContent=rank===1?'A full orbit, a steady aim, and a scrapyard full of spare parts.':`${game.ranking()[0].name} took the top spot. There is always another round.`;$('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
+ function finish(){const rank=game.ranking().indexOf(game.human)+1;awardXp();best=Math.max(best,game.human.score);save();$('finishTitle').textContent=rank===1?'You ruled the orbit.':'Round over.';$('finishCopy').textContent=rank===1?'A full orbit, a steady aim, and a scrapyard full of spare parts.':`${game.ranking()[0].name} took the top spot. There is always another round.`;$('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
  function events(){for(const e of game.events){if(e.type==='shot')play('shot');if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}if(e.type==='cometShot')toast('Comet shattered! Grab the stardust for a speed rush.');}game.events.length=0;}
  function visible(x,y,r=50){return Math.abs(x-cam.x)<width/(2*cam.zoom)+r&&Math.abs(y-cam.y)<height/(2*cam.zoom)+r;}
  function polygon(x,y,r,sides,angle=0){ctx.beginPath();for(let i=0;i<sides;i++){const a=angle+i/sides*Math.PI*2,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;if(i)ctx.lineTo(px,py);else ctx.moveTo(px,py);}ctx.closePath();}
@@ -1419,11 +1441,52 @@ function reconcileScrap(previous,next,now){
   glow.addColorStop(0,'rgba(30,106,255,0)');glow.addColorStop(.45,'#208bff');glow.addColorStop(1,'#8feaff');
   ctx.fillStyle=glow;ctx.beginPath();ctx.moveTo(-length,0);ctx.lineTo(0,-4);ctx.lineTo(0,4);ctx.closePath();ctx.fill();ctx.restore();
  }
- function orbitSprite(color,kind,focus){
-  const key=color+':'+kind+':'+focus;if(spriteCache.has(key))return spriteCache.get(key);
+ // ---- Cosmetics: orbit skins (piece shapes) and core styles, plus levels ----
+ function hexPath(c,x,y,r,rot=0){c.beginPath();for(let i=0;i<6;i++){const a=rot+i*Math.PI/3;c.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r);}c.closePath();}
+ function skinShape(c,skin,metal,color){
+  c.fillStyle=metal;c.strokeStyle='#09131f';c.lineWidth=1;
+  if(skin===1){for(let i=0;i<8;i++){c.save();c.rotate(i*Math.PI/4);c.fillRect(-1.7,-8.3,3.4,3.4);c.restore();}c.beginPath();c.arc(0,0,6,0,Math.PI*2);c.fill();c.shadowBlur=0;c.stroke();c.fillStyle='#09131f';c.beginPath();c.arc(0,0,2,0,Math.PI*2);c.fill();c.strokeStyle=color;c.lineWidth=1.2;c.beginPath();c.arc(0,0,3.8,0,Math.PI*2);c.stroke();}
+  else if(skin===2){c.fillRect(0,-2.4,8.5,4.8);hexPath(c,-3,0,5.2);c.fill();c.shadowBlur=0;c.stroke();c.strokeRect(0,-2.4,8.5,4.8);c.strokeStyle='#09131f99';for(const x of [2.8,5,7.2]){c.beginPath();c.moveTo(x,-2.4);c.lineTo(x-.8,2.4);c.stroke();}c.fillStyle=color;c.beginPath();c.arc(-3,0,1.7,0,Math.PI*2);c.fill();}
+  else if(skin===3){c.beginPath();c.moveTo(0,-8.5);c.lineTo(4.6,-1.5);c.lineTo(0,8.5);c.lineTo(-4.6,-1.5);c.closePath();c.fill();c.shadowBlur=0;c.stroke();c.strokeStyle='#ffffff70';c.beginPath();c.moveTo(0,-8.5);c.lineTo(0,8.5);c.moveTo(-4.6,-1.5);c.lineTo(4.6,-1.5);c.stroke();c.fillStyle=color;c.beginPath();c.moveTo(0,8.5);c.lineTo(1.8,5.5);c.lineTo(-1.8,5.5);c.closePath();c.fill();}
+  else if(skin===4){hexPath(c,0,0,6.8,Math.PI/6);c.fill();c.shadowBlur=0;c.stroke();c.strokeStyle='#ffffff55';hexPath(c,0,0,3.9,Math.PI/6);c.stroke();c.fillStyle=color;c.beginPath();c.arc(0,0,1.6,0,Math.PI*2);c.fill();}
+  else{c.fillRect(-6.5,-4.5,13,9);c.shadowBlur=0;c.strokeRect(-6.5,-4.5,13,9);c.fillStyle='#ffffff4d';c.fillRect(-5.5,-3.5,10,1.3);c.fillStyle=color;c.fillRect(-2.5,2.5,5,2);}
+ }
+ function coreStyle(c,x,y,style,fill,aim,now){
+  c.save();c.translate(x,y);c.fillStyle=fill;c.strokeStyle=fill;
+  if(style===1){c.lineWidth=3;c.beginPath();c.arc(0,0,6,0,Math.PI*2);c.stroke();c.beginPath();c.arc(0,0,1.8,0,Math.PI*2);c.fill();}
+  else if(style===2){c.rotate(now/900);c.beginPath();for(let k=0;k<8;k++){const a=k*Math.PI/4,r=k%2?3.2:9.5;c.lineTo(Math.cos(a)*r,Math.sin(a)*r);}c.closePath();c.fill();}
+  else if(style===3){c.beginPath();c.moveTo(-9.5,0);c.quadraticCurveTo(0,-8,9.5,0);c.quadraticCurveTo(0,8,-9.5,0);c.closePath();c.fillStyle='#071722';c.fill();c.lineWidth=1.8;c.stroke();c.fillStyle=fill;c.beginPath();c.arc(Math.cos(aim)*2.8,Math.sin(aim)*1.8,3.2,0,Math.PI*2);c.fill();}
+  else if(style===4){c.globalAlpha*=.4;c.lineWidth=1;c.beginPath();c.arc(0,0,9.5,0,Math.PI*2);c.stroke();c.globalAlpha/=.4;c.rotate(now/380);for(let k=0;k<3;k++){const a=k*Math.PI*2/3;c.beginPath();c.arc(0,0,8.5,a-.38,a+.38);c.arc(0,0,3.6,a+.38,a-.38,true);c.closePath();c.fill();}c.beginPath();c.arc(0,0,2.2,0,Math.PI*2);c.fill();}
+  else{c.beginPath();c.arc(0,0,7.5,0,Math.PI*2);c.fill();}
+  c.restore();
+ }
+ function level(){return levelFromXp(xp);}
+ function nextUnlock(lv){const all=[...SKINS.map(s=>({...s,what:'orbit skin'})),...CORES.map(s=>({...s,what:'core style'}))].filter(u=>u.level>lv).sort((a,b)=>a.level-b.level);return all[0]||null;}
+ function updateProgressUI(){const lv=level(),from=xpForLevel(lv),to=xpForLevel(lv+1),f=(xp-from)/(to-from),next=nextUnlock(lv);
+  $('levelValue').textContent=String(lv);$('levelFill').style.width=(Math.max(0,Math.min(1,f))*100).toFixed(1)+'%';
+  $('levelNext').textContent=next?'Next: '+next.name+' '+next.what+' at level '+next.level:'Everything unlocked';
+  $('customizeLevel').textContent='Level '+lv+' · '+Math.floor(xp-from).toLocaleString()+' / '+(to-from).toLocaleString()+' XP to level '+(lv+1);
+  for(const [kind,list] of [['skin',SKINS],['core',CORES]])for(const b of document.querySelectorAll('.cz-tile[data-kind="'+kind+'"]')){const i=Number(b.dataset.id),locked=list[i].level>lv;b.classList.toggle('locked',locked);b.setAttribute('aria-disabled',String(locked));b.setAttribute('aria-pressed',String(look[kind]===i));b.querySelector('small').textContent=locked?'Level '+list[i].level:look[kind]===i?'Equipped':'Unlocked';}
+  if(state==='menu'&&!online)Object.assign(game.human,look);}
+ function buildCustomize(){for(const [kind,list,grid] of [['skin',SKINS,'skinGrid'],['core',CORES,'coreGrid']]){$(grid).innerHTML=list.map((s,i)=>'<button type="button" class="cz-tile" data-kind="'+kind+'" data-id="'+i+'"><canvas width="88" height="88" aria-hidden="true"></canvas><span>'+s.name+'</span><small></small></button>').join('');}
+  for(const b of document.querySelectorAll('.cz-tile'))b.onclick=()=>{if(b.classList.contains('locked')){toast('Reach level '+(b.dataset.kind==='skin'?SKINS:CORES)[Number(b.dataset.id)].level+' to unlock this.');return;}look[b.dataset.kind]=Number(b.dataset.id);save();updateProgressUI();play('collect');};}
+ function drawCustomize(){const now=performance.now(),t=now/1000;
+  for(const b of document.querySelectorAll('.cz-tile')){const c=b.querySelector('canvas').getContext('2d'),i=Number(b.dataset.id),skin=b.dataset.kind==='skin'?i:look.skin,core=b.dataset.kind==='core'?i:look.core;
+   c.clearRect(0,0,88,88);c.save();c.translate(44,44);
+   for(let k=0;k<8;k++){const a=k/8*Math.PI*2+t*.9;c.save();c.translate(Math.cos(a)*28,Math.sin(a)*28);c.rotate(a+Math.PI/2);c.drawImage(orbitSprite('#64eee0',k%5===2?1:k%5===4?2:0,false,skin),-21,-19);c.restore();}
+   hexPath(c,0,0,15,t*.3);c.fillStyle='#102d3d';c.fill();c.strokeStyle='#64eee0';c.lineWidth=2;c.stroke();
+   coreStyle(c,0,0,core,'#64eee0',t*1.3,now);c.restore();}}
+ function awardXp(){const key=online?online.code+':'+online.round:game;if(xpAwarded===key)return;xpAwarded=key;
+  const before=level(),gain=roundXp(game.human.score);xp+=gain;const after=level();save();
+  const from=xpForLevel(after),to=xpForLevel(after+1);
+  $('xpGain').textContent='+'+gain.toLocaleString()+' XP';$('xpLevel').textContent=after>before?'Level '+before+' → '+after:'Level '+after;
+  $('xpFill').style.width=(Math.max(0,Math.min(1,(xp-from)/(to-from)))*100).toFixed(1)+'%';
+  const unlocked=[...SKINS.map(s=>[s,'orbit skin']),...CORES.map(s=>[s,'core style'])].filter(([s])=>s.level>before&&s.level<=after);
+  $('xpUnlock').hidden=!unlocked.length;$('xpUnlock').textContent=unlocked.length?'Unlocked: '+unlocked.map(([s,w])=>s.name+' '+w).join(', ')+'. Equip it in Customize.':'';}
+ function orbitSprite(color,kind,focus,skin=0){
+  const key=color+':'+kind+':'+focus+':'+skin;if(spriteCache.has(key))return spriteCache.get(key);
   const sprite=document.createElement('canvas');sprite.width=42;sprite.height=38;const c=sprite.getContext('2d');c.translate(21,19);
-  c.shadowColor=color+'55';c.shadowBlur=focus?7:3;c.fillStyle=METAL[kind];c.fillRect(-6.5,-4.5,13,9);c.shadowBlur=0;
-  c.strokeStyle='#09131f';c.lineWidth=1;c.strokeRect(-6.5,-4.5,13,9);c.fillStyle='#ffffff4d';c.fillRect(-5.5,-3.5,10,1.3);c.fillStyle=color;c.fillRect(-2.5,2.5,5,2);
+  c.shadowColor=color+'55';c.shadowBlur=focus?7:3;skinShape(c,skin,METAL[kind],color);
   spriteCache.set(key,sprite);return sprite;
  }
  // Hit feedback. Hits are detected by a ship's lastHurt changing and knockouts by new
@@ -1490,12 +1553,12 @@ function reconcileScrap(previous,next,now){
    const rings=new Set(a.pieces.map(p=>orbitSlot(p.slot).radius));for(const r of rings){ctx.strokeStyle=a.color+'1c';ctx.lineWidth=1;ctx.beginPath();ctx.arc(a.x,a.y,shieldRadius(a,r),0,Math.PI*2);ctx.stroke();}
    for(const p of a.pieces){const item=p.item,blend=scrapBlend(p,now);
     const x=p.x+(p.blendX||0)*blend,y=p.y+(p.blendY||0)*blend;
-    ctx.strokeStyle=a.color+'15';ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(x,y);ctx.stroke();ctx.save();ctx.translate(x,y);ctx.rotate(p.angle+Math.PI/2);ctx.drawImage(orbitSprite(a.color,item.kind,isYou),-21,-19);ctx.restore();}
+    ctx.strokeStyle=a.color+'15';ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(x,y);ctx.stroke();ctx.save();ctx.translate(x,y);ctx.rotate(p.angle+Math.PI/2);ctx.drawImage(orbitSprite(a.color,item.kind,isYou,a.skin||0),-21,-19);ctx.restore();}
    if(a.shieldUntil>game.time){ctx.strokeStyle=a.color+'9a';ctx.lineWidth=1.4;ctx.setLineDash([4,5]);ctx.beginPath();ctx.arc(a.x,a.y,outer+13,game.time,Math.PI*2+game.time);ctx.stroke();ctx.setLineDash([]);}
    const speed=Math.hypot(a.vx,a.vy);if(speed>15){const angle=Math.atan2(a.vy,a.vx);ctx.strokeStyle=a.color+'70';ctx.lineWidth=3;for(const offset of [-.3,.3]){const x=a.x-Math.cos(angle+offset)*19,y=a.y-Math.sin(angle+offset)*19;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-Math.cos(angle)*(7+speed*.04),y-Math.sin(angle)*(7+speed*.04));ctx.stroke();}}
    const glitch=glitchLevel(a,now);if(glitch){const j=7*glitch;ctx.save();ctx.translate((Math.random()-.5)*2*j,(Math.random()-.5)*j);}
    ctx.shadowColor=a.color+'5a';ctx.shadowBlur=isYou?17:9;polygon(a.x,a.y,18,6,a.aim);ctx.fillStyle='#102d3d';ctx.strokeStyle=a.flashUntil>game.time?'#fff3d9':a.hp===1&&Math.sin(now/85)>.55?'#ff6f52':a.color;ctx.lineWidth=2.3;ctx.fill();ctx.stroke();ctx.shadowBlur=0;
-   ctx.fillStyle=a.hurtUntil>game.time&&Math.floor(game.time*13)%2?'#ffffff':a.color;ctx.beginPath();ctx.arc(a.x,a.y,7.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle=a.color+'99';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(a.x+Math.cos(a.aim)*21,a.y+Math.sin(a.aim)*21);ctx.lineTo(a.x+Math.cos(a.aim)*29,a.y+Math.sin(a.aim)*29);ctx.stroke();
+   coreStyle(ctx,a.x,a.y,a.core||0,a.hurtUntil>game.time&&Math.floor(game.time*13)%2?'#ffffff':a.color,a.aim,now);ctx.strokeStyle=a.color+'99';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(a.x+Math.cos(a.aim)*21,a.y+Math.sin(a.aim)*21);ctx.lineTo(a.x+Math.cos(a.aim)*29,a.y+Math.sin(a.aim)*29);ctx.stroke();
    if(glitch)ctx.restore();
    if(isYou&&online&&online.flashUntil>performance.now()){
     ctx.save();ctx.translate(a.x,a.y);ctx.rotate(a.aim);ctx.fillStyle='#ffdf95';
@@ -1702,7 +1765,7 @@ function reconcileScrap(previous,next,now){
  function frame(now){frames++;if(now-framesAt>=1000){
   const fps=frames*1000/(now-framesAt);
   if(online&&state==='playing'&&!document.hidden&&frames>8&&fps<45&&dpr>.75){pixelRatioCap=Math.max(.75,dpr-.25);resize();}
-  $('perfValue').textContent=Math.round(frames*1000/(now-framesAt))+' fps'+(online?' · '+Math.round(online.rtt||0)+' ms'+(online.updateGap?' · '+Math.round(1000/online.updateGap)+' updates/s':'')+' · queue '+(online.queued||0)+(online.dropped?' · skipped '+online.dropped:''):'');frames=0;framesAt=now;}const dt=Math.min(online?.25:.08,(now-(last||now))/1000);last=now;if(online&&state!=='menu'){if(state==='playing')input();onlineVisualStep(dt);events();updateCamera(dt);if(now-hudAt>120){hudAt=now;updateHUD();}}else if(state==='playing'){input();acc+=dt;let ticks=0;while(acc>=1/120&&ticks<10){game.step(1/120);acc-=1/120;ticks++;if(game.finished)break;}events();updateCamera(dt);if(now-hudAt>120){hudAt=now;updateHUD();}if(game.finished)finish();}else if(state==='menu'){game.time+=dt;for(const a of game.actors)game.updateOrbits(a,true);}if(state!=='menu')updateScrapHUD(game.human.pieces.length);draw();if(toastUntil&&now>toastUntil){$('toast').classList.remove('show');toastUntil=0;}requestAnimationFrame(frame);}
+  $('perfValue').textContent=Math.round(frames*1000/(now-framesAt))+' fps'+(online?' · '+Math.round(online.rtt||0)+' ms'+(online.updateGap?' · '+Math.round(1000/online.updateGap)+' updates/s':'')+' · queue '+(online.queued||0)+(online.dropped?' · skipped '+online.dropped:''):'');frames=0;framesAt=now;}const dt=Math.min(online?.25:.08,(now-(last||now))/1000);last=now;if(online&&state!=='menu'){if(state==='playing')input();onlineVisualStep(dt);events();updateCamera(dt);if(now-hudAt>120){hudAt=now;updateHUD();}}else if(state==='playing'){input();acc+=dt;let ticks=0;while(acc>=1/120&&ticks<10){game.step(1/120);acc-=1/120;ticks++;if(game.finished)break;}events();updateCamera(dt);if(now-hudAt>120){hudAt=now;updateHUD();}if(game.finished)finish();}else if(state==='menu'||state==='customize'){game.time+=dt;for(const a of game.actors)game.updateOrbits(a,true);}if(state!=='menu')updateScrapHUD(game.human.pieces.length);draw();if(toastUntil&&now>toastUntil){$('toast').classList.remove('show');toastUntil=0;}if(state==='customize')drawCustomize();requestAnimationFrame(frame);}
  requestAnimationFrame(frame);
 })();
 
