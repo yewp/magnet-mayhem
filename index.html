@@ -98,11 +98,11 @@ const CRATE_RADIUS=28;
 const CRATE_NORMALS=[[1,0],[0,1],[-1,0],[0,-1]];
 // preview: seconds a comet's route is shown before it launches. A comet head passing
 // through a ship knocks up to hitStrip armor pieces loose (once per comet per ship).
-const COMET={trail:5,smallTrail:3,burst:24,smallBurst:6,showerCount:8,afterglow:1.2,preview:1.2,hitRadius:30,hitStrip:2};
-// Stardust: glowing motes that comet trails drop instead of scrap. Absorbing one gives
+const COMET={burst:24,smallBurst:6,wallDust:6,smallWallDust:3,shotDust:12,smallShotDust:6,shotRadius:24,showerCount:8,afterglow:1.2,preview:1.2,hitRadius:30,hitStrip:2};
+// Stardust: glowing motes a comet throws off when it hits the wall or is shot down. Absorbing one gives
 // points and a speed rush (+boost, eased in and out over ramp seconds); each mote adds
 // rush seconds, up to rushMax. Motes never take an armor slot.
-const STARDUST=Object.freeze({points:15,rush:2,rushMax:6,boost:.3,ramp:.5,life:20,pickup:30,pull:1450});
+const STARDUST=Object.freeze({points:15,rush:2,rushMax:6,boost:.65,ramp:.5,life:20,pickup:30,pull:1450});
 const rushFactor=(a,time)=>{if(!((a.rushUntil||0)>time))return 1;const up=Math.min(1,(time-(a.rushStart||0))/STARDUST.ramp),down=Math.min(1,(a.rushUntil-time)/STARDUST.ramp);return 1+STARDUST.boost*Math.max(0,Math.min(up,down));};
 function cometPoint(e,progress){
  const t=limit(progress,0,1);
@@ -243,6 +243,8 @@ class MagnetWorld{
    // Compare boundary contact with armor, cores and cover on the same swept path.
    test(wallTime(s.prevX,s.x,5,MM.width-5),{kind:'wall'});
    test(wallTime(s.prevY,s.y,5,MM.height-5),{kind:'wall'});
+   for(const c of this.comets||[]){const flight=c.end-c.start-COMET.afterglow,age=this.time-c.start;if(c.shotAt!=null||age<dt||age>=flight)continue;
+    const h0=cometPoint(c,(age-dt)/flight),h1=cometPoint(c,age/flight);test(movingHit(s.prevX,s.prevY,s.x,s.y,h0.x,h0.y,h1.x,h1.y,COMET.shotRadius),{kind:'comet',comet:c,head:h1});}
    for(const wreck of this.wrecks||[])if(wreck.hp>0)test(movingHit(s.prevX,s.prevY,s.x,s.y,wreck.x,wreck.y,wreck.x,wreck.y,32),{kind:'wreck',wreck});
    const crate=this.arenaEvent;
    if(this.eventActive('jackpot') && crate.panels){
@@ -276,6 +278,10 @@ class MagnetWorld{
       if(w.hp===0){w.opened=this.time;w.vx=s.vx*.23;w.vy=s.vy*.23;}
      }
      this.burst(s.x,s.y,'#d5b78c',w.hp%10===0?14:4,110);
+    }
+    else if(hit.kind==='comet'){
+     if(!this.predictInteractions)this.shootComet(hit.comet,hit.head,s.owner);
+     this.burst(s.x,s.y,EVENT_COLORS.comet,10,140);
     }
     else if(hit.kind==='crate'){
      if(!this.predictInteractions){
@@ -425,17 +431,13 @@ class MagnetWorld{
    return {x:px+t*vx,y:py+t*vy};
   };
   const from=edge(-dx,-dy),to=edge(dx,dy);
-  this.comets.push({start,end:start+6.2,x:from.x,y:from.y,toX:to.x,toY:to.y,small,dropped:0,fired:false,hits:[]});
+  this.comets.push({start,end:start+6.2,x:from.x,y:from.y,toX:to.x,toY:to.y,small,fired:false,hits:[]});
  }
  updateComet(e){
   const flight=e.end-e.start-COMET.afterglow,dx=e.toX-e.x,dy=e.toY-e.y,length=Math.hypot(dx,dy);
   const tx=dx/length,ty=dy/length,age=this.time-e.start;
-  const trail=e.small?COMET.smallTrail:COMET.trail,burst=e.small?COMET.smallBurst:COMET.burst;
-  while(e.dropped<trail && age>=e.dropped*flight/trail){
-   const n=e.dropped++,p=cometPoint(e,n/trail);
-   const offset=(n%2?1:-1)*(6+this.random()*12);
-   (this.stardust??=[]).push({id:this.nextId++,x:limit(p.x-tx*12-ty*offset,8,MM.width-8),y:limit(p.y-ty*12+tx*offset,8,MM.height-8),vx:tx*length/flight*.4-ty*offset*3,vy:ty*length/flight*.4+tx*offset*3,pickupAt:this.time+.3,expiresAt:this.time+STARDUST.life});
-  }
+  const burst=e.small?COMET.smallBurst:COMET.burst;
+  if(e.shotAt!=null)return;
   if(e.hits&&age>=0&&age<flight)this.cometStrike(e,cometPoint(e,age/flight),tx,ty);
   if(age<flight || e.fired)return;
   e.fired=true;
@@ -450,7 +452,22 @@ class MagnetWorld{
    }
    item.pickupAt=this.time+.15;this.ground.push(item);
   }
+  const dust=e.small?COMET.smallWallDust:COMET.wallDust;
+  for(let i=0;i<dust;i++){const angle=normal+((i+this.random())/dust-.5)*Math.PI*.8,speed=160+this.random()*260;
+   let vx=Math.cos(angle)*speed,vy=Math.sin(angle)*speed;
+   if(Math.abs(xWall-yWall)<1e-6){vx=Math.abs(vx)*(e.toX>MM.width/2?-1:1);vy=Math.abs(vy)*(e.toY>MM.height/2?-1:1);}
+   this.addStardust(e.toX,e.toY,vx,vy);}
  }
+ // A shot that catches a comet head shatters it into a big cloud of stardust (and no wall burst).
+ shootComet(e,head,owner){
+  if(e.shotAt!=null)return;
+  e.shotAt=this.time;e.fired=true;
+  const dx=e.toX-e.x,dy=e.toY-e.y,length=Math.hypot(dx,dy)||1,speed=length/(e.end-e.start-COMET.afterglow),dust=e.small?COMET.smallShotDust:COMET.shotDust;
+  for(let i=0;i<dust;i++){const angle=(i+this.random())/dust*Math.PI*2,kick=120+this.random()*220;
+   this.addStardust(head.x,head.y,Math.cos(angle)*kick+dx/length*speed*.25,Math.sin(angle)*kick+dy/length*speed*.25);}
+  if(owner===this.human?.id)this.event('cometShot');
+ }
+ addStardust(x,y,vx,vy){(this.stardust??=[]).push({id:this.nextId++,x:limit(x,8,MM.width-8),y:limit(y,8,MM.height-8),vx,vy,pickupAt:this.time+.3,expiresAt:this.time+STARDUST.life});}
  // A comet head knocks armor off ships it passes through; the core is never damaged.
  cometStrike(e,head,tx,ty){
   for(const a of this.actors){
@@ -496,7 +513,7 @@ class MagnetWorld{
   }
   if(this.comets.length){
    for(const comet of this.comets)this.updateComet(comet);
-   this.comets=this.comets.filter(comet=>this.time<comet.end);
+   this.comets=this.comets.filter(comet=>this.time<(comet.shotAt!=null?Math.min(comet.end,comet.shotAt+COMET.afterglow):comet.end));
   }
   if(e&&this.time>=e.end){if(e.kind==='jackpot')for(let side=0;side<4;side++){if(e.panels & (1<<side))this.spillCrate(e,side);}this.arenaEvent=null;this.nextEventAt=this.time+EVENT.gapMin+this.random()*(EVENT.gapMax-EVENT.gapMin);return;}
   if(!e){
@@ -540,8 +557,8 @@ const unwireVortices=list=>(list||[]).map(([x,y,until,owner])=>({x,y,until,owner
 const r2=n=>Math.round(n*100)/100;
 const wireWrecks=w=>(w.wrecks||[]).map(r=>[r2(r.x),r2(r.y),r.kind,r.hp,r2(r.opened)]);
 const unwireWrecks=list=>(list||[]).map(([x,y,kind,hp,opened])=>({x,y,kind,hp,opened}));
-const wireComets=w=>(w.comets||[]).map(c=>[r2(c.start),r2(c.end),Math.round(c.x),Math.round(c.y),Math.round(c.toX),Math.round(c.toY),c.small?1:0]);
-const unwireComets=list=>(list||[]).map(([start,end,x,y,toX,toY,small=0])=>({start,end,x,y,toX,toY,small:small===1}));
+const wireComets=w=>(w.comets||[]).map(c=>{const out=[r2(c.start),r2(c.end),Math.round(c.x),Math.round(c.y),Math.round(c.toX),Math.round(c.toY),c.small?1:0];if(c.shotAt!=null)out.push(r2(c.shotAt));return out;});
+const unwireComets=list=>(list||[]).map(([start,end,x,y,toX,toY,small=0,shotAt=null])=>({start,end,x,y,toX,toY,small:small===1,shotAt}));
 const wireEvent=w=>{const e=w.arenaEvent;return e?[e.kind,r2(e.start),r2(e.end),Math.round(e.x),Math.round(e.y),(e.drops||[]).map(d=>[Math.round(d.x),Math.round(d.y),r2(d.t)]),e.panels??0,e.toX??0,e.toY??0,...(e.launched!=null?[1]:[])]:0;};
 const unwireEvent=e=>e?{kind:e[0],start:e[1],end:e[2],x:e[3],y:e[4],drops:(e[5]||[]).map(([x,y,t])=>({x,y,t})),panels:e[6]??0,toX:e[7]??0,toY:e[8]??0,fired:false,shower:!!e[9]}:null;
 const wireRound=n=>Math.round((Number(n)||0)*10)/10;
@@ -1088,7 +1105,7 @@ function reconcileScrap(previous,next,now){
   $('rebuildPanel').hidden=a.alive||state!=='playing';if(!a.alive)$('rebuildTime').textContent=Math.max(0,a.respawnAt-game.time).toFixed(1);if(best>storedBest&&Math.floor(game.time)%5===0)save();
  }
  function finish(){const rank=game.ranking().indexOf(game.human)+1;best=Math.max(best,game.human.score);save();$('finishTitle').textContent=rank===1?'You owned the scrapyard.':'That was mayhem.';$('finishCopy').textContent=rank===1?'A full orbit, a steady aim, and a scrapyard full of spare parts.':`${game.ranking()[0].name} took the top spot. There is always another round.`;$('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
- function events(){for(const e of game.events){if(e.type==='shot')play('shot');if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}}game.events.length=0;}
+ function events(){for(const e of game.events){if(e.type==='shot')play('shot');if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}if(e.type==='cometShot')toast('Comet shattered! Grab the stardust for a speed rush.');}game.events.length=0;}
  function visible(x,y,r=50){return Math.abs(x-cam.x)<width/(2*cam.zoom)+r&&Math.abs(y-cam.y)<height/(2*cam.zoom)+r;}
  function polygon(x,y,r,sides,angle=0){ctx.beginPath();for(let i=0;i<sides;i++){const a=angle+i/sides*Math.PI*2,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;if(i)ctx.lineTo(px,py);else ctx.moveTo(px,py);}ctx.closePath();}
  // ---- Arena depth and combat effects (drawing only; nothing here changes the game) ----
@@ -1434,7 +1451,7 @@ function reconcileScrap(previous,next,now){
  }
  function effects(){for(const p of game.effects){if(!visible(p.x,p.y,10))continue;ctx.globalAlpha=limit(p.life/.45,0,1);ctx.fillStyle=p.color;ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;for(const p of game.labels){if(p.salvageTotal!==undefined){drawSalvageTotal(p);continue;}if(!visible(p.x,p.y,100))continue;ctx.save();ctx.globalAlpha=Math.min(1,p.life*3);ctx.fillStyle=p.color;ctx.font='750 11px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.shadowColor='#040a12';ctx.shadowBlur=7;ctx.fillText(p.text,p.x,p.y);ctx.restore();}}
  function reticle(){if(state!=='playing'||touchMode||!pointer.active)return;const x=cam.x+(pointer.x-width/2)/cam.zoom,y=cam.y+(pointer.y-height/2)/cam.zoom;ctx.save();ctx.strokeStyle='#d5fff48f';ctx.lineWidth=1/cam.zoom;ctx.beginPath();ctx.arc(x,y,7/cam.zoom,0,Math.PI*2);ctx.moveTo(x-12/cam.zoom,y);ctx.lineTo(x-8/cam.zoom,y);ctx.moveTo(x+8/cam.zoom,y);ctx.lineTo(x+12/cam.zoom,y);ctx.moveTo(x,y-12/cam.zoom);ctx.lineTo(x,y-8/cam.zoom);ctx.moveTo(x,y+8/cam.zoom);ctx.lineTo(x,y+12/cam.zoom);ctx.stroke();ctx.restore();}
- function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const w of game.wrecks||[])if(w.hp>=0){mc.fillStyle=w.kind===1?'#ffd283':'#78ede2';mc.fillRect(w.x*sx-3,w.y*sy-2,6,4);}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}if(game.arenaEvent?.kind==='jackpot'){const e=game.arenaEvent;mc.fillStyle=EVENT_COLORS.jackpot;mc.globalAlpha=.55+.45*Math.sin(performance.now()/120);mc.fillRect(e.x*sx-4,e.y*sy-4,8,8);mc.globalAlpha=1;}for(const c of game.comets||[]){const age=game.time-c.start,flight=c.end-c.start-COMET.afterglow;if(age>flight)continue;mc.strokeStyle=EVENT_COLORS.comet;mc.globalAlpha=age<0?.35:.6;mc.lineWidth=1;mc.beginPath();mc.moveTo(c.x*sx,c.y*sy);mc.lineTo(c.toX*sx,c.toY*sy);mc.stroke();if(age>=0){const p=cometPoint(c,age/flight);mc.globalAlpha=1;mc.fillStyle='#e6fbff';mc.beginPath();mc.arc(p.x*sx,p.y*sy,3,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}for(const v of game.vortices||[]){mc.strokeStyle=POWER_COLORS.vortex;mc.lineWidth=2;mc.beginPath();mc.arc(v.x*sx,v.y*sy,POWER.vortexRadius*sx,0,Math.PI*2);mc.stroke();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);const dark=game.eventActive('blackout');for(const a of game.actors){if(!a.alive||dark&&a.id!==game.human.id)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
+ function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const w of game.wrecks||[])if(w.hp>=0){mc.fillStyle=w.kind===1?'#ffd283':'#78ede2';mc.fillRect(w.x*sx-3,w.y*sy-2,6,4);}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}if(game.arenaEvent?.kind==='jackpot'){const e=game.arenaEvent;mc.fillStyle=EVENT_COLORS.jackpot;mc.globalAlpha=.55+.45*Math.sin(performance.now()/120);mc.fillRect(e.x*sx-4,e.y*sy-4,8,8);mc.globalAlpha=1;}for(const c of game.comets||[]){const age=game.time-c.start,flight=c.end-c.start-COMET.afterglow;if(age>flight||c.shotAt!=null&&game.time>=c.shotAt)continue;mc.strokeStyle=EVENT_COLORS.comet;mc.globalAlpha=age<0?.35:.6;mc.lineWidth=1;mc.beginPath();mc.moveTo(c.x*sx,c.y*sy);mc.lineTo(c.toX*sx,c.toY*sy);mc.stroke();if(age>=0){const p=cometPoint(c,age/flight);mc.globalAlpha=1;mc.fillStyle='#e6fbff';mc.beginPath();mc.arc(p.x*sx,p.y*sy,3,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}for(const v of game.vortices||[]){mc.strokeStyle=POWER_COLORS.vortex;mc.lineWidth=2;mc.beginPath();mc.arc(v.x*sx,v.y*sy,POWER.vortexRadius*sx,0,Math.PI*2);mc.stroke();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);const dark=game.eventActive('blackout');for(const a of game.actors){if(!a.alive||dark&&a.id!==game.human.id)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
  function joystick(){if(!touch)return;ctx.save();ctx.fillStyle='#64eee00d';ctx.strokeStyle='#a1fff34a';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(touch.sx,touch.sy,42,0,Math.PI*2);ctx.fill();ctx.stroke();const len=Math.hypot(touch.dx,touch.dy)||1,range=Math.min(35,len);ctx.fillStyle='#89fff0a0';ctx.beginPath();ctx.arc(touch.sx+touch.dx/len*range,touch.sy+touch.dy/len*range,12,0,Math.PI*2);ctx.fill();ctx.restore();}
  function eventNotice(){
   const e=game.arenaEvent;
@@ -1451,22 +1468,26 @@ function reconcileScrap(previous,next,now){
  function cometStar(x,y,r,rot){ctx.save();ctx.translate(x,y);ctx.rotate(rot);
   const halo=ctx.createRadialGradient(0,0,0,0,0,r*1.7);halo.addColorStop(0,cometRgba(.55));halo.addColorStop(1,cometRgba(0));ctx.fillStyle=halo;ctx.beginPath();ctx.arc(0,0,r*1.7,0,Math.PI*2);ctx.fill();
   ctx.beginPath();for(let k=0;k<8;k++){const a=k*Math.PI/4,rr=k%2?r*.28:r;ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}ctx.closePath();ctx.fillStyle='rgba(255,255,250,.96)';ctx.fill();ctx.restore();}
- function cometSparks(e,head,ux,uy,flying,tailLen){
+ function cometSparks(e,head,ux,uy,flying,tailLen,impact,shot){
   const key=e.start+':'+e.x+':'+e.y;let fx=cometFx.get(key);if(!fx){fx={sparks:[],spawnAt:e.start,burst:false};cometFx.set(key,fx);}fx.seen=performance.now();
   if(flying)while(fx.spawnAt<game.time){fx.spawnAt+=COMET_SPARKS.every;const back=Math.random()*Math.min(tailLen,90),side=Math.random()<.5?-1:1,speed=COMET_SPARKS.speed*(.6+Math.random()*.8);
    fx.sparks.push({x:head.x-ux*back,y:head.y-uy*back,vx:-uy*side*speed-ux*speed*.4,vy:ux*side*speed-uy*speed*.4,born:game.time});}
-  else if(!fx.burst){fx.burst=true;for(let i=0;i<COMET_SPARKS.burst;i++){const ang=Math.atan2(-uy,-ux)+(Math.random()-.5)*Math.PI*.95,speed=80+Math.random()*220;
-   fx.sparks.push({x:e.toX,y:e.toY,vx:Math.cos(ang)*speed,vy:Math.sin(ang)*speed,born:game.time});}}
+  else if(!fx.burst){fx.burst=true;const count=shot?COMET_SPARKS.burst*1.6:COMET_SPARKS.burst;for(let i=0;i<count;i++){const ang=shot?Math.random()*Math.PI*2:Math.atan2(-uy,-ux)+(Math.random()-.5)*Math.PI*.95,speed=(shot?110:80)+Math.random()*220;
+   fx.sparks.push({x:impact.x,y:impact.y,vx:Math.cos(ang)*speed,vy:Math.sin(ang)*speed,born:game.time});}}
   fx.sparks=fx.sparks.filter(p=>game.time-p.born<COMET_SPARKS.life);if(fx.sparks.length>COMET_SPARKS.cap)fx.sparks.splice(0,fx.sparks.length-COMET_SPARKS.cap);
   return fx.sparks;}
  function drawScrapComet(e){
   const age=game.time-e.start,flight=e.end-e.start-COMET.afterglow;
   if(age<0){cometPreview(e);return;}
-  const after=Math.max(0,age-flight),flying=!after;
+  // A comet that was shot down stops where it was hit and shatters there.
+  const shot=e.shotAt!=null&&game.time>=e.shotAt,stop=shot?Math.min(e.shotAt-e.start,flight):flight;
+  const after=shot?game.time-e.shotAt:Math.max(0,age-flight),flying=!shot&&age<flight;
   cometMoments(e,flying?cometPoint(e,age/flight):null,after);
   const big=e.small===false,dx=e.toX-e.x,dy=e.toY-e.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,speed=len/flight;
-  const head=cometPoint(e,Math.min(age,flight)/flight),tailLen=Math.min(Math.min(age,flight)*speed,big?340:260)*(flying?1:Math.max(0,1-after/.45));
-  const sparks=cometSparks(e,head,ux,uy,flying,tailLen);
+  const head=cometPoint(e,Math.min(age,stop)/flight),tailLen=Math.min(Math.min(age,stop)*speed,big?340:260)*(flying?1:Math.max(0,1-after/.45));
+  const impact=shot?head:{x:e.toX,y:e.toY};
+  const sparks=cometSparks(e,head,ux,uy,flying,tailLen,impact,shot);
+  if(shot&&!cometSeen.has('s'+e.start+':'+e.toX)&&visible(impact.x,impact.y,60)){cometSeen.add('s'+e.start+':'+e.toX);play('kill');}
   if(!visible(head.x,head.y,tailLen+160))return;
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
   if(tailLen>2){
@@ -1477,7 +1498,9 @@ function reconcileScrap(previous,next,now){
   }
   for(const p of sparks){const t=game.time-p.born,f=t/COMET_SPARKS.life,x=p.x+p.vx*t*(1-t*.4),y=p.y+p.vy*t*(1-t*.4);ctx.strokeStyle=cometRgba(1-f);ctx.lineWidth=COMET_SPARKS.size*(1-f)+.4;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-p.vx*.04,y-p.vy*.04);ctx.stroke();}
   if(flying)cometStar(head.x,head.y,big?16:12,game.time*5);
-  else{const k=after/COMET.afterglow;if(k<.35)cometStar(e.toX-ux*6,e.toY-uy*6,24*(1-k/.35)+8,k*6);ctx.strokeStyle=cometRgba((1-k)*.8);ctx.lineWidth=2;ctx.beginPath();ctx.arc(e.toX,e.toY,8+(big?70:50)*k,0,Math.PI*2);ctx.stroke();}
+  else{const k=Math.min(1,after/COMET.afterglow),cx=shot?impact.x:impact.x-ux*6,cy=shot?impact.y:impact.y-uy*6;if(k<.35)cometStar(cx,cy,(shot?30:24)*(1-k/.35)+8,k*6);ctx.strokeStyle=cometRgba((1-k)*.8);ctx.lineWidth=2;ctx.beginPath();ctx.arc(impact.x,impact.y,8+(big?70:50)*k,0,Math.PI*2);ctx.stroke();
+   // Shot down: a second, golden ring hints at the stardust it just spilled.
+   if(shot){ctx.strokeStyle='rgba(255,226,140,'+((1-k)*.7)+')';ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(impact.x,impact.y,4+(big?110:80)*Math.sqrt(k),0,Math.PI*2);ctx.stroke();}}
   ctx.restore();
  }
  // Forget spark state for comets that are gone.
