@@ -93,12 +93,17 @@ const EVENTS=['rain','jackpot','blackout','polarity','comet'];
 const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY',comet:'COMET SHOWER'};
 const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c',comet:'#eef3ff'};
 const EVENT=Object.freeze({first:20,gapMin:35,gapMax:45,warn:3,jackpotWarn:5,
- length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:21.2}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
+ length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:13.2}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
 const CRATE_RADIUS=28;
 const CRATE_NORMALS=[[1,0],[0,1],[-1,0],[0,-1]];
 // preview: seconds a comet's route is shown before it launches. A comet head passing
 // through a ship knocks up to hitStrip armor pieces loose (once per comet per ship).
-const COMET={trail:48,burst:36,afterglow:1.2,preview:1.2,hitRadius:30,hitStrip:2};
+const COMET={trail:5,smallTrail:3,burst:24,smallBurst:6,showerCount:8,afterglow:1.2,preview:1.2,hitRadius:30,hitStrip:2};
+// Stardust: glowing motes that comet trails drop instead of scrap. Absorbing one gives
+// points and a speed rush (+boost, eased in and out over ramp seconds); each mote adds
+// rush seconds, up to rushMax. Motes never take an armor slot.
+const STARDUST=Object.freeze({points:15,rush:2,rushMax:6,boost:.3,ramp:.5,life:20,pickup:30,pull:1450});
+const rushFactor=(a,time)=>{if(!((a.rushUntil||0)>time))return 1;const up=Math.min(1,(time-(a.rushStart||0))/STARDUST.ramp),down=Math.min(1,(a.rushUntil-time)/STARDUST.ramp);return 1+STARDUST.boost*Math.max(0,Math.min(up,down));};
 function cometPoint(e,progress){
  const t=limit(progress,0,1);
  return {x:e.x+(e.toX-e.x)*t,y:e.y+(e.toY-e.y)*t};
@@ -127,7 +132,7 @@ class MagnetWorld{
   this.random=random;this.difficulty=difficulty;this.duration=duration;this.time=0;this.nextId=1;this.finished=false;this.ground=[];this.shots=[];this.effects=[];this.labels=[];this.events=[];this.feed=[];
   this.wrecks=newWrecks();
   this.wells=[{x:1400,y:1100,r:65},{x:500,y:500,r:65},{x:2300,y:1700,r:65}];
-  this.pads=PAD_SPOTS.map(p=>({...p,kind:-1,readyAt:POWER.first}));this.vortices=[];this.arenaEvent=null;this.nextEventAt=EVENT.first;this.lastEvent=null;
+  this.pads=PAD_SPOTS.map(p=>({...p,kind:-1,readyAt:POWER.first}));this.vortices=[];this.stardust=[];this.arenaEvent=null;this.nextEventAt=EVENT.first;this.lastEvent=null;
   this.covers=[{x:1010,y:880,r:43},{x:1790,y:1320,r:43},{x:680,y:1580,r:51},{x:2120,y:620,r:51},{x:1720,y:480,r:38},{x:1080,y:1720,r:38},{x:380,y:1050,r:45},{x:2420,y:1150,r:45}];
   this.human=this.actor(name,'#64eee0',true);this.actors=[this.human];this.spawn(this.human,true,0);
   for(let i=0;i<MM.bots;i++){const a=this.actor(PILOTS[i],PALETTE[i],false);this.actors.push(a);this.spawn(a,true,i);}
@@ -142,7 +147,7 @@ class MagnetWorld{
  spawn(a,initial=false,index=0){
   a.wreckMod=0;a.spawnSeq=(a.spawnSeq||0)+1;
   let p;if(initial&&a.human)p={x:1400,y:1100};else if(initial){const angle=index/MM.bots*Math.PI*2,r=740+this.random()*180;p={x:limit(1400+Math.cos(angle)*r,120,MM.width-120),y:limit(1100+Math.sin(angle)*r,120,MM.height-120)};}else p=this.safeSpawn(a);
-  a.x=a.prevX=p.x;a.y=a.prevY=p.y;a.vx=a.vy=0;a.hp=3;a.alive=true;a.pieces=[];a.fire=a.magnet=false;a.shieldTightness=0;a.orbitDelay=0;a.moveX=a.moveY=0;a.shieldUntil=this.time+(a.human?3.5:2);a.hurtUntil=0;a.repair=0;a.powerUntil=0;a.leechAt=0;a.nextShot=this.time+(a.human?0:.3);a.think=0;
+  a.x=a.prevX=p.x;a.y=a.prevY=p.y;a.vx=a.vy=0;a.hp=3;a.alive=true;a.pieces=[];a.fire=a.magnet=false;a.shieldTightness=0;a.orbitDelay=0;a.moveX=a.moveY=0;a.shieldUntil=this.time+(a.human?3.5:2);a.hurtUntil=0;a.repair=0;a.powerUntil=0;a.leechAt=0;a.rushStart=a.rushUntil=0;a.nextShot=this.time+(a.human?0:.3);a.think=0;
   const count=initial?(a.human?8:[6,9,12,15,18,20,7,11,14,22][index]):6;
   for(let i=0;i<count;i++){const item=this.scrap(a.x,a.y);item.origin=a.id;a.seen.add(item.id);this.attach(a,item,false);}
   this.bound(a);this.updateOrbits(a,true);if(a.human&&!initial)this.event('respawn');
@@ -190,6 +195,7 @@ class MagnetWorld{
  think(a,dt){
   a.think-=dt;if(a.think>0)return;a.think=.16+this.random()*.12;
   let enemy=null,enemyDist=Infinity;for(const b of this.actors)if(b!==a&&b.alive&&b.shieldUntil<this.time){const d=distance(a,b);if(d<enemyDist){enemy=b;enemyDist=d;}}
+  let dust=null,dustDist=450;for(const m of this.stardust||[]){const d=distance(a,m);if(d<dustDist){dust=m;dustDist=d;}}
   let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,this.time)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(a,item);if(d<lootDist){loot=item;lootDist=d;}}
   let tx=a.x,ty=a.y;const reserve=this.difficulty==='easy'?5:3;
   let pad=null,padDist=520;if(!holdsPower(a,this.time))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
@@ -197,6 +203,7 @@ class MagnetWorld{
   const jackpot=this.arenaEvent?.kind==='jackpot'&&this.arenaEvent.panels&&distance(a,this.arenaEvent)<900?this.arenaEvent:null;
   if(a.hp===1&&this.time-a.lastHurt>1){const well=this.wells.reduce((best,w)=>distance(a,w)<distance(a,best)?w:best);tx=well.x;ty=well.y;a.fire=false;if(distance(a,well)<30){tx=a.x;ty=a.y;}}
   else if(enemy&&enemyDist<270&&(a.pieces.length<5||a.hp===1)){tx=a.x+(a.x-enemy.x)*2;ty=a.y+(a.y-enemy.y)*2;a.magnet=false;}
+  else if(dust){tx=dust.x;ty=dust.y;}
   else if(jackpot){tx=jackpot.x;ty=jackpot.y;}
   else if(pad){tx=pad.x;ty=pad.y;}
   else if(enemy&&a.pieces.length>reserve+3&&enemyDist<670){const dx=enemy.x-a.x,dy=enemy.y-a.y,d=enemyDist||1,radial=enemyDist>340?.8:enemyDist<240?-.7:.05,spin=a.id%2?1:-1;tx=a.x+dx/d*radial*220-dy/d*spin*180;ty=a.y+dy/d*radial*220+dx/d*spin*180;}
@@ -205,7 +212,7 @@ class MagnetWorld{
   tx=limit(tx,70,MM.width-70);ty=limit(ty,70,MM.height-70);const dx=tx-a.x,dy=ty-a.y,len=Math.hypot(dx,dy);a.moveX=len>5?dx/len:0;a.moveY=len>5?dy/len:0;
   if(enemy){const lead=Math.min(.55,enemyDist/MM.shotSpeed),error=(this.random()-.5)*(this.difficulty==='easy'?.38:this.difficulty==='hard'?.065:.17)*(this.eventActive('blackout')?EVENT.blackoutAim:1);a.aim=Math.atan2(enemy.y+enemy.vy*lead-a.y,enemy.x+enemy.vx*lead-a.x)+error;}
  }
- move(a,dt){const speed=245/(1+a.pieces.length*.012)*(a.magnet?.56:1)*(a.human?1:this.difficulty==='easy'?.88:1),len=Math.hypot(a.moveX,a.moveY),scale=len>1?1/len:1,f=1-Math.exp(-dt*11);a.vx+=(a.moveX*scale*speed-a.vx)*f;a.vy+=(a.moveY*scale*speed-a.vy)*f;a.x+=a.vx*dt;a.y+=a.vy*dt;this.bound(a);}
+ move(a,dt){const speed=245/(1+a.pieces.length*.012)*(a.magnet?.56:1)*rushFactor(a,this.time)*(a.human?1:this.difficulty==='easy'?.88:1),len=Math.hypot(a.moveX,a.moveY),scale=len>1?1/len:1,f=1-Math.exp(-dt*11);a.vx+=(a.moveX*scale*speed-a.vx)*f;a.vy+=(a.moveY*scale*speed-a.vy)*f;a.x+=a.vx*dt;a.y+=a.vy*dt;this.bound(a);}
  hitCore(a,owner){
   if(!a.alive||a.shieldUntil>this.time||a.hurtUntil>this.time)return false;a.hp--;a.hurtUntil=this.time+.6;a.lastHurt=this.time;a.flashUntil=this.time+.25;a.repair=0;
   this.burst(a.x,a.y,a.color,20,180);this.label(a.x,a.y-25,'CORE HIT','#ff9e8d');
@@ -313,7 +320,7 @@ class MagnetWorld{
   for(const a of this.actors){if(!a.alive)continue;a.prevX=a.x;a.prevY=a.y;for(const p of a.pieces){p.prevX=p.x;p.prevY=p.y;}if(!a.human)this.think(a,dt);if(a.human&&this.humanMovementStep)this.humanMovementStep(a,dt);else this.move(a,dt);}
   for(let i=0;i<this.actors.length;i++){const a=this.actors[i];if(!a.alive)continue;for(let j=i+1;j<this.actors.length;j++){const b=this.actors[j];if(!b.alive)continue;const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d<33){const len=d||1,px=(d?dx/len:1)*(33-d)*.5,py=(d?dy/len:0)*(33-d)*.5;a.x-=px;a.y-=py;b.x+=px;b.y+=py;this.bound(a);this.bound(b);}}}
   for(const a of this.actors)if(a.alive){advanceShield(a,dt);this.updateOrbits(a);if(a.fire)this.shoot(a);}
-  this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
+  this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateStardust(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
   for(const a of this.actors){if(!a.alive){if(this.time>=a.respawnAt)this.spawn(a);continue;}
    const canRepair=a.hp<3&&this.time-a.lastHurt>2&&this.time-a.lastShot>1.5&&this.wells.some(w=>distance(a,w)<w.r-9);
    if(canRepair){a.repair+=dt;if(a.repair>=3){a.hp++;a.repair=0;this.burst(a.x,a.y,'#7af2d0',12,80);if(a.human)this.event('repair');}}else a.repair=0;
@@ -423,12 +430,11 @@ class MagnetWorld{
  updateComet(e){
   const flight=e.end-e.start-COMET.afterglow,dx=e.toX-e.x,dy=e.toY-e.y,length=Math.hypot(dx,dy);
   const tx=dx/length,ty=dy/length,age=this.time-e.start;
-  const trail=e.small?8:COMET.trail,burst=e.small?8:COMET.burst;
+  const trail=e.small?COMET.smallTrail:COMET.trail,burst=e.small?COMET.smallBurst:COMET.burst;
   while(e.dropped<trail && age>=e.dropped*flight/trail){
    const n=e.dropped++,p=cometPoint(e,n/trail);
    const offset=(n%2?1:-1)*(6+this.random()*12);
-   const roll=this.random(),item=this.scrap(limit(p.x-tx*12-ty*offset,8,MM.width-8),limit(p.y-ty*12+tx*offset,8,MM.height-8),roll<.08?2:roll<.3?1:0);
-   item.vx=tx*length/flight*.81-ty*offset*3;item.vy=ty*length/flight*.81+tx*offset*3;this.ground.push(item);
+   (this.stardust??=[]).push({id:this.nextId++,x:limit(p.x-tx*12-ty*offset,8,MM.width-8),y:limit(p.y-ty*12+tx*offset,8,MM.height-8),vx:tx*length/flight*.4-ty*offset*3,vy:ty*length/flight*.4+tx*offset*3,pickupAt:this.time+.3,expiresAt:this.time+STARDUST.life});
   }
   if(e.hits&&age>=0&&age<flight)this.cometStrike(e,cometPoint(e,age/flight),tx,ty);
   if(age<flight || e.fired)return;
@@ -456,6 +462,24 @@ class MagnetWorld{
    if(a===this.human)this.event('cometHit');
   }
  }
+ updateStardust(dt){
+  const motes=this.stardust??=[];
+  for(const m of motes){
+   m.x=limit(m.x+m.vx*dt,8,MM.width-8);m.y=limit(m.y+m.vy*dt,8,MM.height-8);m.vx*=Math.exp(-3*dt);m.vy*=Math.exp(-3*dt);
+   if(this.time>=m.expiresAt){m.dead=true;continue;}
+   for(const a of this.actors){if(!a.alive)continue;const d=distance(a,m);
+    if(d<STARDUST.pickup&&this.time>=m.pickupAt){m.dead=true;this.absorbStardust(a,m);break;}
+    if(a.magnet&&d<magnetRange(a)){const pull=STARDUST.pull*(1-d/magnetRange(a))*dt/(d||1);m.vx+=(a.x-m.x)*pull;m.vy+=(a.y-m.y)*pull;}}
+  }
+  this.stardust=motes.filter(m=>!m.dead);
+ }
+ absorbStardust(a,m){
+  a.score+=STARDUST.points;
+  if(!((a.rushUntil||0)>this.time))a.rushStart=this.time;
+  a.rushUntil=Math.min(this.time+STARDUST.rushMax,Math.max(this.time,a.rushUntil||0)+STARDUST.rush);
+  this.burst(m.x,m.y,'#fff1c4',8,90);
+  if(a===this.human)this.event('stardust');
+ }
  eventActive(kind){const e=this.arenaEvent;return Boolean(e)&&e.kind===kind&&this.time>=e.start&&this.time<e.end;}
  updateEvents(){
   const e=this.arenaEvent;
@@ -463,7 +487,7 @@ class MagnetWorld{
   this.soloCometAt??=85+this.random()*65;
   if(e?.kind==='comet' && this.time>=e.start-COMET.preview){
    if(e.launched==null)this.updateComet(e); // Finish a single comet from an older saved round.
-   else while(e.launched<16 && this.time>=e.start+e.launched-COMET.preview){
+   else while(e.launched<COMET.showerCount && this.time>=e.start+e.launched-COMET.preview){
     const index=e.launched++;this.launchComet(e.start+index,index!==0);
    }
   }else if(!e && this.time>=this.soloCometAt && this.time+COMET.preview+6.2<Math.min(this.nextEventAt,this.duration)){
@@ -478,12 +502,12 @@ class MagnetWorld{
   if(!e){
    if(this.nextEventAt==null)this.nextEventAt=EVENT.first;
    if(this.time<this.nextEventAt)return;
-   const options=EVENTS.filter(k=>k!==this.lastEvent),kind=this.lastEvent&&!this.hadCometShower?'comet':options[Math.floor(this.random()*options.length)];
+   const options=EVENTS.filter(k=>k!==this.lastEvent),kind=options[Math.floor(this.random()*options.length)];
    const start=this.time+(kind==='jackpot'?EVENT.jackpotWarn:EVENT.warn),end=start+EVENT.length[kind];
    if(end>this.duration-2){this.nextEventAt=Infinity;return;}
    const next={kind,start,end,x:0,y:0,drops:[],fired:false};
    if(kind==='jackpot'){const p=this.freePoint(55);next.x=p.x;next.y=p.y;next.panels=15;}
-   if(kind==='comet'){next.launched=0;this.hadCometShower=true;}
+   if(kind==='comet')next.launched=0;
    if(kind==='rain'){const alive=this.actors.filter(a=>a.alive);
     for(let i=0;i<EVENT.rainDrops;i++){let p;
      if(i%4===0&&alive.length){const a=alive[Math.floor(this.random()*alive.length)];p={x:limit(a.x+(this.random()-.5)*360,60,MM.width-60),y:limit(a.y+(this.random()-.5)*360,60,MM.height-60)};}
@@ -504,7 +528,9 @@ class MagnetWorld{
 // Orbit positions, particle effects, and colors are rebuilt locally rather than
 // transferred as hundreds of redundant objects on every update.
 const WIRE_METALS=['#9dbbd5','#efae72','#ffda79'];
-const WIRE_ACTOR_FIELDS=['id','name','color','human','x','y','vx','vy','hp','alive','phase','score','kills','deaths','steals','aim','fire','magnet','shieldUntil','hurtUntil','lastShot','lastHurt','repair','respawnAt','flashUntil','spawnSeq','moveX','moveY','pullRank','orbitRank','railRank','shieldTightness','orbitDelay','bankedLevel','powerUntil','powerKind','powerAt','fullSalvage','wreckMod'];
+const WIRE_ACTOR_FIELDS=['id','name','color','human','x','y','vx','vy','hp','alive','phase','score','kills','deaths','steals','aim','fire','magnet','shieldUntil','hurtUntil','lastShot','lastHurt','repair','respawnAt','flashUntil','spawnSeq','moveX','moveY','pullRank','orbitRank','railRank','shieldTightness','orbitDelay','bankedLevel','powerUntil','powerKind','powerAt','fullSalvage','wreckMod','rushStart','rushUntil'];
+const wireDust=(w,visible)=>(w.stardust||[]).filter(visible).map(m=>[m.id,Math.round(m.x),Math.round(m.y)]);
+const unwireDust=list=>(list||[]).map(([id,x,y])=>({id,x,y}));
 // Power-up pads: [x, y, kind (-1 while charging), readyAt].
 const wirePads=w=>(w.pads||[]).map(p=>[p.x,p.y,p.kind,Math.round(p.readyAt*10)/10]);
 const unwirePads=list=>(list||[]).map(([x,y,kind,readyAt])=>({x,y,kind,readyAt}));
@@ -529,14 +555,14 @@ function encodeWireWorld(w,selfId,view){
  const visible=wireVisibility(w,selfId,view);
  return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),wr:wireWrecks(w),cm:wireComets(w),ev:wireEvent(w),
   a:w.actors.map(a=>[WIRE_ACTOR_FIELDS.map(k=>a[k]??0),a.pieces.map(p=>[p.slot,p.item.id,p.item.kind])]),
-  g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.origin?[Number(Boolean(p.hot)),p.repelUntil>w.time?r2(p.repelUntil):0,p.origin]:p.repelUntil>w.time?[Number(Boolean(p.hot)),r2(p.repelUntil)]:p.hot?[1]:[])]),
+  sd:wireDust(w,visible),g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.origin?[Number(Boolean(p.hot)),p.repelUntil>w.time?r2(p.repelUntil):0,p.origin]:p.repelUntil>w.time?[Number(Boolean(p.hot)),r2(p.repelUntil)]:p.hot?[1]:[])]),
   s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.pierce?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil||0),1]:s.deflectTrailUntil>w.time?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil)]:s.seek?[1]:[])])};
 }
 function decodeWireWorld(w){
  if(w?.wire!==2)return w;
  return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(w.wr),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],
   actors:w.a.map(([values,pieces])=>{const a=Object.fromEntries(WIRE_ACTOR_FIELDS.map((k,i)=>[k,values[i]]));a.pieces=pieces.map(([slot,id,kind])=>({slot,item:{id,kind,color:WIRE_METALS[kind]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0}));return a;}),
-  ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
+  stardust:unwireDust(w.sd),ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
   shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
 }
 
@@ -550,7 +576,7 @@ const WIRE3_KEYFRAME_TICKS=40;
 const WIRE3_ACTOR_FIELDS=WIRE_ACTOR_FIELDS.filter(k=>!['name','color','human'].includes(k));
 const WIRE3_BOOLEANS=new Set(['alive','fire','magnet']);
 const WIRE3_DIGITS={x:2,y:2,vx:1,vy:1,phase:3,aim:3,moveX:3,moveY:3,shieldTightness:3,orbitDelay:3,
- shieldUntil:2,hurtUntil:2,lastShot:2,lastHurt:2,repair:2,respawnAt:2,flashUntil:2,powerUntil:2,powerAt:2};
+ shieldUntil:2,hurtUntil:2,lastShot:2,lastHurt:2,repair:2,respawnAt:2,flashUntil:2,powerUntil:2,powerAt:2,rushStart:2,rushUntil:2};
 const WIRE3_EXACT=new Set(['x','y','vx','vy']);
 const wireDigits=(n,d)=>{const f=10**d;return Math.round((Number(n)||0)*f)/f;};
 // Trailing zeros are implied by the decoder's defaults.
@@ -576,7 +602,7 @@ class WireSender{
    this.pieces.set(a.id,text);return [values,flat];
   });
   // Pickup and ignore windows that already ended are sent as zero.
-  out.g=w.ground.filter(visible).map(p=>{const ignoring=p.ignoreUntil>t;return wireTrim([p.id,wireDigits(p.x,1),wireDigits(p.y,1),p.kind,wireDigits(p.expiresAt,1),
+  out.sd=wireDust(w,visible);out.g=w.ground.filter(visible).map(p=>{const ignoring=p.ignoreUntil>t;return wireTrim([p.id,wireDigits(p.x,1),wireDigits(p.y,1),p.kind,wireDigits(p.expiresAt,1),
    wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0,p.repelUntil>t?r2(p.repelUntil):0,p.origin||0]);});
   out.s=w.shots.filter(visible).map(s=>wireTrim([s.item.id,s.item.kind,s.owner,wireDigits(s.x,1),wireDigits(s.y,1),wireDigits(s.vx,1),wireDigits(s.vy,1),wireDigits(s.life,3),s.bounces,s.seek?1:0,s.deflectTrailUntil>t?r2(s.deflectTrailUntil):0,s.pierce?1:0]));
   return out;
@@ -602,7 +628,7 @@ class WireReceiver{
    actors.push(a);
   }
   return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(this.wrecks),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),effects:[],labels:[],actors,
-   ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
+   stardust:unwireDust(w.sd),ground:w.g.map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
    shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
  }
 }
@@ -620,7 +646,8 @@ function applyMovementCommand(world, actor, command) {
 }
 function movementCopy(a) {
   return {x:a.x,y:a.y,vx:a.vx,vy:a.vy,human:true,pieces:a.pieces,
-    moveX:a.moveX||0,moveY:a.moveY||0,aim:a.aim||0,magnet:!!a.magnet,fire:!!a.fire};
+    moveX:a.moveX||0,moveY:a.moveY||0,aim:a.aim||0,magnet:!!a.magnet,fire:!!a.fire,
+    rushStart:a.rushStart||0,rushUntil:a.rushUntil||0};
 }
 // Client-only movement step: replays the scrap count each command was predicted
 // with, so collecting or losing scrap mid-replay does not change earlier moves.
@@ -1003,7 +1030,7 @@ function reconcileScrap(previous,next,now){
  $('startForm').addEventListener('submit',e=>{e.preventDefault();connectOnline(preferredRoom?'join':'quick',preferredRoom);});$('againBtn').onclick=()=>online?menu():start();$('restartBtn').onclick=()=>online?connectOnline('create'):start();$('resumeBtn').onclick=pause;$('pauseBtn').onclick=pause;$('returnMenuBtn').onclick=menu;$('finishMenuBtn').onclick=menu;
  $('helpBtn').onclick=()=>{if(state==='help')return;helpFrom=state;show('help');};$('closeHelpBtn').onclick=()=>show(helpFrom);
  function getAudio(){if(!audio){const AC=window.AudioContext||window.webkitAudioContext;if(AC)try{audio=new AC();}catch{}}if(audio?.state==='suspended')audio.resume().catch(()=>{});return audio;}
- function play(type){if(!sound)return;const ac=getAudio();if(!ac)return;const now=ac.currentTime;if((type==='collect'||type==='strip')&&now-lastSound<.065)return;lastSound=now;try{const o=ac.createOscillator(),g=ac.createGain();o.type=['hurt','death'].includes(type)?'triangle':'sine';const f={comet:1250,power:880,shot:330,collect:720,steal:980,strip:180,hurt:95,death:65,kill:490,repair:620,start:430,finish:560}[type]||440;o.frequency.setValueAtTime(f,now);o.frequency.exponentialRampToValueAtTime(type==='death'?25:type==='shot'?105:f*1.5,now+.11);g.gain.setValueAtTime(type==='shot'?.022:type==='collect'?.02:.05,now);g.gain.exponentialRampToValueAtTime(.001,now+.19);o.connect(g);g.connect(ac.destination);o.start(now);o.stop(now+.2);}catch{}}
+ function play(type){if(!sound)return;const ac=getAudio();if(!ac)return;const now=ac.currentTime;if((type==='collect'||type==='strip')&&now-lastSound<.065)return;lastSound=now;try{const o=ac.createOscillator(),g=ac.createGain();o.type=['hurt','death'].includes(type)?'triangle':'sine';const f={stardust:1480,comet:1250,power:880,shot:330,collect:720,steal:980,strip:180,hurt:95,death:65,kill:490,repair:620,start:430,finish:560}[type]||440;o.frequency.setValueAtTime(f,now);o.frequency.exponentialRampToValueAtTime(type==='death'?25:type==='shot'?105:f*1.5,now+.11);g.gain.setValueAtTime(type==='shot'?.022:type==='collect'?.02:.05,now);g.gain.exponentialRampToValueAtTime(.001,now+.19);o.connect(g);g.connect(ac.destination);o.start(now);o.stop(now+.2);}catch{}}
  $('soundBtn').onclick=()=>{sound=!sound;$('soundBtn').classList.toggle('active',sound);$('soundBtn').setAttribute('aria-pressed',String(sound));$('soundBtn').setAttribute('aria-label',sound?'Turn sound off':'Turn sound on');$('soundBtn').title=sound?'Turn sound off':'Turn sound on';$('soundWaves').setAttribute('d',sound?'M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14':'m16 9 6 6m0-6-6 6');if(sound){getAudio();play('start');}};
  const editing=el=>Boolean(el?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])'));
  function beginFire(source){if(fireSources.has(source))return;fireSources.add(source);input();if(online)requestShot();else game.shoot(game.human);}
@@ -1052,7 +1079,7 @@ function reconcileScrap(previous,next,now){
  function updateHUD(){const a=game.human,ranking=game.ranking(),rank=ranking.indexOf(a)+1;best=Math.max(best,a.score);$('scoreValue').textContent=fmt(a.score);$('timeValue').textContent=clock(Math.max(0,Math.ceil(game.duration-game.time)));$('clockStat').classList.toggle('urgent',game.duration-game.time<=30);$('rankValue').replaceChildren(document.createTextNode(String(rank)),Object.assign(document.createElement('small'),{textContent:` / ${ranking.length}`}));$('bestValue').textContent=fmt(best);$('hpValue').textContent=`CORE ${Math.max(0,a.hp)}/3`;
   Array.from($('healthBars').querySelectorAll('i')).forEach((el,i)=>{el.className=i<a.hp?(a.hp===1?'full hurt':'full'):'';});
   $('fireBtn').disabled=!a.alive;$('magnetBtn').disabled=!a.alive;$('fireBtn').classList.toggle('engaged',a.fire&&a.pieces.length>0);$('magnetBtn').classList.toggle('engaged',a.magnet);$('magnetBtn').setAttribute('aria-pressed',String(a.magnet));
-  let message=a.wreckMod?WRECK_NAMES[a.wreckMod]+' · Equipped':'Collect scrap. Pick your moment.';if(!a.alive)message='Rebuilding your core…';else if(holdsPower(a,game.time)&&POWERS[a.powerKind])message=`${POWER_LABELS[POWERS[a.powerKind]]} · ${Math.ceil(a.powerUntil-game.time)}s · ${POWER_HINTS[POWERS[a.powerKind]]}`;else if(a.shieldUntil>game.time)message=`SPAWN SHIELD · ${Math.ceil(a.shieldUntil-game.time)}s · Firing ends protection`;else if(a.repair>0)message=`REPAIRING CORE · ${(3-a.repair).toFixed(1)}s`;else if(!a.pieces.length)message='NO ARMOR · Pull in loose scrap';else if(a.magnet)message='DEFENSIVE ORBIT · Magnet active';else if(a.pieces.length===armorCapacity(a))message='FULL ORBIT · Collect cooled scrap for salvage';$('statusLine').textContent=eventNotice()||message;$('statusLine').classList.toggle('repairing',a.repair>0);
+  let message=a.wreckMod?WRECK_NAMES[a.wreckMod]+' · Equipped':'Collect scrap. Pick your moment.';if(!a.alive)message='Rebuilding your core…';else if(holdsPower(a,game.time)&&POWERS[a.powerKind])message=`${POWER_LABELS[POWERS[a.powerKind]]} · ${Math.ceil(a.powerUntil-game.time)}s · ${POWER_HINTS[POWERS[a.powerKind]]}`;else if(a.shieldUntil>game.time)message=`SPAWN SHIELD · ${Math.ceil(a.shieldUntil-game.time)}s · Firing ends protection`;else if(a.repair>0)message=`REPAIRING CORE · ${(3-a.repair).toFixed(1)}s`;else if(!a.pieces.length)message='NO ARMOR · Pull in loose scrap';else if(a.magnet)message='DEFENSIVE ORBIT · Magnet active';else if(a.pieces.length===armorCapacity(a))message='FULL ORBIT · Collect cooled scrap for salvage';$('statusLine').textContent=eventNotice()||rushNotice(a)||message;$('statusLine').classList.toggle('repairing',a.repair>0);
   const list=$('leaders'),signature=ranking.map(p=>p.id+':'+p.name+':'+p.score).join('|');if(signature!==leaderKey){leaderKey=signature;list.replaceChildren();const visible=ranking.slice(0,6);if(!visible.includes(a))visible.push(a);for(const pilot of visible){const i=ranking.indexOf(pilot),row=document.createElement('div');row.className='leader'+(pilot.id===a.id?' you':'')+(i>=6?' separated':'');const rankEl=document.createElement('span');rankEl.className='rank';rankEl.textContent=String(i+1);const dot=document.createElement('i');dot.style.background=pilot.color;const who=document.createElement('span');who.className='who';who.textContent=pilot.name+(pilot.id===a.id?' (you)':pilot.human?' · player':'');const points=document.createElement('span');points.className='points';points.textContent=fmt(pilot.score);row.append(rankEl,dot,who,points);list.append(row);}}
   const feed=$('feed'),activeFeed=game.feed.filter(e=>game.time-e.time<10),signatureFeed=JSON.stringify(activeFeed);if(signatureFeed!==feedKey){feedKey=signatureFeed;feed.replaceChildren();for(const entry of activeFeed){const line=document.createElement('div');line.className='feed-line';line.style.borderColor=entry.color;const who=document.createElement('b');who.textContent=entry.killer;who.style.color=entry.color;line.append(who,document.createTextNode(` scrapped ${entry.victim}`));feed.append(line);}}
   // Keep the status line just above the controls, across screen sizes.
@@ -1455,6 +1482,23 @@ function reconcileScrap(previous,next,now){
  }
  // Forget spark state for comets that are gone.
  function pruneCometFx(){const now=performance.now();for(const [key,fx] of cometFx)if(now-fx.seen>2000)cometFx.delete(key);}
+ // ---- Stardust: twinkling motes from comet trails, and the speed rush they give ----
+ const dustDrawn=new Map();let rushSeen=0;
+ function drawStardust(){const now=performance.now(),seen=new Set();
+  for(const m of game.stardust||[]){seen.add(m.id);let p=dustDrawn.get(m.id);if(!p){p={x:m.x,y:m.y};dustDrawn.set(m.id,p);}p.x+=(m.x-p.x)*.25;p.y+=(m.y-p.y)*.25;
+   if(!visible(p.x,p.y,20))continue;const tw=.75+.25*Math.sin(now/140+m.id),r=9*tw;
+   ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.75;ctx.drawImage(softSprite('rgba(255,228,150,1)'),p.x-26,p.y-26,52,52);ctx.globalAlpha=.55*tw;ctx.strokeStyle='#ffe7a8';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(p.x,p.y,13+4*Math.sin(now/200+m.id),0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+   ctx.translate(p.x,p.y);ctx.rotate(now/600+m.id);ctx.fillStyle='#fffbe8';ctx.beginPath();for(let k=0;k<8;k++){const a=k*Math.PI/4,rr=k%2?r*.3:r;ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}ctx.closePath();ctx.fill();ctx.restore();}
+  for(const id of dustDrawn.keys())if(!seen.has(id))dustDrawn.delete(id);}
+ // A pilot in a stardust rush gets a soft golden ring and sparkles streaming behind.
+ function drawRush(){const now=performance.now()/1000;
+  for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,80))continue;const k=rushFactor(a,game.time)-1;if(k<=.01)continue;const strength=k/STARDUST.boost,speed=Math.hypot(a.vx,a.vy)||1;
+   ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.35*strength;ctx.drawImage(softSprite('rgba(255,214,120,1)'),a.x-46,a.y-46,92,92);ctx.globalAlpha=1;ctx.strokeStyle='rgba(255,226,140,'+(.75*strength)+')';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(a.x,a.y,27+2*Math.sin(now*9),0,Math.PI*2);ctx.stroke();
+   for(let i=0;i<8;i++){const f=((now*2.4+i/8)%1),side=Math.sin(i*2.1)*11,x=a.x-a.vx/speed*(20+f*46)-a.vy/speed*side,y=a.y-a.vy/speed*(20+f*46)+a.vx/speed*side;ctx.fillStyle='rgba(255,240,190,'+(.95*(1-f)*strength)+')';ctx.beginPath();ctx.arc(x,y,3.2*(1-f)+.8,0,Math.PI*2);ctx.fill();}
+   ctx.restore();}}
+ function rushNotice(a){return a.alive&&(a.rushUntil||0)>game.time?'STARDUST RUSH · '+Math.ceil(a.rushUntil-game.time)+'s':'';}
+ // A chime whenever your rush is extended (works offline and online).
+ function watchRush(){const until=game.human.rushUntil||0;if(until>rushSeen+.05&&until>game.time)play('stardust');rushSeen=until;}
  function drawWrecks(){
   for(const w of game.wrecks||[]){
    if(w.hp<0||!visible(w.x,w.y,75))continue;
@@ -1561,7 +1605,7 @@ function reconcileScrap(previous,next,now){
   for(const a of game.actors){if(!a.alive||a===game.human||!visible(a.x,a.y,40))continue;polygon(a.x,a.y,18,6,a.aim);ctx.strokeStyle=a.color;ctx.globalAlpha=.22*fade;ctx.lineWidth=6;ctx.stroke();ctx.globalAlpha=.7*fade;ctx.lineWidth=2;ctx.stroke();}
   ctx.restore();
  }
- function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);if(state!=='menu')watchEvent();ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();drawWrecks();drawEventMarkers();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawSmoke();powerAuras();drawPilots();drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();drawBlackout();cometIndicators();vignette();eventBanner();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
+ function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);if(state!=='menu'){watchEvent();watchRush();}ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();drawWrecks();drawEventMarkers();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawStardust();drawSmoke();powerAuras();drawRush();drawPilots();drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();drawBlackout();cometIndicators();vignette();eventBanner();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
  function frame(now){frames++;if(now-framesAt>=1000){
   const fps=frames*1000/(now-framesAt);
   if(online&&state==='playing'&&!document.hidden&&frames>8&&fps<45&&dpr>.75){pixelRatioCap=Math.max(.75,dpr-.25);resize();}
