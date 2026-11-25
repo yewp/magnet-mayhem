@@ -103,8 +103,10 @@ const COMET={burst:24,smallBurst:6,wallDust:6,smallWallDust:3,shotDust:12,smallS
 // Stardust: glowing motes a comet throws off when it hits the wall or is shot down. Absorbing one gives
 // points and a speed rush (+boost, eased in and out over ramp seconds); each mote adds
 // rush seconds, up to rushMax. Motes never take an armor slot.
-const STARDUST=Object.freeze({points:15,rush:2,rushMax:6,boost:.65,ramp:.5,life:20,pickup:30,pull:1450});
-const rushFactor=(a,time)=>{if(!((a.rushUntil||0)>time))return 1;const up=Math.min(1,(time-(a.rushStart||0))/STARDUST.ramp),down=Math.min(1,(a.rushUntil-time)/STARDUST.ramp);return 1+STARDUST.boost*Math.max(0,Math.min(up,down));};
+const STARDUST=Object.freeze({points:15,rush:2,rushMax:6,boost:.65,spin:1,ramp:.5,life:20,pickup:30,pull:1450});
+// How far into a stardust rush a pilot is: 0 = none, 1 = full strength (eased in and out).
+const rushStrength=(a,time)=>{if(!((a.rushUntil||0)>time))return 0;const up=Math.min(1,(time-(a.rushStart||0))/STARDUST.ramp),down=Math.min(1,(a.rushUntil-time)/STARDUST.ramp);return Math.max(0,Math.min(up,down));};
+const rushFactor=(a,time)=>1+STARDUST.boost*rushStrength(a,time);
 function cometPoint(e,progress){
  const t=limit(progress,0,1);
  return {x:e.x+(e.toX-e.x)*t,y:e.y+(e.toY-e.y)*t};
@@ -121,11 +123,12 @@ const railSpeed=()=>MM.shotSpeed;
 function shieldRadius(actor,baseRadius){
  return baseRadius*(1-.4*(actor.shieldTightness||0));
 }
-function advanceShield(actor,dt){
+function advanceShield(actor,dt,time){
  const previous=actor.shieldTightness||0;
  actor.shieldTightness=limit(previous+(actor.magnet?1:-1)*dt/.18,0,1);
- // Integrate the lost rotation so releasing the magnet never skips an angle.
- actor.orbitDelay=(actor.orbitDelay||0)+dt*.75*(previous+actor.shieldTightness)/2;
+ // Integrate the lost rotation so releasing the magnet never skips an angle. A stardust
+ // rush works the other way: the orbit gains rotation and spins up to (1 + spin) times faster.
+ actor.orbitDelay=(actor.orbitDelay||0)+dt*.75*(previous+actor.shieldTightness)/2-(time==null?0:dt*STARDUST.spin*rushStrength(actor,time));
 }
 function orbitSlot(slot){if(slot>=30)return{radius:111,index:slot-30,count:8,spin:-.58};if(slot<8)return{radius:43,index:slot,count:8,spin:1};if(slot<18)return{radius:66,index:slot-8,count:10,spin:-.82};return{radius:89,index:slot-18,count:12,spin:.68};}
 class MagnetWorld{
@@ -326,7 +329,7 @@ class MagnetWorld{
   if(this.finished)return;this.time+=dt;
   for(const a of this.actors){if(!a.alive)continue;a.prevX=a.x;a.prevY=a.y;for(const p of a.pieces){p.prevX=p.x;p.prevY=p.y;}if(!a.human)this.think(a,dt);if(a.human&&this.humanMovementStep)this.humanMovementStep(a,dt);else this.move(a,dt);}
   for(let i=0;i<this.actors.length;i++){const a=this.actors[i];if(!a.alive)continue;for(let j=i+1;j<this.actors.length;j++){const b=this.actors[j];if(!b.alive)continue;const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d<33){const len=d||1,px=(d?dx/len:1)*(33-d)*.5,py=(d?dy/len:0)*(33-d)*.5;a.x-=px;a.y-=py;b.x+=px;b.y+=py;this.bound(a);this.bound(b);}}}
-  for(const a of this.actors)if(a.alive){advanceShield(a,dt);this.updateOrbits(a);if(a.fire)this.shoot(a);}
+  for(const a of this.actors)if(a.alive){advanceShield(a,dt,this.time);this.updateOrbits(a);if(a.fire)this.shoot(a);}
   this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateStardust(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
   for(const a of this.actors){if(!a.alive){if(this.time>=a.respawnAt)this.spawn(a);continue;}
    const canRepair=a.hp<3&&this.time-a.lastHurt>2&&this.time-a.lastShot>1.5&&this.wells.some(w=>distance(a,w)<w.r-9);
@@ -931,7 +934,7 @@ function reconcileScrap(previous,next,now){
   }
   online.serverTime=next.time;
   next.time=next.finished?next.duration:sameRound?Math.max(previous.time,next.time):next.time;
-  for(const actor of next.actors)actor.orbitDelay=(actor.orbitDelay||0)+(next.time-online.serverTime)*.75*(actor.shieldTightness||0);
+  for(const actor of next.actors)actor.orbitDelay=(actor.orbitDelay||0)+(next.time-online.serverTime)*(.75*(actor.shieldTightness||0)-STARDUST.spin*rushStrength(actor,next.time));
   if(!sameRound||!next.human.alive||motionLife(next.human)!==motionLife(old)){online.nextTriggerFlash=0;online.flashUntil=0;online.shot=data.shotAck||0;}
   if(sameRound){
    const prior=new Map(previous.shots.map(shot=>[shot.item.id,shot]));
@@ -1038,7 +1041,7 @@ function reconcileScrap(previous,next,now){
    online.playback.present(game,a.id,dt);
    for(const pilot of game.actors){
     pilot.prevX=pilot.x;pilot.prevY=pilot.y;
-    if(pilot.alive){advanceShield(pilot,game.time-lastOrbitTime);game.updateOrbits(pilot,true);}
+    if(pilot.alive){advanceShield(pilot,game.time-lastOrbitTime,game.time);game.updateOrbits(pilot,true);}
    }
    for(let remaining=Math.min(dt,.1);remaining>0;){
     const step=Math.min(remaining,1/60);
@@ -1536,6 +1539,7 @@ function reconcileScrap(previous,next,now){
  function drawRush(){const now=performance.now()/1000;
   for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,80))continue;const k=rushFactor(a,game.time)-1;if(k<=.01)continue;const strength=k/STARDUST.boost,speed=Math.hypot(a.vx,a.vy)||1;
    ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.35*strength;ctx.drawImage(softSprite('rgba(255,214,120,1)'),a.x-46,a.y-46,92,92);ctx.globalAlpha=1;ctx.strokeStyle='rgba(255,226,140,'+(.75*strength)+')';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(a.x,a.y,27+2*Math.sin(now*9),0,Math.PI*2);ctx.stroke();
+   for(let i=0;i<a.pieces.length;i++){const p=a.pieces[i],tw=.5+.5*Math.sin(now*11+i*1.9);if(tw<.35)continue;ctx.globalAlpha=.9*strength*tw;ctx.drawImage(softSprite('rgba(255,214,120,1)'),p.x-17,p.y-17,34,34);}ctx.globalAlpha=1;
    for(let i=0;i<8;i++){const f=((now*2.4+i/8)%1),side=Math.sin(i*2.1)*11,x=a.x-a.vx/speed*(20+f*46)-a.vy/speed*side,y=a.y-a.vy/speed*(20+f*46)+a.vx/speed*side;ctx.fillStyle='rgba(255,240,190,'+(.95*(1-f)*strength)+')';ctx.beginPath();ctx.arc(x,y,3.2*(1-f)+.8,0,Math.PI*2);ctx.fill();}
    ctx.restore();}}
  function rushNotice(a){return a.alive&&(a.rushUntil||0)>game.time?'STARDUST RUSH · '+Math.ceil(a.rushUntil-game.time)+'s':'';}
