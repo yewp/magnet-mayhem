@@ -163,6 +163,8 @@ const POWER=Object.freeze({first:20,recharge:25,radius:34,
 //  collapse  30 s where a safe ring closes in on a spot near the middle (over 9 s), holds, then opens
 //            again (last 4 s); ships outside it shed an armor piece every 0.45 s, or take a core hit
 //            every 2 s once they have none left. Shed pieces fly toward the ring and are free for rivals.
+//            Ships outside the ring cannot collect scrap at all (no magnet pull, pickup or Leech), and loose
+//            scrap outside it is hot: nobody can pull or collect it until the ring passes it or the event ends.
 //  hole      18 s black hole near the middle that grows, pulls ships (inside their movement step, so
 //            online prediction matches) and loose scrap, and eats scrap and armor that reach its
 //            horizon; a bare core inside takes a hit every 1.5 s. When it ends it bursts: what it ate
@@ -282,7 +284,8 @@ class MagnetWorld{
   a.think-=dt;if(a.think>0)return;a.think=.16+this.random()*.12;
   let enemy=null,enemyDist=Infinity;for(const b of this.actors)if(b!==a&&b.alive&&b.shieldUntil<this.time){const d=distance(a,b);if(d<enemyDist){enemy=b;enemyDist=d;}}
   let dust=null,dustDist=450;for(const m of this.stardust||[]){const d=distance(a,m);if(d<dustDist){dust=m;dustDist=d;}}
-  let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,this.time)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(a,item);if(d<lootDist){loot=item;lootDist=d;}}
+  const hotRing=this.arenaEvent?.kind==='collapse'&&this.time>=this.arenaEvent.start&&this.time<this.arenaEvent.end?this.arenaEvent:null,hotR=hotRing?this.collapseRadius(hotRing):0;
+  let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,this.time)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;if(hotRing&&(item.x-hotRing.x)*(item.x-hotRing.x)+(item.y-hotRing.y)*(item.y-hotRing.y)>hotR*hotR)continue;const d=distance(a,item);if(d<lootDist){loot=item;lootDist=d;}}
   let tx=a.x,ty=a.y;const reserve=this.difficulty==='easy'?5:3;
   let pad=null,padDist=520;if(!holdsPower(a,this.time))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
   a.magnet=Boolean(loot&&lootDist<270&&(enemyDist>260||a.pieces.length<3))&&!this.eventActive('polarity');a.fire=Boolean(enemy&&enemyDist<650&&a.pieces.length>reserve&&!a.magnet&&this.time>a.shieldUntil);
@@ -401,7 +404,8 @@ class MagnetWorld{
  updateScrap(dt,replenish=true){
   // Runs for hundreds of pieces every step: cheap squared-distance checks skip the far ones before the
   // exact checks (with a margin, so results are unchanged), and the friction factor is worked out once.
-  const friction=Math.exp(-2.4*dt),hole=this.arenaEvent?.kind==='hole'&&this.time>=this.arenaEvent.start&&this.time<this.arenaEvent.end?this.arenaEvent:null,holeR=hole?this.holePull(hole):0,holeH=hole?this.holeHorizon(hole):0;
+  const friction=Math.exp(-2.4*dt),hole=this.arenaEvent?.kind==='hole'&&this.time>=this.arenaEvent.start&&this.time<this.arenaEvent.end?this.arenaEvent:null,holeR=hole?this.holePull(hole):0,holeH=hole?this.holeHorizon(hole):0,
+   ring=this.arenaEvent?.kind==='collapse'&&this.time>=this.arenaEvent.start&&this.time<this.arenaEvent.end?this.arenaEvent:null,ringR=ring?this.collapseRadius(ring):0,ringR2=ringR*ringR;
   for(const item of this.ground){if(item.dead)continue;
    item.x=limit(item.x+item.vx*dt,7,MM.width-7);item.y=limit(item.y+item.vy*dt,7,MM.height-7);item.vx*=friction;item.vy*=friction;
    for(const cover of this.covers){const dx=item.x-cover.x,dy=item.y-cover.y,near=cover.r+9;if(dx*dx+dy*dy>near*near)continue;const d=hyp(dx,dy);if(d<cover.r+8){const len=d||1;item.x=cover.x+(d?dx/len:1)*(cover.r+9);item.y=cover.y+(d?dy/len:0)*(cover.r+9);}}
@@ -411,6 +415,7 @@ class MagnetWorld{
    if(hole){const dx=hole.x-item.x,dy=hole.y-item.y,dd=dx*dx+dy*dy;if(dd<holeR*holeR){const d=Math.sqrt(dd)||1;if(d<holeH){item.dead=true;hole.eaten=(hole.eaten||0)+1;continue;}
     const k=1-(d-holeH)/(holeR-holeH),pull=(80+EVENT.hole.scrapPull*k*k)*dt;item.vx+=(dx-dy*.5)/d*pull;item.vy+=(dy+dx*.5)/d*pull;const speed=hyp(item.vx,item.vy);if(speed>520){item.vx*=520/speed;item.vy*=520/speed;}}}
    if(item.expiresAt<=this.time){item.dead=true;continue;}if(item.leechTo&&this.leechFlight(item,dt))continue;if(this.time<item.pickupAt)continue;
+   if(ring){const rx=item.x-ring.x,ry=item.y-ring.y;if(rx*rx+ry*ry>ringR2)continue;}
    if(this.eventActive('polarity')){
     for(const a of this.actors){if(!a.alive||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a);
      if(d<28&&canCollectScrap(a,item,this.time)){if(this.attach(a,item,true))item.dead=true;break;}
@@ -419,7 +424,7 @@ class MagnetWorld{
     continue;
    }
    let puller=null,pullScore=-1,pullDist=0;
-   for(const a of this.actors){if(!a.alive)continue;const range=a.magnet?magnetRange(a,this.time):82,ox=item.x-a.x,oy=item.y-a.y;if(ox*ox+oy*oy>(range+1)*(range+1))continue;
+   for(const a of this.actors){if(!a.alive)continue;if(ring){const rx=a.x-ring.x,ry=a.y-ring.y;if(rx*rx+ry*ry>ringR2)continue;}const range=a.magnet?magnetRange(a,this.time):82,ox=item.x-a.x,oy=item.y-a.y;if(ox*ox+oy*oy>(range+1)*(range+1))continue;
     if(!canCollectScrap(a,item,this.time)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a);if(d>range)continue;const weight=(a.magnet?2.4:1)/(d+25);if(weight>pullScore){puller=a;pullScore=weight;pullDist=d;}}
    if(!puller)continue;
    if(pullDist<28){if(this.attach(puller,item,true))item.dead=true;}
@@ -511,7 +516,7 @@ class MagnetWorld{
  // One step of a stolen piece homing in on its leecher; returns false once it is ordinary scrap again.
  leechFlight(item,dt){
   const a=this.time<item.leechUntil?this.actors.find(b=>b.id===item.leechTo):null;
-  if(!a||!a.alive){item.leechTo=0;return false;}
+  if(!a||!a.alive||this.outsideRing(a)){item.leechTo=0;return false;}
   const dx=a.x-item.x,dy=a.y-item.y,d=hyp(dx,dy)||1;
   if(d<28){item.ignoreUntil=Math.min(item.ignoreUntil,this.time);if(this.attach(a,item,true)){item.dead=true;return true;}item.leechTo=0;return false;}
   const k=Math.min(1,dt*10);item.vx+=(dx/d*POWER.leechSpeed-item.vx)*k;item.vy+=(dy/d*POWER.leechSpeed-item.vy)*k;
@@ -650,6 +655,8 @@ class MagnetWorld{
   for(const a of this.actors){if(!a.alive||a.shieldUntil>this.time)continue;const d=distance(a,e);if(d>H.burstRadius)continue;const out=Math.atan2(a.y-e.y,a.x-e.x);
    for(let i=0;i<H.burstStrip&&a.pieces.length;i++){const p=a.pieces.pop(),ang=out+(this.random()-.5)*.8;this.drop(p.item,p.x,p.y,Math.cos(ang)*380,Math.sin(ang)*380,a.id,HOT_SCRAP_SECONDS,true);}if(a.human)this.event('holeBurst');}
   this.burst(e.x,e.y,EVENT_COLORS.hole,40,420);}
+ // Also true for loose scrap: during a Collapse, scrap outside the ring is hot for everyone.
+ outsideRing(a){const e=this.arenaEvent;if(!e||e.kind!=='collapse'||this.time<e.start||this.time>=e.end)return false;const r=this.collapseRadius(e),dx=a.x-e.x,dy=a.y-e.y;return dx*dx+dy*dy>r*r;}
  // A free spot inside the Collapse ring as it will be `ahead` seconds from now, or null if no ring is closing.
  ringPoint(ahead=2){const e=this.arenaEvent;if(!e||e.kind!=='collapse'||this.time+ahead<e.start||this.time>=e.end-EVENT.ring.open)return null;
   const r=Math.max(60,this.collapseRadius(e,this.time+ahead)-110);let p={x:e.x,y:e.y};
@@ -1334,7 +1341,7 @@ function reconcileScrap(previous,next,now){
  }
  function finish(){const rank=game.ranking().indexOf(game.human)+1;awardXp();best=Math.max(best,game.human.score);save();$('finishTitle').textContent=rank===1?'You ruled the orbit.':'Round over.';$('finishCopy').textContent=rank===1?'A full orbit, a steady aim, and a scrapyard full of spare parts.':`${game.ranking()[0].name} took the top spot. There is always another round.`;$('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
  let ringToastFor=-1,holeToastFor=-1;
- function events(){for(const e of game.events){if(e.type==='holeEat'){play('strip');const at=game.arenaEvent?.start??0;if(holeToastFor!==at){holeToastFor=at;toast('The black hole is eating your armor. Pull away!');}}if(e.type==='holeBurst')play('strip');if(e.type==='shot')play('shot');if(e.type==='ring'){play('strip');const at=game.arenaEvent?.start??0;if(ringToastFor!==at){ringToastFor=at;toast('Outside the ring! Your armor is breaking off. Get inside.');}}if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}if(e.type==='cometShot')toast('Comet shattered! Grab the stardust for a speed rush.');}game.events.length=0;}
+ function events(){for(const e of game.events){if(e.type==='holeEat'){play('strip');const at=game.arenaEvent?.start??0;if(holeToastFor!==at){holeToastFor=at;toast('The black hole is eating your armor. Pull away!');}}if(e.type==='holeBurst')play('strip');if(e.type==='shot')play('shot');if(e.type==='ring'){play('strip');const at=game.arenaEvent?.start??0;if(ringToastFor!==at){ringToastFor=at;toast('Outside the ring! You can\'t collect scrap and your armor is breaking off. Get inside.');}}if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}if(e.type==='cometShot')toast('Comet shattered! Grab the stardust for a speed rush.');}game.events.length=0;}
  function visible(x,y,r=50){return Math.abs(x-cam.x)<width/(2*cam.zoom)+r&&Math.abs(y-cam.y)<height/(2*cam.zoom)+r;}
  function polygon(x,y,r,sides,angle=0){ctx.beginPath();for(let i=0;i<sides;i++){const a=angle+i/sides*Math.PI*2,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;if(i)ctx.lineTo(px,py);else ctx.moveTo(px,py);}ctx.closePath();}
  // ---- Arena depth and combat effects (drawing only; nothing here changes the game) ----
@@ -1577,17 +1584,20 @@ function reconcileScrap(previous,next,now){
   c.fillStyle='#09203266';c.fillRect(-1,-s*.25,2,s*.5);
   spriteCache.set(key,sprite);return sprite;
  }
+ const RING_HOT='#ff5a36';
  function drawScrap(){
   // One combined transform per piece (no save/restore each), since a brawl can show hundreds of pieces.
-  const now=performance.now();let m=null,lastAlpha=-1;
+  const now=performance.now(),ring=game.arenaEvent?.kind==='collapse'&&game.time>=game.arenaEvent.start&&game.time<game.arenaEvent.end?game.arenaEvent:null,ringR=ring?game.collapseRadius(ring):0;let m=null,lastAlpha=-1;
   for(const p of game.ground){
    const blend=scrapBlend(p,now),x=p.x+(p.blendX||0)*blend,y=p.y+(p.blendY||0)*blend;
    if(!visible(x,y,15))continue;
    if(!m){m=ctx.getTransform();ctx.save();}
    const c=Math.cos(p.id*2.39996),sn=Math.sin(p.id*2.39996),alpha=game.time<p.pickupAt?.5:.92;
    ctx.setTransform(m.a*c+m.c*sn,m.b*c+m.d*sn,m.c*c-m.a*sn,m.d*c-m.b*sn,m.a*x+m.c*y+m.e,m.b*x+m.d*y+m.f);if(alpha!==lastAlpha){ctx.globalAlpha=alpha;lastAlpha=alpha;}
-   const hot=hotForPilot(game.human,p,game.time);
-   if(hot)drawBaked(ctx,hotScrapGlow(p.kind),0,0);else ctx.drawImage(scrapSprite(p.color,p.kind),-18,-18);
+   // Scrap outside a Collapse ring is hot for everyone: drawn red-orange without the glow (most of the map's scrap
+   // can be outside the ring, and the glow sprite is ~3.5x the pixels, which doubled dropped frames in a test).
+   if(hotForPilot(game.human,p,game.time))drawBaked(ctx,hotScrapGlow(p.kind),0,0);
+   else ctx.drawImage(scrapSprite(ring&&(p.x-ring.x)*(p.x-ring.x)+(p.y-ring.y)*(p.y-ring.y)>ringR*ringR?RING_HOT:p.color,p.kind),-18,-18);
   }
   if(m)ctx.restore();
  }
@@ -2125,7 +2135,7 @@ function reconcileScrap(previous,next,now){
   if(!e || game.time>=e.end)return '';
   const label=EVENT_LABELS[e.kind];
   if(game.time<e.start)return label+' in '+Math.ceil(e.start-game.time)+'s';
-  const hints={rain:'Collect the falling scrap',jackpot:e.panels?'Shoot the gold panels':'Crate emptied',comet:'Follow the glowing scrap trail',blackout:'Visibility reduced',polarity:'Magnets repel scrap',collapse:'Get inside the ring',hole:'Keep clear · it bursts at the end'};
+  const hints={rain:'Collect the falling scrap',jackpot:e.panels?'Shoot the gold panels':'Crate emptied',comet:'Follow the glowing scrap trail',blackout:'Visibility reduced',polarity:'Magnets repel scrap',collapse:'Get inside · scrap outside is hot',hole:'Keep clear · it bursts at the end'};
   return label+' · '+hints[e.kind];
  }
  // Comets: a spinning four-point star head, a thin twinkling tail, and a shower of sparks
@@ -2306,7 +2316,7 @@ function reconcileScrap(previous,next,now){
   ctx.globalAlpha=pulse;ctx.fillStyle='rgba(9,19,31,.86)';ctx.beginPath();ctx.roundRect(x,y,w,30,8);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
   ctx.fillStyle=color;ctx.fillRect(x+8,y+25,(w-16)*frac,2);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,width/2,y+14);ctx.restore();
   const me=game.human;if(e.kind==='collapse'&&!warn&&me.alive&&me.shieldUntil<=game.time&&hyp(me.x-e.x,me.y-e.y)>game.collapseRadius(e)){const k=.5+.5*Math.sin(performance.now()/110);
-   ctx.save();ctx.strokeStyle=color;ctx.globalAlpha=.22+.3*k;ctx.lineWidth=14;ctx.strokeRect(7,7,width-14,height-14);ctx.globalAlpha=.8+.2*k;ctx.fillStyle=color;ctx.font='800 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('OUTSIDE THE RING · LOSING ARMOR',width/2,y+52);ctx.restore();}}
+   ctx.save();ctx.strokeStyle=color;ctx.globalAlpha=.22+.3*k;ctx.lineWidth=14;ctx.strokeRect(7,7,width-14,height-14);ctx.globalAlpha=.8+.2*k;ctx.fillStyle=color;ctx.font='800 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('OUTSIDE THE RING · NO PICKUPS · LOSING ARMOR',width/2,y+52);ctx.restore();}}
  // Comet route previews: a dashed line across the arena and an arrow at the entry point.
  function cometPreview(e){const lead=e.start-game.time;if(lead<=0||lead>COMET.preview+.05)return;const k=1-lead/COMET.preview,dx=e.toX-e.x,dy=e.toY-e.y,len=hyp(dx,dy)||1;
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.25+.55*k;const glow=26+30*k;ctx.drawImage(softSprite('rgba(244,247,255,1)'),e.x-glow,e.y-glow,glow*2,glow*2);ctx.globalCompositeOperation='source-over';
