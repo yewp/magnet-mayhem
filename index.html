@@ -104,13 +104,13 @@ const SKINS=Object.freeze([{name:'Plain',level:1},{name:'Gears',level:8},{name:'
  {name:'Mochi',shop:true},{name:'Shuriken',shop:true},{name:'Paper charms',shop:true},{name:'Hearts',shop:true},{name:'Flower pins',shop:true}]);
 // Tails come from the shop (free for now) and follow your ship in your pilot color.
 const TAILS=Object.freeze([{name:'None'},{name:'Cat tail'},{name:'Fox tail'},{name:'Three-tailed fox'},{name:'Dragon tail'},{name:'Ribbon streamers'},{name:'Comet trail'},{name:'Fish fin'},{name:'Scorpion tail'},{name:'Peacock fan'},{name:'Kite with bows'},{name:'Bubble trail'},{name:'Jellyfish tentacles'},{name:'Leafy vine'},{name:'Constellation'},{name:'Spiked club'},{name:'Devil tail'},{name:'Paper lanterns'},{name:'Chain links'},{name:'Rainbow streamer'},{name:'Feather boa'},{name:'Cherry blossoms'},{name:'Snowflakes'},{name:'Music notes'},{name:'Pixel trail'},{name:'Robot claw'},{name:'Paper cranes'},{name:'Fireflies'},{name:'Ghost wisps'},{name:'Aurora veil'},{name:'Ink brush'},{name:'Party bunting'},{name:'Balloon'},{name:'Gold coins'},{name:'Tiger tail'},{name:'Double helix'},{name:'Neon tube'},{name:'Pearl necklace'},{name:'Pom-pom spring'},{name:'Booster flame'},{name:'Butterflies'},{name:'Hearts'},{name:'Dandelion seeds'},{name:'Bamboo stalk'},{name:'Candy cane'},{name:'Koi fish'},{name:'Water wake'},{name:'Smoke rings'},{name:'Mini galaxy'},{name:'Star wand'},{name:'Ducklings'},{name:'Toy train'},{name:'Lava lamp'},{name:'Bone tail'},{name:'Little ghost'},{name:'Bat swarm'},{name:'Anchor rope'},{name:'Ringed planet'},{name:'Thorny rose'},{name:'Gummy worm'},{name:'UFO'}]);
-const CORES=Object.freeze([{name:'Dot',level:1},{name:'Ring',level:5},{name:'Star',level:11},{name:'Eye',level:17},{name:'Reactor',level:25},{name:'Spirit flame',shop:true},{name:'Atom',shop:true},{name:'Gyroscope',shop:true},{name:'Pulsar',shop:true},{name:'Turbine',shop:true},{name:'Hex lock',shop:true},{name:'Binary',shop:true},{name:'Reticle',shop:true},{name:'Vortex',shop:true},{name:'Plasma',shop:true}]);
+const CORES=Object.freeze([{name:'Dot',level:1},{name:'Ring',level:5},{name:'Star',level:11},{name:'Eye',level:17},{name:'Reactor',level:25},{name:'Spirit flame',shop:true},{name:'Atom',shop:true},{name:'Gyroscope',shop:true},{name:'Pulsar',shop:true},{name:'Turbine',shop:true},{name:'Hex lock',shop:true},{name:'Binary',shop:true},{name:'Reticle',shop:true},{name:'Vortex',shop:true},{name:'Plasma',shop:true},{name:'Compass',shop:true},{name:'Aperture',shop:true},{name:'Vitals',shop:true},{name:'Gauge',shop:true},{name:'Magnet',shop:true},{name:'Recoil',shop:true},{name:'Pulse',shop:true},{name:'Drift',shop:true},{name:'Lock-on',shop:true}]);
 // Levels: going from level L to L+1 takes 300 + 100*(L-1) XP; a finished round is worth its score + 100.
 const xpForLevel=level=>{let xp=0;for(let l=1;l<level;l++)xp+=300+100*(l-1);return xp;};
 const levelFromXp=xp=>{let level=1;while(xp>=xpForLevel(level+1))level++;return level;};
 const roundXp=score=>Math.max(0,Math.floor(score||0))+100;
 const cleanLook=look=>{const pick=(v,list)=>Number.isInteger(v)&&v>=0&&v<list.length?v:0;return {skin:pick(look?.skin,SKINS),core:pick(look?.core,CORES),tail:pick(look?.tail,TAILS)};};
-const botLook=i=>({skin:(i*3+1)%SKINS.length,core:(i*4+2)%CORES.length,tail:i%2?0:1+(i/2*13)%(TAILS.length-1)});
+const botLook=i=>({skin:(i*3+1)%SKINS.length,core:(i*5+2)%CORES.length,tail:i%2?0:1+(i/2*13)%(TAILS.length-1)});
 const PALETTE=['#ff927f','#b29eff','#f2b768','#79bafa','#eaa0d4','#a9ce75','#e6d481','#9eaddf','#efa4a0','#88c9b0'];
 const PILOTS=['Rivet','Junkratchet','Polarity','Tin Can','Scrapjack','Flux','Copperhead','Orbit','Loose Bolt','Iron Moth'];
 const limit=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1499,7 +1499,7 @@ function reconcileScrap(previous,next,now){
   else if(skin===4){hexPath(c,0,0,6.8,Math.PI/6);c.fill();c.shadowBlur=0;c.stroke();c.strokeStyle='#ffffff55';hexPath(c,0,0,3.9,Math.PI/6);c.stroke();c.fillStyle=color;c.beginPath();c.arc(0,0,1.6,0,Math.PI*2);c.fill();}
   else{c.fillRect(-6.5,-4.5,13,9);c.shadowBlur=0;c.strokeRect(-6.5,-4.5,13,9);c.fillStyle='#ffffff4d';c.fillRect(-5.5,-3.5,10,1.3);c.fillStyle=color;c.fillRect(-2.5,2.5,5,2);}
  }
- function coreStyle(c,x,y,style,fill,aim,now){
+ function coreStyle(c,x,y,style,fill,aim,now,live=null){
   c.save();c.translate(x,y);c.fillStyle=fill;c.strokeStyle=fill;
   if(style===1){c.lineWidth=3;c.beginPath();c.arc(0,0,6,0,Math.PI*2);c.stroke();c.beginPath();c.arc(0,0,1.8,0,Math.PI*2);c.fill();}
   else if(style===2){c.rotate(now/900);c.beginPath();for(let k=0;k<8;k++){const a=k*Math.PI/4,r=k%2?3.2:9.5;c.lineTo(Math.cos(a)*r,Math.sin(a)*r);}c.closePath();c.fill();}
@@ -1508,8 +1508,28 @@ function reconcileScrap(previous,next,now){
   else if(style===5){const t=now/1000,f=1+.18*Math.sin(t*14)*Math.sin(t*4.7),alpha=c.globalAlpha;c.shadowColor=fill;c.shadowBlur=14;c.globalAlpha=alpha*.85;c.beginPath();c.moveTo(0,8);c.quadraticCurveTo(9,2,4,-4*f);c.quadraticCurveTo(3,-9*f,0,-14*f);c.quadraticCurveTo(-3,-9*f,-4,-4*f);c.quadraticCurveTo(-9,2,0,8);c.fill();
    c.shadowBlur=0;c.globalAlpha=alpha;c.fillStyle='#ffffffcc';c.beginPath();c.moveTo(0,6);c.quadraticCurveTo(4,2,1.5,-2*f);c.quadraticCurveTo(0,-6*f,-1.5,-2*f);c.quadraticCurveTo(-4,2,0,6);c.fill();}
   else if(style>=6&&style<=14)shopCore(c,style,fill,now/1000);
+  else if(style>=15&&style<=23)reactiveCore(c,style,fill,live||coreDemo(now/1000),now/1000);
   else{c.beginPath();c.arc(0,0,7.5,0,Math.PI*2);c.fill();}
   c.restore();
+ }
+ // Reactive cores 15-23 respond to the ship: aim, movement, health, scrap, magnet and firing.
+ function coreLive(a){const sp=Math.hypot(a.vx||0,a.vy||0);return {aim:a.aim||0,moveA:sp>8?Math.atan2(a.vy,a.vx):(a.aim||0),speed:Math.min(1,sp/245),hp:Math.max(1,Math.min(3,Math.ceil(a.hp||1))),
+  scrap:Math.min(1,(a.pieces?.length||0)/Math.max(1,armorCapacity(a))),magnet:!!a.magnet,shotAge:Math.max(0,game.time-(a.lastShot||-99))};}
+ // In the shop and Customize there is no match, so a short loop of fake play shows how each one reacts.
+ function coreDemo(t){return {aim:t*.9+Math.sin(t*.6)*1.2,moveA:t*.5,speed:.5+.5*Math.sin(t*.7),hp:3-Math.floor((t%7.5)/2.5),scrap:(t*.12)%1,magnet:(t%5)<2.2,shotAge:t%1.1};}
+ function reactiveCore(c,style,col,s,t){const A=c.globalAlpha,T=Math.PI*2,dot=(x,y,r)=>{c.beginPath();c.arc(x,y,r,0,T);c.fill();};c.lineCap='round';c.lineJoin='round';
+  if(style===15){c.lineWidth=1.2;c.globalAlpha=A*.35;c.beginPath();c.arc(0,0,9,0,T);c.stroke();c.globalAlpha=A;c.rotate(s.aim);c.beginPath();c.moveTo(9.2,0);c.lineTo(1.2,-4.4);c.lineTo(3.4,0);c.lineTo(1.2,4.4);c.closePath();c.fill();dot(-3.6,0,1.6);}
+  else if(style===16){const open=1.8+s.speed*5.8;c.globalAlpha=A*.9;dot(0,0,9);c.globalAlpha=A;c.save();c.rotate(t*.25+s.speed*.6);c.fillStyle='#102d3d';hexPath(c,0,0,open);c.fill();
+   c.strokeStyle='#102d3d';c.lineWidth=1.1;for(let k=0;k<6;k++){const a=k*Math.PI/3;c.beginPath();c.moveTo(Math.cos(a)*open,Math.sin(a)*open);c.lineTo(Math.cos(a+1.05)*9.4,Math.sin(a+1.05)*9.4);c.stroke();}c.restore();c.lineWidth=1.4;c.beginPath();c.arc(0,0,9,0,T);c.stroke();}
+  else if(style===17){c.lineWidth=2.6;for(let k=0;k<3;k++){const a=-Math.PI/2+k*T/3+.25,alive=k<s.hp;c.globalAlpha=A*(alive?(s.hp===1?.45+.55*Math.abs(Math.sin(t*6)):1):.15);c.beginPath();c.arc(0,0,8,a,a+T/3-.5);c.stroke();}c.globalAlpha=A;dot(0,0,2.4);}
+  else if(style===18){c.lineWidth=1.6;c.beginPath();c.arc(0,0,8.6,0,T);c.stroke();c.save();c.beginPath();c.arc(0,0,7.4,0,T);c.clip();const lvl=7.4-14.8*s.scrap;c.globalAlpha=A*.9;c.beginPath();c.moveTo(-8,8);for(let x=-8;x<=8;x++)c.lineTo(x,lvl+Math.sin(x*.7+t*4)*.7);c.lineTo(8,8);c.closePath();c.fill();c.restore();c.globalAlpha=A;}
+  else if(style===19){const on=s.magnet,r=on?7.6:8.6;c.lineWidth=2.4;c.globalAlpha=A*(on?1:.55);c.save();c.rotate(s.aim);for(const sd of [1,-1]){c.beginPath();c.arc(0,0,r,sd*.5,sd*(Math.PI-.35),sd<0);c.stroke();}
+   if(on)for(let k=0;k<5;k++){const f=(t*1.6+k/5)%1,a=(k-2)*.32,rr=11-f*10;c.globalAlpha=A*Math.min(1,f*3)*(1-f*.3);dot(Math.cos(a)*rr,Math.sin(a)*rr,1.1);}c.restore();c.globalAlpha=A;dot(0,0,2.2);}
+  else if(style===20){const kick=Math.max(0,1-s.shotAge/.25),ux=Math.cos(s.aim),uy=Math.sin(s.aim);c.lineWidth=1.8+kick*1.4;c.globalAlpha=A*(.6+kick*.4);c.beginPath();c.arc(0,0,7.2+kick*1.6,0,T);c.stroke();
+   if(kick>0){c.lineWidth=2;c.beginPath();c.moveTo(ux*9.5,uy*9.5);c.lineTo(ux*(9.5+kick*3),uy*(9.5+kick*3));c.stroke();}c.globalAlpha=A;dot(-ux*kick*3.6,-uy*kick*3.6,3.2);}
+  else if(style===21){const period=s.hp>=3?1.2:s.hp===2?.75:.42,ph=(t%period)/period,beat=Math.max(0,1-ph*4);c.lineWidth=1.6;c.globalAlpha=A*(1-ph);c.beginPath();c.arc(0,0,4+ph*6,0,T);c.stroke();c.globalAlpha=A;c.shadowColor=col;c.shadowBlur=4+beat*10;dot(0,0,3.4+beat*1.6);c.shadowBlur=0;}
+  else if(style===22){const L=1+s.speed*9,bx=-Math.cos(s.moveA),by=-Math.sin(s.moveA);c.lineWidth=3.6;for(let k=0;k<4;k++){c.globalAlpha=A*(1-k/4)*.8;c.beginPath();c.moveTo(bx*L*k/4,by*L*k/4);c.lineTo(bx*L*(k+1)/4,by*L*(k+1)/4);c.stroke();}c.globalAlpha=A;c.shadowColor=col;c.shadowBlur=6;dot(0,0,3.4);c.shadowBlur=0;}
+  else{const lock=Math.max(0,1-s.shotAge/.7),r=8.2-lock*2.6;c.lineWidth=1.8;c.save();c.rotate((1-lock)*(t*.8)+lock*(s.aim+Math.PI/4));for(let k=0;k<4;k++){c.save();c.rotate(k*Math.PI/2);c.beginPath();c.moveTo(r,r-3);c.lineTo(r,r);c.lineTo(r-3,r);c.stroke();c.restore();}c.restore();c.globalAlpha=A*(.5+lock*.5);dot(0,0,1.6+lock*.8);c.globalAlpha=A;}
  }
  // Shop cores 6-14: one color, clean lines, gentle motion. Drawn around the origin, already translated.
  function shopCore(c,style,col,t){const A=c.globalAlpha,T=Math.PI*2,dot=(x,y,r)=>{c.beginPath();c.arc(x,y,r,0,T);c.fill();};c.lineCap='round';
@@ -1930,7 +1950,7 @@ function reconcileScrap(previous,next,now){
    const speed=Math.hypot(a.vx,a.vy);if(speed>15){const angle=Math.atan2(a.vy,a.vx);ctx.strokeStyle=a.color+'70';ctx.lineWidth=3;for(const offset of [-.3,.3]){const x=a.x-Math.cos(angle+offset)*19,y=a.y-Math.sin(angle+offset)*19;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-Math.cos(angle)*(7+speed*.04),y-Math.sin(angle)*(7+speed*.04));ctx.stroke();}}
    const glitch=glitchLevel(a,now);if(glitch){const j=7*glitch;ctx.save();ctx.translate((Math.random()-.5)*2*j,(Math.random()-.5)*j);}
    ctx.shadowColor=a.color+'5a';ctx.shadowBlur=isYou?17:9;polygon(a.x,a.y,18,6,a.aim);ctx.fillStyle='#102d3d';ctx.strokeStyle=a.flashUntil>game.time?'#fff3d9':a.hp===1&&Math.sin(now/85)>.55?'#ff6f52':a.color;ctx.lineWidth=2.3;ctx.fill();ctx.stroke();ctx.shadowBlur=0;
-   coreStyle(ctx,a.x,a.y,a.core||0,a.hurtUntil>game.time&&Math.floor(game.time*13)%2?'#ffffff':a.color,a.aim,now);ctx.strokeStyle=a.color+'99';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(a.x+Math.cos(a.aim)*21,a.y+Math.sin(a.aim)*21);ctx.lineTo(a.x+Math.cos(a.aim)*29,a.y+Math.sin(a.aim)*29);ctx.stroke();
+   coreStyle(ctx,a.x,a.y,a.core||0,a.hurtUntil>game.time&&Math.floor(game.time*13)%2?'#ffffff':a.color,a.aim,now,(a.core||0)>=15?coreLive(a):null);ctx.strokeStyle=a.color+'99';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(a.x+Math.cos(a.aim)*21,a.y+Math.sin(a.aim)*21);ctx.lineTo(a.x+Math.cos(a.aim)*29,a.y+Math.sin(a.aim)*29);ctx.stroke();
    if(glitch)ctx.restore();
    if(isYou&&online&&online.flashUntil>performance.now()){
     ctx.save();ctx.translate(a.x,a.y);ctx.rotate(a.aim);ctx.fillStyle='#ffdf95';
