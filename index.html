@@ -114,13 +114,19 @@ const botLook=i=>({skin:(i*3+1)%SKINS.length,core:(i*5+2)%CORES.length,tail:i%2?
 const PALETTE=['#ff927f','#b29eff','#f2b768','#79bafa','#eaa0d4','#a9ce75','#e6d481','#9eaddf','#efa4a0','#88c9b0'];
 const PILOTS=['Rivet','Junkratchet','Polarity','Tin Can','Scrapjack','Flux','Copperhead','Orbit','Loose Bolt','Iron Moth'];
 const limit=(v,a,b)=>Math.max(a,Math.min(b,v));
-const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+// Length of a vector. Math.hypot allocates memory on every call in Chrome, and these run thousands of
+// times per step, so a plain square root keeps garbage collection from interrupting frames.
+const hyp=(x,y)=>Math.sqrt(x*x+y*y);
+const distance=(a,b)=>hyp(a.x-b.x,a.y-b.y);
 function wallTime(start,end,min,max){
     if(start<min||start>max)return 0;
     if(end<=min&&end<start)return (min-start)/(end-start);
     if(end>=max&&end>start)return (max-start)/(end-start);
     return null;
 }
+// Shot hit records are made only when something is actually hit (not for every piece a shot passes),
+// so busy fights do not fill memory with throwaway objects.
+const WALL_HIT=Object.freeze({kind:'wall'}),ARMOR_REACH=[];
 function movingHit(x0,y0,x1,y1,tx0,ty0,tx1,ty1,r){
  const ox=x0-tx0,oy=y0-ty0,dx=x1-x0-(tx1-tx0),dy=y1-y0-(ty1-ty0),c=ox*ox+oy*oy-r*r;
  if(c<=0)return 0;const a=dx*dx+dy*dy;if(a<1e-9)return null;const b=2*(ox*dx+oy*dy),disc=b*b-4*a*c;if(disc<0)return null;const t=(-b-Math.sqrt(disc))/(2*a);return t>=0&&t<=1?t:null;
@@ -193,7 +199,10 @@ function advanceShield(actor,dt,time){
  // rush works the other way: the orbit gains rotation and spins up to (1 + spin) times faster.
  actor.orbitDelay=(actor.orbitDelay||0)+dt*.75*(previous+actor.shieldTightness)/2-(time==null?0:dt*STARDUST.spin*rushStrength(actor,time));
 }
-function orbitSlot(slot){if(slot>=30)return{radius:111,index:slot-30,count:8,spin:-.58};if(slot<8)return{radius:43,index:slot,count:8,spin:1};if(slot<18)return{radius:66,index:slot-8,count:10,spin:-.82};return{radius:89,index:slot-18,count:12,spin:.68};}
+function makeOrbitSlot(slot){if(slot>=30)return{radius:111,index:slot-30,count:8,spin:-.58};if(slot<8)return{radius:43,index:slot,count:8,spin:1};if(slot<18)return{radius:66,index:slot-8,count:10,spin:-.82};return{radius:89,index:slot-18,count:12,spin:.68};}
+// Slots are looked up for every armor piece every step, so they are made once and reused (read-only).
+const ORBIT_SLOTS=Array.from({length:38},(_,slot)=>Object.freeze(makeOrbitSlot(slot)));
+function orbitSlot(slot){return ORBIT_SLOTS[slot]||makeOrbitSlot(slot);}
 class MagnetWorld{
  constructor({name='You',difficulty='normal',random=Math.random,duration=MM.duration}={}){
   this.random=random;this.difficulty=difficulty;this.duration=duration;this.time=0;this.nextId=1;this.finished=false;this.ground=[];this.shots=[];this.effects=[];this.labels=[];this.events=[];this.feed=[];
@@ -258,7 +267,7 @@ class MagnetWorld{
   const x=a.x+Math.cos(a.aim)*26,y=a.y+Math.sin(a.aim)*26;
   a.nextShot=this.time+MM.fireDelay*(a.human?1:this.difficulty==='easy'?1.5:this.difficulty==='hard'?.92:1.15)*(rapidRail(a,this.time)?.5:1);a.lastShot=this.time;a.shieldUntil=Math.min(a.shieldUntil,this.time);this.burst(x,y,a.color,3,70);if(a.human)this.event('shot');return true;
  }
- bound(a){a.x=limit(a.x,MM.coreRadius+4,MM.width-MM.coreRadius-4);a.y=limit(a.y,MM.coreRadius+4,MM.height-MM.coreRadius-4);for(const c of this.covers){const dx=a.x-c.x,dy=a.y-c.y,d=Math.hypot(dx,dy),r=c.r+MM.coreRadius+2;if(d<r){const len=d||1;a.x=c.x+(d?dx/len:1)*r;a.y=c.y+(d?dy/len:0)*r;}}}
+ bound(a){a.x=limit(a.x,MM.coreRadius+4,MM.width-MM.coreRadius-4);a.y=limit(a.y,MM.coreRadius+4,MM.height-MM.coreRadius-4);for(const c of this.covers){const dx=a.x-c.x,dy=a.y-c.y,d=hyp(dx,dy),r=c.r+MM.coreRadius+2;if(d<r){const len=d||1;a.x=c.x+(d?dx/len:1)*r;a.y=c.y+(d?dy/len:0)*r;}}}
  think(a,dt){
   a.think-=dt;if(a.think>0)return;a.think=.16+this.random()*.12;
   let enemy=null,enemyDist=Infinity;for(const b of this.actors)if(b!==a&&b.alive&&b.shieldUntil<this.time){const d=distance(a,b);if(d<enemyDist){enemy=b;enemyDist=d;}}
@@ -276,10 +285,10 @@ class MagnetWorld{
   else if(enemy&&a.pieces.length>reserve+3&&enemyDist<670){const dx=enemy.x-a.x,dy=enemy.y-a.y,d=enemyDist||1,radial=enemyDist>340?.8:enemyDist<240?-.7:.05,spin=a.id%2?1:-1;tx=a.x+dx/d*radial*220-dy/d*spin*180;ty=a.y+dy/d*radial*220+dx/d*spin*180;}
   else if(loot){tx=loot.x;ty=loot.y;}
   else if(enemy){tx=enemy.x;ty=enemy.y;}
-  tx=limit(tx,70,MM.width-70);ty=limit(ty,70,MM.height-70);const dx=tx-a.x,dy=ty-a.y,len=Math.hypot(dx,dy);a.moveX=len>5?dx/len:0;a.moveY=len>5?dy/len:0;
+  tx=limit(tx,70,MM.width-70);ty=limit(ty,70,MM.height-70);const dx=tx-a.x,dy=ty-a.y,len=hyp(dx,dy);a.moveX=len>5?dx/len:0;a.moveY=len>5?dy/len:0;
   if(enemy){const lead=Math.min(.55,enemyDist/MM.shotSpeed),error=(this.random()-.5)*(this.difficulty==='easy'?.38:this.difficulty==='hard'?.065:.17)*(this.eventActive('blackout')?EVENT.blackoutAim:1);a.aim=Math.atan2(enemy.y+enemy.vy*lead-a.y,enemy.x+enemy.vx*lead-a.x)+error;}
  }
- move(a,dt){const speed=245/(1+a.pieces.length*.012)*(a.magnet?.56:1)*rushFactor(a,this.time)*(a.human?1:this.difficulty==='easy'?.88:1),len=Math.hypot(a.moveX,a.moveY),scale=len>1?1/len:1,f=1-Math.exp(-dt*11);a.vx+=(a.moveX*scale*speed-a.vx)*f;a.vy+=(a.moveY*scale*speed-a.vy)*f;a.x+=a.vx*dt;a.y+=a.vy*dt;this.bound(a);}
+ move(a,dt){const speed=245/(1+a.pieces.length*.012)*(a.magnet?.56:1)*rushFactor(a,this.time)*(a.human?1:this.difficulty==='easy'?.88:1),len=hyp(a.moveX,a.moveY),scale=len>1?1/len:1,f=1-Math.exp(-dt*11);a.vx+=(a.moveX*scale*speed-a.vx)*f;a.vy+=(a.moveY*scale*speed-a.vy)*f;a.x+=a.vx*dt;a.y+=a.vy*dt;this.bound(a);}
  hitCore(a,owner){
   if(!a.alive||a.shieldUntil>this.time||a.hurtUntil>this.time)return false;a.hp--;a.hurtUntil=this.time+.6;a.lastHurt=this.time;a.flashUntil=this.time+.25;a.repair=0;
   this.burst(a.x,a.y,a.color,20,180);this.label(a.x,a.y-25,'CORE HIT','#ff9e8d');
@@ -298,6 +307,12 @@ class MagnetWorld{
   this.burst(a.x,a.y,a.color,35,260);if(a.human)this.event('death',{name:killer?.name||'a rival'});
  }
  updateShots(dt){
+  // How far each pilot's armor reaches from its center (now and last step). A shot farther than that
+  // (plus both movements and the piece radius) cannot hit any of its pieces, so they are not checked one by one.
+  const reach=ARMOR_REACH;reach.length=this.actors.length;
+  for(let i=0;i<this.actors.length;i++){const a=this.actors[i];let m=0;
+   for(const p of a.pieces){const ox=p.x-a.x,oy=p.y-a.y,px=p.prevX-a.prevX,py=p.prevY-a.prevY;m=Math.max(m,ox*ox+oy*oy,px*px+py*py);}
+   reach[i]=Math.sqrt(m)+hyp(a.x-a.prevX,a.y-a.prevY)+11;}
   for(const s of this.shots){if(s.dead)continue;
    if(s.seek)this.steerSeeker(s,dt);
    s.prevX=s.x;s.prevY=s.y;s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;
@@ -307,11 +322,11 @@ class MagnetWorld{
     if(t<first){second=first;nextHit=hit;first=t;hit=object;}
     else if(s.pierce&&t<second){second=t;nextHit=object;}};
    // Compare boundary contact with armor, cores and cover on the same swept path.
-   test(wallTime(s.prevX,s.x,5,MM.width-5),{kind:'wall'});
-   test(wallTime(s.prevY,s.y,5,MM.height-5),{kind:'wall'});
+   test(wallTime(s.prevX,s.x,5,MM.width-5),WALL_HIT);
+   test(wallTime(s.prevY,s.y,5,MM.height-5),WALL_HIT);
    for(const c of this.comets||[]){const flight=c.end-c.start-COMET.afterglow,age=this.time-c.start;if(c.shotAt!=null||age<dt||age>=flight)continue;
     const h0=cometPoint(c,(age-dt)/flight),h1=cometPoint(c,age/flight);test(movingHit(s.prevX,s.prevY,s.x,s.y,h0.x,h0.y,h1.x,h1.y,COMET.shotRadius),{kind:'comet',comet:c,head:h1});}
-   for(const wreck of this.wrecks||[])if(wreck.hp>0)test(movingHit(s.prevX,s.prevY,s.x,s.y,wreck.x,wreck.y,wreck.x,wreck.y,32),{kind:'wreck',wreck});
+   for(const wreck of this.wrecks||[])if(wreck.hp>0){const t=movingHit(s.prevX,s.prevY,s.x,s.y,wreck.x,wreck.y,wreck.x,wreck.y,32);if(t!=null)test(t,{kind:'wreck',wreck});}
    const crate=this.arenaEvent;
    if(this.eventActive('jackpot') && crate.panels){
     for(const [side,[nx,ny]] of CRATE_NORMALS.entries()){
@@ -324,10 +339,12 @@ class MagnetWorld{
      if(Math.abs(across)<=CRATE_RADIUS)test(t,{kind:'crate',side});
     }
    }
-   for(const c of this.covers)test(movingHit(s.prevX,s.prevY,s.x,s.y,c.x,c.y,c.x,c.y,c.r+4),{kind:'cover'});
-   for(const a of this.actors){if(!a.alive||a.id===s.owner||a.shieldUntil>this.time||hasPower(a,'phase',this.time))continue;
-    for(const p of a.pieces)test(movingHit(s.prevX,s.prevY,s.x,s.y,p.prevX,p.prevY,p.x,p.y,11),{kind:'armor',a,p});
-    test(movingHit(s.prevX,s.prevY,s.x,s.y,a.prevX,a.prevY,a.x,a.y,MM.coreRadius+4),{kind:'core',a});
+   for(const c of this.covers){const t=movingHit(s.prevX,s.prevY,s.x,s.y,c.x,c.y,c.x,c.y,c.r+4);if(t!=null)test(t,{kind:'cover'});}
+   const shotStep=hyp(s.x-s.prevX,s.y-s.prevY);
+   for(let i=0;i<this.actors.length;i++){const a=this.actors[i];if(!a.alive||a.id===s.owner||a.shieldUntil>this.time||hasPower(a,'phase',this.time))continue;
+    const near=!(hyp(s.x-a.x,s.y-a.y)>reach[i]+shotStep);// missing positions (NaN) fall back to checking every piece
+    if(near)for(const p of a.pieces){const t=movingHit(s.prevX,s.prevY,s.x,s.y,p.prevX,p.prevY,p.x,p.y,11);if(t!=null)test(t,{kind:'armor',a,p});}
+    const tc=movingHit(s.prevX,s.prevY,s.x,s.y,a.prevX,a.prevY,a.x,a.y,MM.coreRadius+4);if(tc!=null)test(tc,{kind:'core',a});
    }
    const endX=s.x,endY=s.y;
    while(hit){s.x=s.prevX+(endX-s.prevX)*first;s.y=s.prevY+(endY-s.prevY)*first;
@@ -364,25 +381,29 @@ class MagnetWorld{
   }this.shots=this.shots.filter(s=>!s.dead);
  }
  updateScrap(dt,replenish=true){
+  // Runs for hundreds of pieces every step: cheap squared-distance checks skip the far ones before the
+  // exact checks (with a margin, so results are unchanged), and the friction factor is worked out once.
+  const friction=Math.exp(-2.4*dt);
   for(const item of this.ground){if(item.dead)continue;
-   item.x+=item.vx*dt;item.y+=item.vy*dt;item.vx*=Math.exp(-2.4*dt);item.vy*=Math.exp(-2.4*dt);item.x=limit(item.x,7,MM.width-7);item.y=limit(item.y,7,MM.height-7);
-   for(const cover of this.covers){const dx=item.x-cover.x,dy=item.y-cover.y,d=Math.hypot(dx,dy);if(d<cover.r+8){const len=d||1;item.x=cover.x+(d?dx/len:1)*(cover.r+9);item.y=cover.y+(d?dy/len:0)*(cover.r+9);}}
-   for(const v of this.vortices){const dx=v.x-item.x,dy=v.y-item.y,d=Math.hypot(dx,dy)||1;if(d>POWER.vortexRadius)continue;
+   item.x=limit(item.x+item.vx*dt,7,MM.width-7);item.y=limit(item.y+item.vy*dt,7,MM.height-7);item.vx*=friction;item.vy*=friction;
+   for(const cover of this.covers){const dx=item.x-cover.x,dy=item.y-cover.y,near=cover.r+9;if(dx*dx+dy*dy>near*near)continue;const d=hyp(dx,dy);if(d<cover.r+8){const len=d||1;item.x=cover.x+(d?dx/len:1)*(cover.r+9);item.y=cover.y+(d?dy/len:0)*(cover.r+9);}}
+   for(const v of this.vortices){const dx=v.x-item.x,dy=v.y-item.y,d=hyp(dx,dy)||1;if(d>POWER.vortexRadius)continue;
     const pull=(120+900*(1-d/POWER.vortexRadius))*dt;item.vx+=(dx/d-dy/d*.6)*pull;item.vy+=(dy/d+dx/d*.6)*pull;
-    if(d<45){item.vx*=Math.exp(-6*dt);item.vy*=Math.exp(-6*dt);}const speed=Math.hypot(item.vx,item.vy);if(speed>420){item.vx*=420/speed;item.vy*=420/speed;}}
+    if(d<45){item.vx*=Math.exp(-6*dt);item.vy*=Math.exp(-6*dt);}const speed=hyp(item.vx,item.vy);if(speed>420){item.vx*=420/speed;item.vy*=420/speed;}}
    if(item.expiresAt<=this.time){item.dead=true;continue;}if(item.leechTo&&this.leechFlight(item,dt))continue;if(this.time<item.pickupAt)continue;
    if(this.eventActive('polarity')){
     for(const a of this.actors){if(!a.alive||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a);
      if(d<28&&canCollectScrap(a,item,this.time)){if(this.attach(a,item,true))item.dead=true;break;}
      if(a.magnet&&!hotForPilot(a,item,this.time)&&d<magnetRange(a)){const push=EVENT.repel*(1-d/magnetRange(a))*dt/(d||1);item.repelUntil=this.time+.22;item.vx+=(item.x-a.x)*push;item.vy+=(item.y-a.y)*push;}}
-    const speed=Math.hypot(item.vx,item.vy);if(speed>540){item.vx*=540/speed;item.vy*=540/speed;}
+    const speed=hyp(item.vx,item.vy);if(speed>540){item.vx*=540/speed;item.vy*=540/speed;}
     continue;
    }
    let puller=null,pullScore=-1,pullDist=0;
-   for(const a of this.actors){if(!a.alive||!canCollectScrap(a,item,this.time)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a),range=a.magnet?magnetRange(a,this.time):82;if(d>range)continue;const weight=(a.magnet?2.4:1)/(d+25);if(weight>pullScore){puller=a;pullScore=weight;pullDist=d;}}
+   for(const a of this.actors){if(!a.alive)continue;const range=a.magnet?magnetRange(a,this.time):82,ox=item.x-a.x,oy=item.y-a.y;if(ox*ox+oy*oy>(range+1)*(range+1))continue;
+    if(!canCollectScrap(a,item,this.time)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;const d=distance(item,a);if(d>range)continue;const weight=(a.magnet?2.4:1)/(d+25);if(weight>pullScore){puller=a;pullScore=weight;pullDist=d;}}
    if(!puller)continue;
    if(pullDist<28){if(this.attach(puller,item,true))item.dead=true;}
-   else{const force=(puller.magnet?1450:500)*(1-pullDist/(puller.magnet?magnetRange(puller,this.time):82)),dx=(puller.x-item.x)/pullDist,dy=(puller.y-item.y)/pullDist;item.vx+=dx*force*dt;item.vy+=dy*force*dt;const speed=Math.hypot(item.vx,item.vy);if(speed>540){item.vx*=540/speed;item.vy*=540/speed;}}
+   else{const force=(puller.magnet?1450:500)*(1-pullDist/(puller.magnet?magnetRange(puller,this.time):82)),dx=(puller.x-item.x)/pullDist,dy=(puller.y-item.y)/pullDist;item.vx+=dx*force*dt;item.vy+=dy*force*dt;const speed=hyp(item.vx,item.vy);if(speed>540){item.vx*=540/speed;item.vy*=540/speed;}}
   }
   this.ground=this.ground.filter(item=>!item.dead);
   while(replenish&&this.ground.length<MM.ground)this.ground.push(this.scrap());
@@ -390,7 +411,7 @@ class MagnetWorld{
  step(dt){
   if(this.finished)return;this.time+=dt;
   for(const a of this.actors){if(!a.alive)continue;a.prevX=a.x;a.prevY=a.y;for(const p of a.pieces){p.prevX=p.x;p.prevY=p.y;}if(!a.human)this.think(a,dt);if(a.human&&this.humanMovementStep)this.humanMovementStep(a,dt);else this.move(a,dt);}
-  for(let i=0;i<this.actors.length;i++){const a=this.actors[i];if(!a.alive)continue;for(let j=i+1;j<this.actors.length;j++){const b=this.actors[j];if(!b.alive)continue;const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d<33){const len=d||1,px=(d?dx/len:1)*(33-d)*.5,py=(d?dy/len:0)*(33-d)*.5;a.x-=px;a.y-=py;b.x+=px;b.y+=py;this.bound(a);this.bound(b);}}}
+  for(let i=0;i<this.actors.length;i++){const a=this.actors[i];if(!a.alive)continue;for(let j=i+1;j<this.actors.length;j++){const b=this.actors[j];if(!b.alive)continue;const dx=b.x-a.x,dy=b.y-a.y,d=hyp(dx,dy);if(d<33){const len=d||1,px=(d?dx/len:1)*(33-d)*.5,py=(d?dy/len:0)*(33-d)*.5;a.x-=px;a.y-=py;b.x+=px;b.y+=py;this.bound(a);this.bound(b);}}}
   for(const a of this.actors)if(a.alive){advanceShield(a,dt,this.time);this.updateOrbits(a);if(a.fire)this.shoot(a);}
   this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateStardust(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
   for(const a of this.actors){if(!a.alive){if(this.time>=a.respawnAt)this.spawn(a);continue;}
@@ -461,7 +482,7 @@ class MagnetWorld{
    if(!target||this.time<(a.leechAt||0))continue;
    const p=target.pieces.pop();a.leechAt=this.time+POWER.leechEvery;
    this.burst(p.x,p.y,POWER_COLORS.leech,6,90);
-   const dx=a.x-p.x,dy=a.y-p.y,d=Math.hypot(dx,dy)||1;
+   const dx=a.x-p.x,dy=a.y-p.y,d=hyp(dx,dy)||1;
    this.drop(p.item,p.x,p.y,dx/d*POWER.leechSpeed*.5,dy/d*POWER.leechSpeed*.5,target.id,HOT_SCRAP_SECONDS,true);
    p.item.pickupAt=this.time;p.item.leechTo=a.id;p.item.leechUntil=this.time+POWER.leechFlight;
    if(a===this.human)this.event('leech');else if(target===this.human)this.event('leeched');
@@ -471,16 +492,16 @@ class MagnetWorld{
  leechFlight(item,dt){
   const a=this.time<item.leechUntil?this.actors.find(b=>b.id===item.leechTo):null;
   if(!a||!a.alive){item.leechTo=0;return false;}
-  const dx=a.x-item.x,dy=a.y-item.y,d=Math.hypot(dx,dy)||1;
+  const dx=a.x-item.x,dy=a.y-item.y,d=hyp(dx,dy)||1;
   if(d<28){item.ignoreUntil=Math.min(item.ignoreUntil,this.time);if(this.attach(a,item,true)){item.dead=true;return true;}item.leechTo=0;return false;}
   const k=Math.min(1,dt*10);item.vx+=(dx/d*POWER.leechSpeed-item.vx)*k;item.vy+=(dy/d*POWER.leechSpeed-item.vy)*k;
   return true;
  }
  // Seeker shots turn toward the nearest enemy core within reach and roughly ahead.
  steerSeeker(s,dt){
-  const heading=Math.atan2(s.vy,s.vx),speed=Math.hypot(s.vx,s.vy);let target=null,best=POWER.seekRange;
+  const heading=Math.atan2(s.vy,s.vx),speed=hyp(s.vx,s.vy);let target=null,best=POWER.seekRange;
   for(const a of this.actors){if(!a.alive||a.id===s.owner||a.shieldUntil>this.time||hasPower(a,'phase',this.time))continue;
-   const d=Math.hypot(a.x-s.x,a.y-s.y);if(d>=best)continue;let off=Math.atan2(a.y-s.y,a.x-s.x)-heading;off=Math.atan2(Math.sin(off),Math.cos(off));
+   const d=hyp(a.x-s.x,a.y-s.y);if(d>=best)continue;let off=Math.atan2(a.y-s.y,a.x-s.x)-heading;off=Math.atan2(Math.sin(off),Math.cos(off));
    if(Math.abs(off)<POWER.seekCone){best=d;target=off;}}
   if(target==null)return;
   const turn=Math.max(-POWER.seekTurn*dt,Math.min(POWER.seekTurn*dt,target)),angle=heading+turn;
@@ -488,7 +509,7 @@ class MagnetWorld{
  }
  // A deflected shot keeps its speed, aims back at the shooter, and now belongs to the defender.
  deflect(s,defender){
-  const shooter=this.actors.find(a=>a.id===s.owner),speed=Math.hypot(s.vx,s.vy)||MM.shotSpeed;
+  const shooter=this.actors.find(a=>a.id===s.owner),speed=hyp(s.vx,s.vy)||MM.shotSpeed;
   const angle=shooter?.alive?Math.atan2(shooter.y-s.y,shooter.x-s.x):Math.atan2(-s.vy,-s.vx);
   s.vx=Math.cos(angle)*speed;s.vy=Math.sin(angle)*speed;s.prevX=s.x;s.prevY=s.y;s.owner=defender.id;s.life=Math.max(s.life,.9);s.bounces++;s.seek=false;s.deflectTrailUntil=this.time+DEFLECT_TRAIL_SECONDS;
   this.burst(s.x,s.y,POWER_COLORS.deflector,10,140);
@@ -518,7 +539,7 @@ class MagnetWorld{
   this.comets.push({start,end:start+6.2,x:from.x,y:from.y,toX:to.x,toY:to.y,small,fired:false,hits:[]});
  }
  updateComet(e){
-  const flight=e.end-e.start-COMET.afterglow,dx=e.toX-e.x,dy=e.toY-e.y,length=Math.hypot(dx,dy);
+  const flight=e.end-e.start-COMET.afterglow,dx=e.toX-e.x,dy=e.toY-e.y,length=hyp(dx,dy);
   const tx=dx/length,ty=dy/length,age=this.time-e.start;
   const burst=e.small?COMET.smallBurst:COMET.burst;
   if(e.shotAt!=null)return;
@@ -546,7 +567,7 @@ class MagnetWorld{
  shootComet(e,head,owner){
   if(e.shotAt!=null)return;
   e.shotAt=this.time;e.fired=true;
-  const dx=e.toX-e.x,dy=e.toY-e.y,length=Math.hypot(dx,dy)||1,speed=length/(e.end-e.start-COMET.afterglow),dust=e.small?COMET.smallShotDust:COMET.shotDust;
+  const dx=e.toX-e.x,dy=e.toY-e.y,length=hyp(dx,dy)||1,speed=length/(e.end-e.start-COMET.afterglow),dust=e.small?COMET.smallShotDust:COMET.shotDust;
   for(let i=0;i<dust;i++){const angle=(i+this.random())/dust*Math.PI*2,kick=120+this.random()*220;
    this.addStardust(head.x,head.y,Math.cos(angle)*kick+dx/length*speed*.25,Math.sin(angle)*kick+dy/length*speed*.25);}
   if(owner===this.human?.id)this.event('cometShot');
@@ -993,7 +1014,7 @@ function reconcileScrap(previous,next,now){
   next.attach=function(actor,item){
    // When two pilots can collect the same item this frame, wait for the room's owner decision.
    const contested=this.actors.some(other=>other!==actor&&other.alive&&canCollectScrap(other,item,this.time)&&
-    !(item.ignoreId===other.id&&this.time<item.ignoreUntil)&&Math.hypot(other.x-item.x,other.y-item.y)<28);
+    !(item.ignoreId===other.id&&this.time<item.ignoreUntil)&&hyp(other.x-item.x,other.y-item.y)<28);
    if(contested)return false;
    const previousCount=actor.pieces.length;
    const added=MagnetWorld.prototype.attach.call(this,actor,item,false);
@@ -1153,9 +1174,10 @@ function reconcileScrap(previous,next,now){
  for(let i=0;i<MM.maxArmor;i++)$('armorDots').append(document.createElement('i'));
  try{best=Number(localStorage.getItem('magnet-mayhem-best'))||0;storedBest=best;xp=Math.max(0,Number(localStorage.getItem('orbbitz-xp'))||0);try{look=cleanLook(JSON.parse(localStorage.getItem('orbbitz-look')||'{}'));owned=new Set([0,...(JSON.parse(localStorage.getItem('orbbitz-owned')||'[]')).filter(i=>Number.isInteger(i)&&i>0&&i<TAILS.length)]);try{const o=JSON.parse(localStorage.getItem('orbbitz-owned-looks')||'{}');for(const [kind,list] of [['skin',SKINS],['core',CORES]])ownedLooks[kind]=new Set((Array.isArray(o[kind])?o[kind]:[]).filter(i=>Number.isInteger(i)&&list[i]?.shop));}catch{}}catch{look={skin:0,core:0,tail:0};}if(!owned.has(look.tail))look.tail=0;const lv=levelFromXp(xp);if(!lookAllowed('skin',look.skin,lv))look.skin=0;if(!lookAllowed('core',look.core,lv))look.core=0;$('menuBest').textContent=Math.floor(best).toLocaleString();const name=localStorage.getItem('magnet-mayhem-pilot');if(name)$('playerName').value=name.slice(0,16);const difficulty=localStorage.getItem('magnet-mayhem-difficulty');if(['easy','normal','hard'].includes(difficulty))$('difficulty').value=difficulty;}catch{}
  function save(){try{localStorage.setItem('magnet-mayhem-best',String(Math.floor(best)));localStorage.setItem('magnet-mayhem-pilot',$('playerName').value.trim()||'You');localStorage.setItem('magnet-mayhem-difficulty',$('difficulty').value);xp=Math.max(xp,Number(localStorage.getItem('orbbitz-xp'))||0);localStorage.setItem('orbbitz-xp',String(xp));localStorage.setItem('orbbitz-look',JSON.stringify(look));localStorage.setItem('orbbitz-owned',JSON.stringify([...owned]));localStorage.setItem('orbbitz-owned-looks',JSON.stringify({skin:[...ownedLooks.skin],core:[...ownedLooks.core]}));storedBest=best;}catch{}}
- // Drawing sharpness adapts to the frame rate, online and offline: it steps down when frames drop and
- // back up after a few smooth seconds, so big or high-DPI screens stay smooth in busy fights.
- let pixelRatioCap=1.5,smoothSecs=0,lastSharpnessDrop=0,lastSharpnessRise=0,riseWait=8000;
+ // Drawing sharpness adapts to the frame rate, online and offline: it steps down when a second is slow or
+ // has several dropped frames, and back up after a few fully smooth seconds. A step up that soon fails makes
+ // the next try wait twice as long, so it settles instead of flipping back and forth.
+ let pixelRatioCap=1.5,smoothSecs=0,lastSharpnessDrop=0,lastSharpnessRise=-1e9,riseWait=8000,droppedFrames=0,lastFrameAt=0,playingSince=0;
  function resize(){width=innerWidth;height=innerHeight;dpr=Math.min(devicePixelRatio||1,pixelRatioCap);canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);}
  addEventListener('resize',resize);resize();
  function toast(text){$('toast').textContent=text;$('toast').classList.add('show');toastUntil=performance.now()+3000;}
@@ -1187,14 +1209,14 @@ function reconcileScrap(previous,next,now){
  function input(){const a=game.human;if(!a.alive){a.fire=a.magnet=false;a.moveX=a.moveY=0;return;}
   const kx=(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0),ky=(keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('w')||keys.has('arrowup')?1:0);
   const wx=cam.x+(pointer.x-width/2)/cam.zoom,wy=cam.y+(pointer.y-height/2)/cam.zoom;
-  if(touch){const d=Math.hypot(touch.dx,touch.dy),strength=limit((d-6)/36,0,1);a.moveX=d?touch.dx/d*strength:0;a.moveY=d?touch.dy/d*strength:0;if(d>8)a.aim=Math.atan2(touch.dy,touch.dx);}
-  else{if(kx||ky){const d=Math.hypot(kx,ky);a.moveX=kx/d;a.moveY=ky/d;}else if(pointer.active){const dx=wx-a.x,dy=wy-a.y,d=Math.hypot(dx,dy),strength=limit((d-15)/120,0,1);a.moveX=d?dx/d*strength:0;a.moveY=d?dy/d*strength:0;}else a.moveX=a.moveY=0;a.aim=Math.atan2(wy-a.y,wx-a.x);}
+  if(touch){const d=hyp(touch.dx,touch.dy),strength=limit((d-6)/36,0,1);a.moveX=d?touch.dx/d*strength:0;a.moveY=d?touch.dy/d*strength:0;if(d>8)a.aim=Math.atan2(touch.dy,touch.dx);}
+  else{if(kx||ky){const d=hyp(kx,ky);a.moveX=kx/d;a.moveY=ky/d;}else if(pointer.active){const dx=wx-a.x,dy=wy-a.y,d=hyp(dx,dy),strength=limit((d-15)/120,0,1);a.moveX=d?dx/d*strength:0;a.moveY=d?dy/d*strength:0;}else a.moveX=a.moveY=0;a.aim=Math.atan2(wy-a.y,wx-a.x);}
   a.fire=fireSources.size>0;a.magnet=magnetSources.size>0;
   if(touchMode&&a.fire){let target=null,d=750;for(const b of game.actors){if(!b.alive||b.id===a.id||b.shieldUntil>game.time)continue;const range=distance(a,b);if(range<d){d=range;target=b;}}if(target)a.aim=Math.atan2(target.y+target.vy*d/MM.shotSpeed-a.y,target.x+target.vx*d/MM.shotSpeed-a.x);}
  }
  function updateCamera(dt){const a=game.human;let crowd=0;
-  for(const b of game.actors){if(b===a||!b.alive)continue;const d=Math.hypot(b.x-a.x,b.y-a.y);crowd+=limit(1-(d-300)/400,0,1);}
-  const speed=a.alive?Math.hypot(a.vx,a.vy):0,target=(width<720?.85:1.04)-a.pieces.length*.004-Math.min(.07,speed/245*.07)-Math.min(.08,crowd*.02);
+  for(const b of game.actors){if(b===a||!b.alive)continue;const d=hyp(b.x-a.x,b.y-a.y);crowd+=limit(1-(d-300)/400,0,1);}
+  const speed=a.alive?hyp(a.vx,a.vy):0,target=(width<720?.85:1.04)-a.pieces.length*.004-Math.min(.07,speed/245*.07)-Math.min(.08,crowd*.02);
   cam.zoom+=(target-cam.zoom)*(1-Math.exp(-dt*1.6));if(a.alive){const f=1-Math.exp(-dt*(online?22:7));cam.x+=(a.x-cam.x)*f;cam.y+=(a.y-cam.y)*f;}}
  let displayedScrap=-1,displayedCapacity=0;
  function updateScrapHUD(count){
@@ -1257,7 +1279,7 @@ function reconcileScrap(previous,next,now){
  }
  function vignette(){
   if(vignetteCache?.w!==width||vignetteCache?.h!==height){const c=document.createElement('canvas');c.width=Math.max(1,Math.ceil(width/2));c.height=Math.max(1,Math.ceil(height/2));
-   const g=c.getContext('2d'),grad=g.createRadialGradient(c.width/2,c.height/2,Math.min(c.width,c.height)*.38,c.width/2,c.height/2,Math.hypot(c.width,c.height)/2);
+   const g=c.getContext('2d'),grad=g.createRadialGradient(c.width/2,c.height/2,Math.min(c.width,c.height)*.38,c.width/2,c.height/2,hyp(c.width,c.height)/2);
    grad.addColorStop(0,'rgba(3,8,14,0)');grad.addColorStop(1,'rgba(3,8,14,.6)');g.fillStyle=grad;g.fillRect(0,0,c.width,c.height);vignetteCache={c,w:width,h:height};}
   ctx.drawImage(vignetteCache.c,0,0,width,height);
  }
@@ -1266,17 +1288,19 @@ function reconcileScrap(previous,next,now){
   const repel=game.eventActive?.('polarity');for(const a of game.actors)if(a.alive&&a.magnet){const R=magnetRange(a,game.time);if(visible(a.x,a.y,R))list.push({x:a.x,y:a.y,R,pull:repel?-22:20});}
   for(let i=ripples.length-1;i>=0;i--){const age=(now-ripples[i].start)/1000;if(age>1.4){ripples.splice(i,1);continue;}if(visible(ripples[i].x,ripples[i].y,700))list.push({x:ripples[i].x,y:ripples[i].y,age});}
   return list;}
+ // Writes the warped point into warp[0], warp[1] instead of returning a new array for every grid point.
+ const warp=new Float64Array(2);
  function warpPoint(x,y,src){let dx=0,dy=0;
-  for(const w of src){const ox=w.x-x,oy=w.y-y,d=Math.hypot(ox,oy)||1;
+  for(const w of src){const ox=w.x-x,oy=w.y-y,d=hyp(ox,oy)||1;
    if(w.age==null){if(d<w.R){const f=1-d/w.R,move=Math.min(w.pull*f*f,d*.6);dx+=ox/d*move;dy+=oy/d*move;}}
    else{const band=(d-w.age*460)/55;if(band>-3&&band<3){const amp=24*(1-w.age/1.4)*Math.exp(-band*band)*Math.sin(band*2.4);dx-=ox/d*amp;dy-=oy/d*amp;}}}
-  return [x+dx,y+dy];}
+  warp[0]=x+dx;warp[1]=y+dy;}
  function warpedGrid(step,left,right,top,bottom,src){
   ctx.beginPath();const seg=35;
   for(let x=Math.floor(left/step)*step;x<=right;x+=step){if(!src.length){ctx.moveTo(x,top);ctx.lineTo(x,bottom);continue;}
-   for(let y=top,first=true;;y+=seg){const yy=Math.min(y,bottom),[px,py]=warpPoint(x,yy,src);if(first){ctx.moveTo(px,py);first=false;}else ctx.lineTo(px,py);if(yy>=bottom)break;}}
+   for(let y=top,first=true;;y+=seg){const yy=Math.min(y,bottom);warpPoint(x,yy,src);if(first){ctx.moveTo(warp[0],warp[1]);first=false;}else ctx.lineTo(warp[0],warp[1]);if(yy>=bottom)break;}}
   for(let y=Math.floor(top/step)*step;y<=bottom;y+=step){if(!src.length){ctx.moveTo(left,y);ctx.lineTo(right,y);continue;}
-   for(let x=left,first=true;;x+=seg){const xx=Math.min(x,right),[px,py]=warpPoint(xx,y,src);if(first){ctx.moveTo(px,py);first=false;}else ctx.lineTo(px,py);if(xx>=right)break;}}
+   for(let x=left,first=true;;x+=seg){const xx=Math.min(x,right);warpPoint(xx,y,src);if(first){ctx.moveTo(warp[0],warp[1]);first=false;}else ctx.lineTo(warp[0],warp[1]);if(xx>=right)break;}}
   ctx.stroke();}
  function knockoutFx(victim,now){
   shockwaves.push({x:victim.x,y:victim.y,color:victim.color,start:now});ripples.push({x:victim.x,y:victim.y,start:now});
@@ -1329,7 +1353,7 @@ function reconcileScrap(previous,next,now){
   // Kept subtle: only scrap in the inner half of the range, and only the 6 nearest pieces per magnet.
   const pulled=new Map();
   for(const item of game.ground){if(item.dead||game.time<item.pickupAt||!visible(item.x,item.y,40))continue;let best=null,score=-1,bestD=0;
-   for(const a of magnets){if(!canCollectScrap(a,item,game.time))continue;if(item.ignoreId===a.id&&game.time<item.ignoreUntil)continue;const d=Math.hypot(item.x-a.x,item.y-a.y),R=magnetRange(a,game.time);if(d>R)continue;const w=2.4/(d+25);if(w>score){score=w;best=a;bestD=d;}}
+   for(const a of magnets){if(!canCollectScrap(a,item,game.time))continue;if(item.ignoreId===a.id&&game.time<item.ignoreUntil)continue;const d=hyp(item.x-a.x,item.y-a.y),R=magnetRange(a,game.time);if(d>R)continue;const w=2.4/(d+25);if(w>score){score=w;best=a;bestD=d;}}
    if(!best||bestD>magnetRange(best,game.time)*.5)continue;let list=pulled.get(best);if(!list)pulled.set(best,list=[]);list.push({item,d:bestD});}
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineWidth=.8;
   for(const [a,list] of pulled){const R=magnetRange(a,game.time)*.5;ctx.strokeStyle=a.color;
@@ -1393,12 +1417,12 @@ function reconcileScrap(previous,next,now){
  function wellsAndCover(){
   for(const w of game.wells){if(!visible(w.x,w.y,100))continue;const pulse=.5+Math.sin(game.time*2)*.15;ctx.save();
    // Breathing glow (brighter while someone repairs) and arcs turning slowly around the ring.
-   const repairing=game.actors.some(a=>a.alive&&a.repair>0&&Math.hypot(a.x-w.x,a.y-w.y)<w.r),t=performance.now()/1000;
+   const repairing=game.actors.some(a=>a.alive&&a.repair>0&&hyp(a.x-w.x,a.y-w.y)<w.r),t=performance.now()/1000;
    ctx.globalAlpha=.16+.06*Math.sin(t*1.3)+(repairing?.2:0);ctx.drawImage(softSprite('rgba(80,230,190,1)'),w.x-w.r*2.1,w.y-w.r*2.1,w.r*4.2,w.r*4.2);ctx.globalAlpha=1;
    ctx.globalCompositeOperation='lighter';ctx.lineCap='round';ctx.strokeStyle='#7cf2cf';
    ctx.lineWidth=3;ctx.globalAlpha=repairing?.75:.45;for(let k=0;k<2;k++){const a0=t*.55+k*Math.PI;ctx.beginPath();ctx.arc(w.x,w.y,w.r+4,a0,a0+.9);ctx.stroke();}
    ctx.lineWidth=1.5;ctx.globalAlpha=.3;for(let k=0;k<3;k++){const a0=-t*.8+k*Math.PI*2/3;ctx.beginPath();ctx.arc(w.x,w.y,w.r-11,a0,a0+.55);ctx.stroke();}
-   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.fillStyle='#3dbea00c';ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(99,222,190,${pulse})`;ctx.lineWidth=1.5;ctx.setLineDash([7,8]);ctx.beginPath();ctx.arc(w.x,w.y,w.r,game.time*.12,Math.PI*2+game.time*.12);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#4fb89c45';ctx.lineWidth=1;ctx.beginPath();ctx.arc(w.x,w.y,w.r-11,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#7ce8c4a0';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(w.x-9,w.y);ctx.lineTo(w.x+9,w.y);ctx.moveTo(w.x,w.y-9);ctx.lineTo(w.x,w.y+9);ctx.stroke();ctx.fillStyle='#75c9b08c';ctx.font='600 9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';if(Math.hypot(game.human.x-w.x,game.human.y-w.y)>w.r+30)ctx.fillText('REPAIR WELL',w.x,w.y+w.r+17);ctx.restore();}
+   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.fillStyle='#3dbea00c';ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(99,222,190,${pulse})`;ctx.lineWidth=1.5;ctx.setLineDash([7,8]);ctx.beginPath();ctx.arc(w.x,w.y,w.r,game.time*.12,Math.PI*2+game.time*.12);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#4fb89c45';ctx.lineWidth=1;ctx.beginPath();ctx.arc(w.x,w.y,w.r-11,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#7ce8c4a0';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(w.x-9,w.y);ctx.lineTo(w.x+9,w.y);ctx.moveTo(w.x,w.y-9);ctx.lineTo(w.x,w.y+9);ctx.stroke();ctx.fillStyle='#75c9b08c';ctx.font='600 9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';if(hyp(game.human.x-w.x,game.human.y-w.y)>w.r+30)ctx.fillText('REPAIR WELL',w.x,w.y+w.r+17);ctx.restore();}
   for(const c of game.covers){if(!visible(c.x,c.y,c.r+10))continue;ctx.save();ctx.shadowColor='#0006';ctx.shadowBlur=8;polygon(c.x,c.y+3,c.r,6,Math.PI/6);ctx.fillStyle='#07111d';ctx.fill();ctx.shadowBlur=0;polygon(c.x,c.y,c.r,6,Math.PI/6);ctx.fillStyle='#152b3c';ctx.strokeStyle='#3a5365';ctx.lineWidth=2;ctx.fill();ctx.stroke();polygon(c.x,c.y,c.r*.72,6,Math.PI/6);ctx.fillStyle='#0b1c2b';ctx.strokeStyle='#294355';ctx.lineWidth=1;ctx.fill();ctx.stroke();ctx.translate(c.x,c.y);ctx.rotate(c.x*.01);ctx.strokeStyle='#b68e5260';ctx.lineWidth=3;for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(-12,i*8-4);ctx.lineTo(12,i*8+4);ctx.stroke();}ctx.fillStyle='#66899c';for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;ctx.fillRect(Math.cos(a)*c.r*.87-1.5,Math.sin(a)*c.r*.87-1.5,3,3);}ctx.restore();}
  }
  function pads(){
@@ -1422,7 +1446,7 @@ function reconcileScrap(previous,next,now){
    if(kind==='deflector'){const outer=a.pieces.length?shieldRadius(a,Math.max(...a.pieces.map(p=>orbitSlot(p.slot).radius)))+14:40;ctx.globalAlpha=.35+.15*Math.sin(t*5);ctx.lineWidth=2;polygon(a.x,a.y,outer,6,t*.4);ctx.stroke();}
    if(kind==='leech'){const target=a.leechId?game.actors.find(b=>b.id===a.leechId&&b.alive):null;if(target){ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
     for(const [w,al] of [[6,.12],[2,.6]]){ctx.lineWidth=w;ctx.globalAlpha=al;ctx.beginPath();ctx.moveTo(target.x,target.y);
-     for(let k=1;k<=12;k++){const f=k/12,wob=Math.sin(f*Math.PI*3-t*14)*8*Math.sin(f*Math.PI),dx=a.x-target.x,dy=a.y-target.y,len=Math.hypot(dx,dy)||1;ctx.lineTo(target.x+dx*f-dy/len*wob,target.y+dy*f+dx/len*wob);}ctx.stroke();}}}
+     for(let k=1;k<=12;k++){const f=k/12,wob=Math.sin(f*Math.PI*3-t*14)*8*Math.sin(f*Math.PI),dx=a.x-target.x,dy=a.y-target.y,len=hyp(dx,dy)||1;ctx.lineTo(target.x+dx*f-dy/len*wob,target.y+dy*f+dx/len*wob);}ctx.stroke();}}}
    if(kind==='scatter'||kind==='seeker'||kind==='rapid'){ctx.globalAlpha=.5;ctx.lineWidth=2;for(let k=0;k<3;k++){const ang=a.aim+(k-1)*(kind==='scatter'?.2:0);ctx.beginPath();ctx.moveTo(a.x+Math.cos(ang)*30,a.y+Math.sin(ang)*30);ctx.lineTo(a.x+Math.cos(ang)*(38+k*(kind==='scatter'?0:4)),a.y+Math.sin(ang)*(38+k*(kind==='scatter'?0:4)));ctx.stroke();if(kind!=='scatter')break;}}
    ctx.restore();}
  }
@@ -1444,6 +1468,15 @@ function reconcileScrap(previous,next,now){
   c.width=Math.ceil((halfW+m)*2*R);c.height=Math.ceil((halfH+m)*2*R);const g=c.getContext('2d');g.translate(c.width/2,c.height/2);g.scale(R,R);g.shadowColor=glowColor;g.shadowBlur=blur*R/dpr;draw(g);
   const out={img:c,w:c.width/R,h:c.height/R};spriteCache.set(key,out);return out;}
  function drawBaked(c,b,x,y){c.drawImage(b.img,x-b.w/2,y-b.h/2,b.w,b.h);}
+ // Only the soft halo of a shape, cached; the shape itself is still drawn sharp on top. The shape is drawn
+ // off the image and its shadow offset back in, so just the glow lands. Used for ship hulls and shots,
+ // which were most of the remaining per-frame blurs in a brawl.
+ function bakedHalo(key,halfW,halfH,blur,glowColor,draw){if(spriteCache.has(key))return spriteCache.get(key);const R=4,dp=Math.max(1,devicePixelRatio||1),m=1.5*blur/dp+1,c=document.createElement('canvas');
+  c.width=Math.ceil((halfW+m)*2*R);c.height=Math.ceil((halfH+m)*2*R);const g=c.getContext('2d'),off=c.width*2+100;g.translate(c.width/2-off,c.height/2);g.scale(R,R);g.shadowColor=glowColor;g.shadowBlur=blur*R/dp;g.shadowOffsetX=off;draw(g);
+  const out={img:c,w:c.width/R,h:c.height/R};spriteCache.set(key,out);return out;}
+ function hexPath(c,r){c.beginPath();for(let i=0;i<6;i++){const a=i/6*Math.PI*2;if(i)c.lineTo(Math.cos(a)*r,Math.sin(a)*r);else c.moveTo(Math.cos(a)*r,Math.sin(a)*r);}c.closePath();}
+ function hullHalo(color,blur){return bakedHalo('hullhalo:'+color+':'+blur,19.2,19.2,blur,color+'5a',g=>{hexPath(g,18);g.fillStyle='#000';g.strokeStyle='#000';g.lineWidth=2.3;g.fill();g.stroke();});}
+ function shotHalo(color){return bakedHalo('shothalo:'+color,6,3,10,color,g=>{g.fillStyle='#000';g.fillRect(-6,-3,12,6);});}
  function hotScrapGlow(kind){return bakedGlow('hotscrap:'+kind,18,18,8,'#ff8b39',g=>g.drawImage(scrapSprite('#ff8b39',kind),-18,-18));}
  function scrapSprite(color,kind){
   const key='ground:'+color+':'+kind;
@@ -1471,18 +1504,18 @@ function reconcileScrap(previous,next,now){
  function drawShots(){
   const live=new Set();
   for(const s of game.shots){const id=s.item.id;live.add(id);let trail=shotTrails.get(id);if(!trail||trail.bounces!==s.bounces){trail=[];trail.bounces=s.bounces;shotTrails.set(id,trail);}
-   const tip=trail.at(-1);if(!tip||Math.hypot(tip.x-s.x,tip.y-s.y)>3){trail.push({x:s.x,y:s.y});if(trail.length>11)trail.shift();}
+   const tip=trail.at(-1);if(!tip||hyp(tip.x-s.x,tip.y-s.y)>3){trail.push({x:s.x,y:s.y});if(trail.length>11)trail.shift();}
    if(!visible(s.x,s.y,160))continue;const owner=game.actors.find(a=>a.id===s.owner),color=owner?.color||'#ffb37d';
    ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';ctx.strokeStyle=color;
    for(let i=1;i<trail.length;i++){const f=i/trail.length;ctx.globalAlpha=.55*f;ctx.lineWidth=1+5*f;ctx.beginPath();ctx.moveTo(trail[i-1].x,trail[i-1].y);ctx.lineTo(trail[i].x,trail[i].y);ctx.stroke();}
    ctx.globalAlpha=.9;ctx.lineWidth=1.4;ctx.strokeStyle='#ffffff';const prev=trail.at(-2);if(prev){ctx.beginPath();ctx.moveTo(prev.x,prev.y);ctx.lineTo(s.x,s.y);ctx.stroke();}
    ctx.restore();if(s.deflectTrailUntil>game.time)drawDeflectTrail(s);
-   if(s.seek){ctx.save();ctx.strokeStyle=POWER_COLORS.seeker;ctx.globalAlpha=.8;ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(s.x,s.y,9,0,Math.PI*2);ctx.stroke();ctx.restore();}ctx.save();ctx.translate(s.x,s.y);ctx.rotate(Math.atan2(s.vy,s.vx));ctx.shadowColor=s.item.color;ctx.shadowBlur=10;ctx.fillStyle=s.item.color;ctx.fillRect(-6,-3,12,6);ctx.shadowBlur=0;ctx.fillStyle='#fff3d1';ctx.fillRect(3,-2,3,4);ctx.restore();}
+   if(s.seek){ctx.save();ctx.strokeStyle=POWER_COLORS.seeker;ctx.globalAlpha=.8;ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(s.x,s.y,9,0,Math.PI*2);ctx.stroke();ctx.restore();}ctx.save();ctx.translate(s.x,s.y);ctx.rotate(Math.atan2(s.vy,s.vx));drawBaked(ctx,shotHalo(s.item.color),0,0);ctx.fillStyle=s.item.color;ctx.fillRect(-6,-3,12,6);ctx.fillStyle='#fff3d1';ctx.fillRect(3,-2,3,4);ctx.restore();}
   for(const id of shotTrails.keys())if(!live.has(id))shotTrails.delete(id);
  }
  function drawDeflectTrail(shot){
   const left=limit((shot.deflectTrailUntil-game.time)/DEFLECT_TRAIL_SECONDS,0,1);
-  const speed=Math.hypot(shot.vx,shot.vy);
+  const speed=hyp(shot.vx,shot.vy);
   const length=Math.min(56,8+speed*DEFLECT_TRAIL_SECONDS*(1-left));
   ctx.save();ctx.translate(shot.x,shot.y);ctx.rotate(Math.atan2(shot.vy,shot.vx));
   ctx.globalAlpha=Math.min(1,left*3);ctx.shadowColor='#178cff';ctx.shadowBlur=9;
@@ -1521,7 +1554,7 @@ function reconcileScrap(previous,next,now){
   c.restore();
  }
  // Reactive cores 15-23 respond to the ship: aim, movement, health, scrap, magnet and firing.
- function coreLive(a){const sp=Math.hypot(a.vx||0,a.vy||0);return {aim:a.aim||0,moveA:sp>8?Math.atan2(a.vy,a.vx):(a.aim||0),speed:Math.min(1,sp/245),hp:Math.max(1,Math.min(3,Math.ceil(a.hp||1))),
+ function coreLive(a){const sp=hyp(a.vx||0,a.vy||0);return {aim:a.aim||0,moveA:sp>8?Math.atan2(a.vy,a.vx):(a.aim||0),speed:Math.min(1,sp/245),hp:Math.max(1,Math.min(3,Math.ceil(a.hp||1))),
   scrap:Math.min(1,(a.pieces?.length||0)/Math.max(1,armorCapacity(a))),magnet:!!a.magnet,shotAge:Math.max(0,game.time-(a.lastShot||-99))};}
  // In the shop and Customize there is no match, so a short loop of fake play shows how each one reacts.
  function coreDemo(t){return {aim:t*.9+Math.sin(t*.6)*1.2,moveA:t*.5,speed:.5+.5*Math.sin(t*.7),hp:3-Math.floor((t%7.5)/2.5),scrap:(t*.12)%1,magnet:(t%5)<2.2,shotAge:t%1.1};}
@@ -1560,13 +1593,13 @@ function reconcileScrap(previous,next,now){
  function tailLight(hex,k){const n=parseInt(hex.slice(1,7),16),r=n>>16,g=n>>8&255,b=n&255,m=v=>Math.round(v+(255-v)*k);return 'rgb('+m(r)+','+m(g)+','+m(b)+')';}
  function tailDark(hex,k){const n=parseInt(hex.slice(1,7),16),m=v=>Math.round(v*(1-k));return 'rgb('+m(n>>16)+','+m(n>>8&255)+','+m(n&255)+')';}
  function newTail(h){return {h,x:null,y:null,t:null,kind:-1,spd:0,chains:[],hist:[],parts:[],path:[],acc:0};}
- function tailFollow(ch,hx,hy,wag,t,phase,curl=0){const n=ch.length;ch[0].x=hx;ch[0].y=hy;for(let k=1;k<n;k++){const p=ch[k-1],q=ch[k];const dx=q.x-p.x,dy=q.y-p.y,d=Math.hypot(dx,dy)||1,nx=-dy/d,ny=dx/d,f=k/n,w=wag*Math.sin(t*6+phase-k*.55)*f+curl*f*f;q.x=p.x+dx/d*TAIL_SEG+nx*w;q.y=p.y+dy/d*TAIL_SEG+ny*w;}}
+ function tailFollow(ch,hx,hy,wag,t,phase,curl=0){const n=ch.length;ch[0].x=hx;ch[0].y=hy;for(let k=1;k<n;k++){const p=ch[k-1],q=ch[k];const dx=q.x-p.x,dy=q.y-p.y,d=hyp(dx,dy)||1,nx=-dy/d,ny=dx/d,f=k/n,w=wag*Math.sin(t*6+phase-k*.55)*f+curl*f*f;q.x=p.x+dx/d*TAIL_SEG+nx*w;q.y=p.y+dy/d*TAIL_SEG+ny*w;}}
  // ref is the speed that counts as "fast" (it folds the peacock fan).
- function tailStep(st,kind,x,y,t,phase,ref=245){const h=st.h,bx=x-Math.cos(h)*15,by=y-Math.sin(h)*15,dt=st.t==null?0:Math.min(.1,Math.max(0,t-st.t));let jump=st.x==null||Math.hypot(x-st.x,y-st.y)>150;const still=st.x!=null&&Math.hypot(x-st.x,y-st.y)<.05;
-  if(dt>0&&!jump)st.spd+=(Math.hypot(x-st.x,y-st.y)/dt/ref-st.spd)*Math.min(1,dt*5);
+ function tailStep(st,kind,x,y,t,phase,ref=245){const h=st.h,bx=x-Math.cos(h)*15,by=y-Math.sin(h)*15,dt=st.t==null?0:Math.min(.1,Math.max(0,t-st.t));let jump=st.x==null||hyp(x-st.x,y-st.y)>150;const still=st.x!=null&&hyp(x-st.x,y-st.y)<.05;
+  if(dt>0&&!jump)st.spd+=(hyp(x-st.x,y-st.y)/dt/ref-st.spd)*Math.min(1,dt*5);
   if(st.kind!==kind){st.kind=kind;const n=TAIL_LEN[kind]||TAIL_N;st.chains=Array.from({length:kind===3?3:kind===12?4:1},()=>Array.from({length:n},()=>({x:0,y:0})));st.hist=[];st.parts=[];st.path=[];jump=true;}
   st.x=x;st.y=y;st.t=t;
-  if(kind===6){if(jump)st.hist=[];const last=st.hist[0];if(!last||Math.hypot(bx-last.x,by-last.y)>.5){st.hist.unshift({x:bx,y:by});if(st.hist.length>26)st.hist.pop();}else st.hist.pop();return;}
+  if(kind===6){if(jump)st.hist=[];const last=st.hist[0];if(!last||hyp(bx-last.x,by-last.y)>.5){st.hist.unshift({x:bx,y:by});if(st.hist.length>26)st.hist.pop();}else st.hist.pop();return;}
   if(kind===11||kind===14||(kind>=21&&kind<=24)){tailParts(st,kind,bx,by,h,dt,t,jump);return;}
   if(TAIL_PATH[kind]){tailTrack(st,kind,bx,by,jump,still);return;}
   if(TAIL_DRIFT[kind]){tailDrift(st,kind,bx,by,h,dt,jump);return;}
@@ -1582,7 +1615,7 @@ function reconcileScrap(previous,next,now){
  const TAIL_PATH={28:30,30:52,40:96,45:96,46:34,48:96,50:96,51:96,54:96,55:96,57:96,60:96},TAIL_RETRACT=new Set([28,30,46]);
  function tailTrack(st,kind,bx,by,jump,still){if(jump)st.path=[];const p=st.path,last=p[0];
   if(!last)p.unshift({x:bx,y:by});
-  else{const d=Math.hypot(bx-last.x,by-last.y);if(d>.8){const n=Math.min(60,Math.floor(d/.8));for(let i=1;i<=n;i++){const f=i/n;p.unshift({x:last.x+(bx-last.x)*f,y:last.y+(by-last.y)*f});}}
+  else{const d=hyp(bx-last.x,by-last.y);if(d>.8){const n=Math.min(60,Math.floor(d/.8));for(let i=1;i<=n;i++){const f=i/n;p.unshift({x:last.x+(bx-last.x)*f,y:last.y+(by-last.y)*f});}}
    else if(still&&TAIL_RETRACT.has(kind)&&p.length>1)p.pop();}
   while(p.length>TAIL_PATH[kind])p.pop();}
  function tailOn(p,k){if(p.length<k+2)return null;const q=p[k],o=p[k+1];return {x:q.x,y:q.y,a:Math.atan2(q.y-o.y,q.x-o.x)};}
@@ -1604,9 +1637,9 @@ function reconcileScrap(previous,next,now){
    st.parts=st.parts.filter(p=>p.age<p.life);return;}
   if(kind===11){const every=st.spd>.08?.08:.3;while(st.acc>every){st.acc-=every;st.parts.push({x:bx+(Math.random()-.5)*5,y:by+(Math.random()-.5)*5,vx:-Math.cos(h)*8+(Math.random()-.5)*6,vy:-Math.sin(h)*8+(Math.random()-.5)*6,age:0,r:1.5+Math.random()*2.2,ph:Math.random()*6});}
    for(const b of st.parts){b.age+=dt;b.x+=b.vx*dt+Math.sin(t*3+b.ph)*.12;b.y+=b.vy*dt+Math.cos(t*3+b.ph)*.12;}st.parts=st.parts.filter(b=>b.age<1.3);return;}
-  const lastStar=st.parts[0];if(st.acc>.13&&(!lastStar||Math.hypot(bx-lastStar.x,by-lastStar.y)>10)){st.acc=0;st.parts.unshift({x:bx+(Math.random()-.5)*6,y:by+(Math.random()-.5)*6,age:0,ph:Math.random()*6});}
+  const lastStar=st.parts[0];if(st.acc>.13&&(!lastStar||hyp(bx-lastStar.x,by-lastStar.y)>10)){st.acc=0;st.parts.unshift({x:bx+(Math.random()-.5)*6,y:by+(Math.random()-.5)*6,age:0,ph:Math.random()*6});}
   for(const s of st.parts)s.age+=dt;st.parts=st.parts.filter(s=>s.age<1.8);}
- function tailDir(ch,k){const p=ch[k-1],q=ch[k],dx=q.x-p.x,dy=q.y-p.y,d=Math.hypot(dx,dy)||1;return {ux:dx/d,uy:dy/d,nx:-dy/d,ny:dx/d};}
+ function tailDir(ch,k){const p=ch[k-1],q=ch[k],dx=q.x-p.x,dy=q.y-p.y,d=hyp(dx,dy)||1;return {ux:dx/d,uy:dy/d,nx:-dy/d,ny:dx/d};}
  function tailDot(c,x,y,r){c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();}
  function tailCurve(c,pts){c.beginPath();c.moveTo(pts[0].x,pts[0].y);for(let k=1;k<pts.length-1;k++)c.quadraticCurveTo(pts[k].x,pts[k].y,(pts[k].x+pts[k+1].x)/2,(pts[k].y+pts[k+1].y)/2);const e=pts[pts.length-1];c.lineTo(e.x,e.y);}
  function fishTail(c,ch,col){const n=ch.length;c.fillStyle=col;for(let k=1;k<n;k++)tailDot(c,ch[k].x,ch[k].y,3.6*Math.sin(Math.PI*(k/n)*.9+.25)+.8);
@@ -1673,7 +1706,7 @@ function reconcileScrap(previous,next,now){
  function fireflyTail(c,st,col,t){for(const p of st.parts){const f=p.age/p.life,blink=.35+.65*Math.max(0,Math.sin(t*4+p.ph)),x=p.x+p.ox+Math.sin(t*p.fx+p.ph)*4,y=p.y+p.oy+Math.cos(t*p.fy+p.ph)*4;
    c.globalAlpha=blink*(1-f)*.25;c.fillStyle=col;tailDot(c,x,y,4.5);c.globalAlpha=blink*(1-f);drawBaked(c,bakedGlow('firefly:'+col,1.5,1.5,8,col,g=>{g.fillStyle=col;g.beginPath();g.arc(0,0,1.5,0,Math.PI*2);g.fill();}),x,y);}c.globalAlpha=1;}
  function wispTail(c,h,col,t){const n=h.length;if(n<3)return;c.strokeStyle=col;c.lineCap='round';
-  for(let w=0;w<3;w++){let prev=null;for(let k=0;k<n;k++){const a=h[Math.max(0,k-1)],b=h[Math.min(n-1,k+1)],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1,off=Math.sin(t*3+k*.35+w*2.1)*k*.18,pt={x:h[k].x-dy/d*off,y:h[k].y+dx/d*off};
+  for(let w=0;w<3;w++){let prev=null;for(let k=0;k<n;k++){const a=h[Math.max(0,k-1)],b=h[Math.min(n-1,k+1)],dx=b.x-a.x,dy=b.y-a.y,d=hyp(dx,dy)||1,off=Math.sin(t*3+k*.35+w*2.1)*k*.18,pt={x:h[k].x-dy/d*off,y:h[k].y+dx/d*off};
     if(prev){const f=k/n;c.globalAlpha=.32*(1-f);c.lineWidth=5.5*(1-f)+.8;c.beginPath();c.moveTo(prev.x,prev.y);c.lineTo(pt.x,pt.y);c.stroke();}prev=pt;}}c.globalAlpha=1;}
  function auroraTail(c,ch,t){const n=ch.length;for(let k=1;k<n;k++){const p=ch[k-1],q=ch[k],{nx,ny}=tailDir(ch,k),w0=6+Math.sin(t*3+k*.6)*1.8,w1=6+Math.sin(t*3+(k+1)*.6)*1.8,f=k/n;
    c.globalAlpha=(.75*(1-f*.8))*(.75+.25*Math.sin(t*4+k));c.fillStyle='hsl('+(135+k*6)+',90%,72%)';c.beginPath();c.moveTo(p.x+nx*w0,p.y+ny*w0);c.lineTo(q.x+nx*w1,q.y+ny*w1);c.lineTo(q.x-nx*w1*.4,q.y-ny*w1*.4);c.lineTo(p.x-nx*w0*.4,p.y-ny*w0*.4);c.closePath();c.fill();}c.globalAlpha=1;}
@@ -1731,7 +1764,7 @@ function reconcileScrap(previous,next,now){
   c.fillStyle=col;c.beginPath();c.ellipse(0,0,6,2.7,0,0,TAU2);c.fill();c.fillStyle='#fff8f0';c.beginPath();c.ellipse(1.6,.6,2,1.1,.3,0,TAU2);c.fill();c.beginPath();c.ellipse(-2.6,-.7,1.3,.8,-.2,0,TAU2);c.fill();
   c.fillStyle='#1c1c1c';tailDot(c,4.2,1,.45);tailDot(c,4.2,-1,.45);c.restore();}
  function wakeTail(c,h,col){const n=h.length;if(n<4)return;c.lineCap='round';c.strokeStyle=col;c.lineWidth=1.2;
-  for(const side of [1,-1]){let prev=null;for(let k=1;k<n;k++){const a=h[k-1],b=h[k],dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy)||1,spread=2.5+k*.42,pt={x:b.x-dy/d*spread*side,y:b.y+dx/d*spread*side};
+  for(const side of [1,-1]){let prev=null;for(let k=1;k<n;k++){const a=h[k-1],b=h[k],dx=a.x-b.x,dy=a.y-b.y,d=hyp(dx,dy)||1,spread=2.5+k*.42,pt={x:b.x-dy/d*spread*side,y:b.y+dx/d*spread*side};
     if(prev){c.globalAlpha=.75*(1-k/n);c.beginPath();c.moveTo(prev.x,prev.y);c.lineTo(pt.x,pt.y);c.stroke();}prev=pt;}}
   c.fillStyle=tailLight(col,.5);for(let k=3;k<n;k+=4){c.globalAlpha=.6*(1-k/n);tailDot(c,h[k].x,h[k].y,1.1);}c.globalAlpha=1;}
  function ringTail(c,st,col){for(const p of st.parts){const f=p.age/p.life,r=3+f*10;c.globalAlpha=.75*(1-f);c.strokeStyle=col;c.lineWidth=2.6*(1-f)+.6;c.beginPath();c.ellipse(p.x,p.y,r*.6,r,p.a,0,TAU2);c.stroke();}c.globalAlpha=1;}
@@ -1818,15 +1851,15 @@ function reconcileScrap(previous,next,now){
   for(let i=0;i<6;i++){const a=rot+i*Math.PI/3;c.beginPath();c.moveTo(cx+Math.cos(a-.4)*4.5,cy+Math.sin(a-.4)*4.5);c.lineTo(cx+Math.cos(a)*8.8,cy+Math.sin(a)*8.8);c.lineTo(cx+Math.cos(a+.4)*4.5,cy+Math.sin(a+.4)*4.5);c.closePath();c.fill();}
   c.fillStyle=col;tailDot(c,cx,cy,5.3);c.fillStyle=tailDark(col,.3);tailDot(c,cx,cy,2);}
  function foxTail(c,ch,col){for(let k=1;k<TAIL_N;k++){const f=k/TAIL_N,r=2+Math.sin(f*Math.PI)*5.5+f*1.5;c.fillStyle=k>=TAIL_N-3?'#fff7ef':col;c.beginPath();c.arc(ch[k].x,ch[k].y,r,0,Math.PI*2);c.fill();}c.fillStyle=tailLight(col,.25);for(let k=3;k<TAIL_N-3;k+=2){c.beginPath();c.arc(ch[k].x,ch[k].y,1.4,0,Math.PI*2);c.fill();}}
- function ribbon(c,ch,col,off,t){const pts=ch.map((p,k)=>{if(!k)return p;const q=ch[k-1],dx=p.x-q.x,dy=p.y-q.y,d=Math.hypot(dx,dy)||1,w=off+Math.sin(t*9-k*.8)*1.6*(k/TAIL_N);return {x:p.x-dy/d*w,y:p.y+dx/d*w};});
+ function ribbon(c,ch,col,off,t){const pts=ch.map((p,k)=>{if(!k)return p;const q=ch[k-1],dx=p.x-q.x,dy=p.y-q.y,d=hyp(dx,dy)||1,w=off+Math.sin(t*9-k*.8)*1.6*(k/TAIL_N);return {x:p.x-dy/d*w,y:p.y+dx/d*w};});
   c.strokeStyle=col;c.lineCap='round';for(let k=1;k<TAIL_N;k++){c.globalAlpha=1-k/TAIL_N*.6;c.lineWidth=3.4-k*.15;c.beginPath();c.moveTo(pts[k-1].x,pts[k-1].y);c.lineTo(pts[k].x,pts[k].y);c.stroke();}c.globalAlpha=1;}
  function tailDraw(c,st,kind,col,t){const ch=st.chains[0];c.save();
   if(kind===1){c.lineCap='round';c.strokeStyle=col;for(let k=1;k<TAIL_N;k++){c.lineWidth=5.2-k*.22;c.beginPath();c.moveTo(ch[k-1].x,ch[k-1].y);c.lineTo(ch[k].x,ch[k].y);c.stroke();}c.fillStyle=tailLight(col,.35);c.beginPath();c.arc(ch[TAIL_N-1].x,ch[TAIL_N-1].y,2.6,0,Math.PI*2);c.fill();}
   else if(kind===2)foxTail(c,ch,col);
   else if(kind===3)for(const chain of st.chains)foxTail(c,chain,col);
   else if(kind===4){c.lineCap='round';for(let k=1;k<TAIL_N;k++){c.strokeStyle=k%2?col:tailLight(col,.2);c.lineWidth=6-k*.38;c.beginPath();c.moveTo(ch[k-1].x,ch[k-1].y);c.lineTo(ch[k].x,ch[k].y);c.stroke();}
-   c.fillStyle=tailLight(col,.45);for(let k=2;k<TAIL_N-1;k+=2){const p=ch[k-1],q=ch[k],dx=q.x-p.x,dy=q.y-p.y,d=Math.hypot(dx,dy)||1,nx=-dy/d,ny=dx/d,s=4-k*.22;c.beginPath();c.moveTo(q.x+nx*s*.4,q.y+ny*s*.4);c.lineTo(q.x+nx*s*1.6-dx/d*2,q.y+ny*s*1.6-dy/d*2);c.lineTo(q.x-dx/d*3,q.y-dy/d*3);c.closePath();c.fill();}
-   const p=ch[TAIL_N-2],q=ch[TAIL_N-1],dx=q.x-p.x,dy=q.y-p.y,d=Math.hypot(dx,dy)||1,ux=dx/d,uy=dy/d;c.fillStyle=col;c.beginPath();c.moveTo(q.x+ux*6,q.y+uy*6);c.lineTo(q.x-uy*4,q.y+ux*4);c.lineTo(q.x+ux*1.5,q.y+uy*1.5);c.lineTo(q.x+uy*4,q.y-ux*4);c.closePath();c.fill();}
+   c.fillStyle=tailLight(col,.45);for(let k=2;k<TAIL_N-1;k+=2){const p=ch[k-1],q=ch[k],dx=q.x-p.x,dy=q.y-p.y,d=hyp(dx,dy)||1,nx=-dy/d,ny=dx/d,s=4-k*.22;c.beginPath();c.moveTo(q.x+nx*s*.4,q.y+ny*s*.4);c.lineTo(q.x+nx*s*1.6-dx/d*2,q.y+ny*s*1.6-dy/d*2);c.lineTo(q.x-dx/d*3,q.y-dy/d*3);c.closePath();c.fill();}
+   const p=ch[TAIL_N-2],q=ch[TAIL_N-1],dx=q.x-p.x,dy=q.y-p.y,d=hyp(dx,dy)||1,ux=dx/d,uy=dy/d;c.fillStyle=col;c.beginPath();c.moveTo(q.x+ux*6,q.y+uy*6);c.lineTo(q.x-uy*4,q.y+ux*4);c.lineTo(q.x+ux*1.5,q.y+uy*1.5);c.lineTo(q.x+uy*4,q.y-ux*4);c.closePath();c.fill();}
   else if(kind===5){ribbon(c,ch,col,-3,t);ribbon(c,ch,'#ff8fc4',3,t+.7);}
   else if(kind===6){for(let k=0;k<st.hist.length;k+=2){const f=k/st.hist.length;c.globalAlpha=.35*(1-f);c.fillStyle=col;c.beginPath();c.arc(st.hist[k].x,st.hist[k].y,3.2*(1-f)+.6,0,Math.PI*2);c.fill();}}
   else if(kind===7)fishTail(c,ch,col);
@@ -1848,7 +1881,7 @@ function reconcileScrap(previous,next,now){
   c.restore();}
  function drawTails(now){const t=now/1000,seen=new Set();
   for(const a of game.actors){if(!a.alive||!a.tail)continue;seen.add(a.id);let st=tailState.get(a.id);if(!st){st=newTail(a.aim);tailState.set(a.id,st);}
-   if(Math.hypot(a.vx,a.vy)>25)st.h=Math.atan2(a.vy,a.vx);tailStep(st,a.tail,a.x,a.y,t,a.id);if(visible(a.x,a.y,140))tailDraw(ctx,st,a.tail,a.color,t);}
+   if(hyp(a.vx,a.vy)>25)st.h=Math.atan2(a.vy,a.vx);tailStep(st,a.tail,a.x,a.y,t,a.id);if(visible(a.x,a.y,140))tailDraw(ctx,st,a.tail,a.color,t);}
   for(const id of tailState.keys())if(!seen.has(id))tailState.delete(id);}
  // Shop and Customize preview: a small ship flying a loop with that tail.
  function tailTile(b,c,kind,t,now){let st=tileState.get(b);if(!st){st=newTail(0);tileState.set(b,st);}
@@ -1910,7 +1943,7 @@ function reconcileScrap(previous,next,now){
  // Tears a ship's pixels: red/cyan color-split ghosts plus horizontal slices shifted sideways.
  function glitchSlices(a,k){
   if(Math.random()<.2)return;
-  const m=ctx.getTransform(),scale=Math.hypot(m.a,m.b),cx=m.a*a.x+m.c*a.y+m.e,cy=m.b*a.x+m.d*a.y+m.f,r=32*scale;
+  const m=ctx.getTransform(),scale=hyp(m.a,m.b),cx=m.a*a.x+m.c*a.y+m.e,cy=m.b*a.x+m.d*a.y+m.f,r=32*scale;
   const x0=Math.max(0,Math.floor(cx-r)),y0=Math.max(0,Math.floor(cy-r)),w=Math.min(canvas.width-x0,Math.ceil(2*r)),h=Math.min(canvas.height-y0,Math.ceil(2*r));
   if(w<=0||h<=0)return;
   glitchBuf??=document.createElement('canvas');if(glitchBuf.width<w||glitchBuf.height<h){glitchBuf.width=Math.max(w,glitchBuf.width);glitchBuf.height=Math.max(h,glitchBuf.height);}
@@ -1956,9 +1989,9 @@ function reconcileScrap(previous,next,now){
     const x=p.x+(p.blendX||0)*blend,y=p.y+(p.blendY||0)*blend;
     ctx.strokeStyle=a.color+'15';ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(x,y);ctx.stroke();ctx.save();ctx.translate(x,y);ctx.rotate(p.angle+Math.PI/2);ctx.drawImage(orbitSprite(a.color,item.kind,isYou,a.skin||0),-21,-19);ctx.restore();}
    if(a.shieldUntil>game.time){ctx.strokeStyle=a.color+'9a';ctx.lineWidth=1.4;ctx.setLineDash([4,5]);ctx.beginPath();ctx.arc(a.x,a.y,outer+13,game.time,Math.PI*2+game.time);ctx.stroke();ctx.setLineDash([]);}
-   const speed=Math.hypot(a.vx,a.vy);if(speed>15){const angle=Math.atan2(a.vy,a.vx);ctx.strokeStyle=a.color+'70';ctx.lineWidth=3;for(const offset of [-.3,.3]){const x=a.x-Math.cos(angle+offset)*19,y=a.y-Math.sin(angle+offset)*19;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-Math.cos(angle)*(7+speed*.04),y-Math.sin(angle)*(7+speed*.04));ctx.stroke();}}
+   const speed=hyp(a.vx,a.vy);if(speed>15){const angle=Math.atan2(a.vy,a.vx);ctx.strokeStyle=a.color+'70';ctx.lineWidth=3;for(const offset of [-.3,.3]){const x=a.x-Math.cos(angle+offset)*19,y=a.y-Math.sin(angle+offset)*19;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-Math.cos(angle)*(7+speed*.04),y-Math.sin(angle)*(7+speed*.04));ctx.stroke();}}
    const glitch=glitchLevel(a,now);if(glitch){const j=7*glitch;ctx.save();ctx.translate((Math.random()-.5)*2*j,(Math.random()-.5)*j);}
-   ctx.shadowColor=a.color+'5a';ctx.shadowBlur=isYou?17:9;polygon(a.x,a.y,18,6,a.aim);ctx.fillStyle='#102d3d';ctx.strokeStyle=a.flashUntil>game.time?'#fff3d9':a.hp===1&&Math.sin(now/85)>.55?'#ff6f52':a.color;ctx.lineWidth=2.3;ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+   ctx.save();ctx.translate(a.x,a.y);ctx.rotate(a.aim);drawBaked(ctx,hullHalo(a.color,isYou?17:9),0,0);ctx.restore();polygon(a.x,a.y,18,6,a.aim);ctx.fillStyle='#102d3d';ctx.strokeStyle=a.flashUntil>game.time?'#fff3d9':a.hp===1&&Math.sin(now/85)>.55?'#ff6f52':a.color;ctx.lineWidth=2.3;ctx.fill();ctx.stroke();
    coreStyle(ctx,a.x,a.y,a.core||0,a.hurtUntil>game.time&&Math.floor(game.time*13)%2?'#ffffff':a.color,a.aim,now,(a.core||0)>=15?coreLive(a):null);ctx.strokeStyle=a.color+'99';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(a.x+Math.cos(a.aim)*21,a.y+Math.sin(a.aim)*21);ctx.lineTo(a.x+Math.cos(a.aim)*29,a.y+Math.sin(a.aim)*29);ctx.stroke();
    if(glitch)ctx.restore();
    if(isYou&&online&&online.flashUntil>performance.now()){
@@ -1986,7 +2019,7 @@ function reconcileScrap(previous,next,now){
  function effects(){for(const p of game.effects){if(!visible(p.x,p.y,10))continue;ctx.globalAlpha=limit(p.life/.45,0,1);ctx.fillStyle=p.color;ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;for(const p of game.labels){if(p.salvageTotal!==undefined){drawSalvageTotal(p);continue;}if(!visible(p.x,p.y,100))continue;ctx.save();ctx.globalAlpha=Math.min(1,p.life*3);ctx.fillStyle=p.color;ctx.font='750 11px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.shadowColor='#040a12';ctx.shadowBlur=7;ctx.fillText(p.text,p.x,p.y);ctx.restore();}}
  function reticle(){if(state!=='playing'||touchMode||!pointer.active)return;const x=cam.x+(pointer.x-width/2)/cam.zoom,y=cam.y+(pointer.y-height/2)/cam.zoom;ctx.save();ctx.strokeStyle='#d5fff48f';ctx.lineWidth=1/cam.zoom;ctx.beginPath();ctx.arc(x,y,7/cam.zoom,0,Math.PI*2);ctx.moveTo(x-12/cam.zoom,y);ctx.lineTo(x-8/cam.zoom,y);ctx.moveTo(x+8/cam.zoom,y);ctx.lineTo(x+12/cam.zoom,y);ctx.moveTo(x,y-12/cam.zoom);ctx.lineTo(x,y-8/cam.zoom);ctx.moveTo(x,y+8/cam.zoom);ctx.lineTo(x,y+12/cam.zoom);ctx.stroke();ctx.restore();}
  function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const w of game.wrecks||[])if(w.hp>=0){mc.fillStyle=w.kind===1?'#ffd283':'#78ede2';mc.fillRect(w.x*sx-3,w.y*sy-2,6,4);}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}if(game.arenaEvent?.kind==='jackpot'){const e=game.arenaEvent;mc.fillStyle=EVENT_COLORS.jackpot;mc.globalAlpha=.55+.45*Math.sin(performance.now()/120);mc.fillRect(e.x*sx-4,e.y*sy-4,8,8);mc.globalAlpha=1;}for(const c of game.comets||[]){const age=game.time-c.start,flight=c.end-c.start-COMET.afterglow;if(age>flight||c.shotAt!=null&&game.time>=c.shotAt)continue;mc.strokeStyle=EVENT_COLORS.comet;mc.globalAlpha=age<0?.35:.6;mc.lineWidth=1;mc.beginPath();mc.moveTo(c.x*sx,c.y*sy);mc.lineTo(c.toX*sx,c.toY*sy);mc.stroke();if(age>=0){const p=cometPoint(c,age/flight);mc.globalAlpha=1;mc.fillStyle='#e6fbff';mc.beginPath();mc.arc(p.x*sx,p.y*sy,3,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}for(const v of game.vortices||[]){mc.strokeStyle=POWER_COLORS.vortex;mc.lineWidth=2;mc.beginPath();mc.arc(v.x*sx,v.y*sy,POWER.vortexRadius*sx,0,Math.PI*2);mc.stroke();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);const dark=game.eventActive('blackout');for(const a of game.actors){if(!a.alive||dark&&a.id!==game.human.id)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
- function joystick(){if(!touch)return;ctx.save();ctx.fillStyle='#64eee00d';ctx.strokeStyle='#a1fff34a';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(touch.sx,touch.sy,42,0,Math.PI*2);ctx.fill();ctx.stroke();const len=Math.hypot(touch.dx,touch.dy)||1,range=Math.min(35,len);ctx.fillStyle='#89fff0a0';ctx.beginPath();ctx.arc(touch.sx+touch.dx/len*range,touch.sy+touch.dy/len*range,12,0,Math.PI*2);ctx.fill();ctx.restore();}
+ function joystick(){if(!touch)return;ctx.save();ctx.fillStyle='#64eee00d';ctx.strokeStyle='#a1fff34a';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(touch.sx,touch.sy,42,0,Math.PI*2);ctx.fill();ctx.stroke();const len=hyp(touch.dx,touch.dy)||1,range=Math.min(35,len);ctx.fillStyle='#89fff0a0';ctx.beginPath();ctx.arc(touch.sx+touch.dx/len*range,touch.sy+touch.dy/len*range,12,0,Math.PI*2);ctx.fill();ctx.restore();}
  function eventNotice(){
   const e=game.arenaEvent;
   if(!e || game.time>=e.end)return '';
@@ -2017,7 +2050,7 @@ function reconcileScrap(previous,next,now){
   const shot=e.shotAt!=null&&game.time>=e.shotAt,stop=shot?Math.min(e.shotAt-e.start,flight):flight;
   const after=shot?game.time-e.shotAt:Math.max(0,age-flight),flying=!shot&&age<flight;
   cometMoments(e,flying?cometPoint(e,age/flight):null,after);
-  const big=e.small===false,dx=e.toX-e.x,dy=e.toY-e.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,speed=len/flight;
+  const big=e.small===false,dx=e.toX-e.x,dy=e.toY-e.y,len=hyp(dx,dy)||1,ux=dx/len,uy=dy/len,speed=len/flight;
   const head=cometPoint(e,Math.min(age,stop)/flight),tailLen=Math.min(Math.min(age,stop)*speed,big?340:260)*(flying?1:Math.max(0,1-after/.45));
   const impact=shot?head:{x:e.toX,y:e.toY};
   const sparks=cometSparks(e,head,ux,uy,flying,tailLen,impact,shot);
@@ -2049,7 +2082,7 @@ function reconcileScrap(previous,next,now){
   for(const id of dustDrawn.keys())if(!seen.has(id))dustDrawn.delete(id);}
  // A pilot in a stardust rush gets a soft golden ring and sparkles streaming behind.
  function drawRush(){const now=performance.now()/1000;
-  for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,80))continue;const k=rushFactor(a,game.time)-1;if(k<=.01)continue;const strength=k/STARDUST.boost,speed=Math.hypot(a.vx,a.vy)||1;
+  for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,80))continue;const k=rushFactor(a,game.time)-1;if(k<=.01)continue;const strength=k/STARDUST.boost,speed=hyp(a.vx,a.vy)||1;
    ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.35*strength;ctx.drawImage(softSprite('rgba(255,214,120,1)'),a.x-46,a.y-46,92,92);ctx.globalAlpha=1;ctx.strokeStyle='rgba(255,226,140,'+(.75*strength)+')';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(a.x,a.y,27+2*Math.sin(now*9),0,Math.PI*2);ctx.stroke();
    for(let i=0;i<a.pieces.length;i++){const p=a.pieces[i],tw=.5+.5*Math.sin(now*11+i*1.9);if(tw<.35)continue;ctx.globalAlpha=.9*strength*tw;ctx.drawImage(softSprite('rgba(255,214,120,1)'),p.x-17,p.y-17,34,34);}ctx.globalAlpha=1;
    for(let i=0;i<8;i++){const f=((now*2.4+i/8)%1),side=Math.sin(i*2.1)*11,x=a.x-a.vx/speed*(20+f*46)-a.vy/speed*side,y=a.y-a.vy/speed*(20+f*46)+a.vx/speed*side;ctx.fillStyle='rgba(255,240,190,'+(.95*(1-f)*strength)+')';ctx.beginPath();ctx.arc(x,y,3.2*(1-f)+.8,0,Math.PI*2);ctx.fill();}
@@ -2100,7 +2133,7 @@ function reconcileScrap(previous,next,now){
    }
    if(game.time<e.start){ctx.save();ctx.fillStyle=EVENT_COLORS.jackpot;ctx.font='800 22px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.globalAlpha=.75+.25*Math.sin(performance.now()/110);ctx.fillText(String(Math.ceil(e.start-game.time)),e.x,e.y-CRATE_RADIUS-26);ctx.restore();}
    const pilot=game.human,dx=e.x-pilot.x,dy=e.y-pilot.y;
-   if(Math.hypot(dx,dy)>90){
+   if(hyp(dx,dy)>90){
     ctx.save();ctx.translate(pilot.x,pilot.y);ctx.rotate(Math.atan2(dy,dx));
     ctx.fillStyle=EVENT_COLORS.jackpot;ctx.beginPath();ctx.moveTo(60,0);
     ctx.lineTo(46,-6);ctx.lineTo(46,6);ctx.closePath();ctx.fill();ctx.restore();
@@ -2135,7 +2168,7 @@ function reconcileScrap(previous,next,now){
   ctx.globalAlpha=pulse;ctx.fillStyle='rgba(9,19,31,.86)';ctx.beginPath();ctx.roundRect(x,y,w,30,8);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
   ctx.fillStyle=color;ctx.fillRect(x+8,y+25,(w-16)*frac,2);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,width/2,y+14);ctx.restore();}
  // Comet route previews: a dashed line across the arena and an arrow at the entry point.
- function cometPreview(e){const lead=e.start-game.time;if(lead<=0||lead>COMET.preview+.05)return;const k=1-lead/COMET.preview,dx=e.toX-e.x,dy=e.toY-e.y,len=Math.hypot(dx,dy)||1;
+ function cometPreview(e){const lead=e.start-game.time;if(lead<=0||lead>COMET.preview+.05)return;const k=1-lead/COMET.preview,dx=e.toX-e.x,dy=e.toY-e.y,len=hyp(dx,dy)||1;
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.25+.55*k;const glow=26+30*k;ctx.drawImage(softSprite('rgba(244,247,255,1)'),e.x-glow,e.y-glow,glow*2,glow*2);ctx.globalCompositeOperation='source-over';
   ctx.globalAlpha=.5+.5*k;ctx.fillStyle=EVENT_COLORS.comet;ctx.translate(e.x+dx/len*40,e.y+dy/len*40);ctx.rotate(Math.atan2(dy,dx));ctx.beginPath();ctx.moveTo(14,0);ctx.lineTo(-8,-9);ctx.lineTo(-3,0);ctx.lineTo(-8,9);ctx.closePath();ctx.fill();ctx.restore();}
  // Arrows at the screen edge for comets about to enter from off screen.
@@ -2148,7 +2181,7 @@ function reconcileScrap(previous,next,now){
  // A whoosh when a comet head passes near you.
  const cometSeen=new Set();
  function cometMoments(e,head,after){const key=e.start+':'+e.toX;
-  if(!after&&head&&!cometSeen.has('w'+key)&&game.human.alive&&Math.hypot(head.x-game.human.x,head.y-game.human.y)<280){cometSeen.add('w'+key);play('comet');}
+  if(!after&&head&&!cometSeen.has('w'+key)&&game.human.alive&&hyp(head.x-game.human.x,head.y-game.human.y)<280){cometSeen.add('w'+key);play('comet');}
   if(cometSeen.size>200)cometSeen.clear();}
  function drawBlackout(){
   if(!game.eventActive('blackout'))return;
@@ -2163,9 +2196,9 @@ function reconcileScrap(previous,next,now){
   ctx.restore();
  }
  function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);if(state!=='menu'){watchEvent();watchRush();}ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();drawWrecks();drawEventMarkers();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawStardust();drawSmoke();powerAuras();drawRush();drawTails(drawNow);drawPilots();drawHeals(drawNow);drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();drawBlackout();cometIndicators();vignette();eventBanner();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
- function frame(now){frames++;if(now-framesAt>=1000){
+ function frame(now){if(lastFrameAt&&now-lastFrameAt>25)droppedFrames++;lastFrameAt=now;if(state!=='playing')playingSince=now;frames++;if(now-framesAt>=1000){
   const fps=frames*1000/(now-framesAt);
-  if(state==='playing'&&!document.hidden&&frames>8){if(fps<48&&dpr>.75){pixelRatioCap=Math.max(.75,dpr-.25);resize();smoothSecs=0;riseWait=now-lastSharpnessRise<4000?Math.min(64000,riseWait*2):8000;lastSharpnessDrop=now;}else if(fps>=57&&dpr<Math.min(devicePixelRatio||1,1.5)-.01&&now-lastSharpnessDrop>riseWait){if(++smoothSecs>=4){pixelRatioCap=Math.min(1.5,dpr+.25);resize();smoothSecs=0;lastSharpnessRise=now;}}else smoothSecs=0;}
+  if(state==='playing'&&!document.hidden&&frames>8&&now-playingSince>2500){if((fps<50||droppedFrames>5)&&dpr>.75){pixelRatioCap=Math.max(.75,dpr-.25);resize();smoothSecs=0;if(now-lastSharpnessRise<30000)riseWait=Math.min(120000,riseWait*2);lastSharpnessDrop=now;}else if(fps>=57&&droppedFrames<=1&&dpr<Math.min(devicePixelRatio||1,1.5)-.01&&now-lastSharpnessDrop>riseWait){if(++smoothSecs>=4){pixelRatioCap=Math.min(1.5,dpr+.25);resize();smoothSecs=0;lastSharpnessRise=now;}}else smoothSecs=0;}droppedFrames=0;
   $('perfValue').textContent=Math.round(frames*1000/(now-framesAt))+' fps'+(online?' · '+Math.round(online.rtt||0)+' ms'+(online.updateGap?' · '+Math.round(1000/online.updateGap)+' updates/s':'')+' · queue '+(online.queued||0)+(online.dropped?' · skipped '+online.dropped:''):'');frames=0;framesAt=now;}const dt=Math.min(online?.25:.08,(now-(last||now))/1000);last=now;if(online&&state!=='menu'){if(state==='playing')input();onlineVisualStep(dt);events();updateCamera(dt);if(now-hudAt>120){hudAt=now;updateHUD();}}else if(state==='playing'){input();acc+=dt;let ticks=0;while(acc>=1/120&&ticks<10){game.step(1/120);acc-=1/120;ticks++;if(game.finished)break;}events();updateCamera(dt);if(now-hudAt>120){hudAt=now;updateHUD();}if(game.finished)finish();}else if(state==='menu'||state==='customize'||state==='shop'){game.time+=dt;for(const a of game.actors)game.updateOrbits(a,true);}if(state!=='menu')updateScrapHUD(game.human.pieces.length);draw();if(toastUntil&&now>toastUntil){$('toast').classList.remove('show');toastUntil=0;}if(state==='customize'||state==='shop')drawCustomize();requestAnimationFrame(frame);}
  requestAnimationFrame(frame);
 })();
