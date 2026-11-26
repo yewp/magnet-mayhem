@@ -160,11 +160,15 @@ const POWER=Object.freeze({first:20,recharge:25,radius:34,
 //  blackout  8 s of darkness (drawing only); bots aim worse while it lasts
 //  polarity  16 s where magnets push loose scrap away and nothing is pulled in;
 //            scrap is still collected by flying right into it
-const EVENTS=['rain','jackpot','blackout','polarity','comet'];
-const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY',comet:'COMET SHOWER'};
-const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c',comet:'#eef3ff'};
-const EVENT=Object.freeze({first:20,gapMin:35,gapMax:45,warn:3,jackpotWarn:5,
- length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:13.2}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
+//  collapse  30 s where a safe ring closes in on a spot near the middle (over 9 s), holds, then opens
+//            again (last 4 s); ships outside it shed an armor piece every 0.45 s, or take a core hit
+//            every 2 s once they have none left. Shed pieces fly toward the ring and are free for rivals.
+const EVENTS=['rain','jackpot','blackout','polarity','comet','collapse'];
+const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY',comet:'COMET SHOWER',collapse:'COLLAPSE'};
+const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c',comet:'#eef3ff',collapse:'#ff8a3d'};
+const EVENT=Object.freeze({first:20,gapMin:35,gapMax:45,warn:3,jackpotWarn:5,collapseWarn:5,
+ length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:13.2,collapse:30}),
+ ring:Object.freeze({radius:560,close:9,open:4,shedEvery:.45,coreEvery:2,grace:.3,shedSpeed:420}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
 const CRATE_RADIUS=28;
 const CRATE_NORMALS=[[1,0],[0,1],[-1,0],[0,-1]];
 // preview: seconds a comet's route is shown before it launches. A comet head passing
@@ -223,7 +227,7 @@ class MagnetWorld{
  safeSpawn(actor){let best=this.freePoint(),bestScore=-1;for(let i=0;i<45;i++){const p=this.freePoint();let d=Infinity;for(const a of this.actors)if(a!==actor&&a.alive)d=Math.min(d,distance(a,p));if(d>bestScore){best=p;bestScore=d;}if(d>550)break;}return best;}
  spawn(a,initial=false,index=0){
   a.wreckMod=0;a.spawnSeq=(a.spawnSeq||0)+1;
-  let p;if(initial&&a.human)p={x:1400,y:1100};else if(initial){const angle=index/MM.bots*Math.PI*2,r=740+this.random()*180;p={x:limit(1400+Math.cos(angle)*r,120,MM.width-120),y:limit(1100+Math.sin(angle)*r,120,MM.height-120)};}else p=this.safeSpawn(a);
+  let p;if(initial&&a.human)p={x:1400,y:1100};else if(initial){const angle=index/MM.bots*Math.PI*2,r=740+this.random()*180;p={x:limit(1400+Math.cos(angle)*r,120,MM.width-120),y:limit(1100+Math.sin(angle)*r,120,MM.height-120)};}else p=this.ringPoint(3)||this.safeSpawn(a);
   a.x=a.prevX=p.x;a.y=a.prevY=p.y;a.vx=a.vy=0;a.hp=3;a.alive=true;a.pieces=[];a.fire=a.magnet=false;a.shieldTightness=0;a.orbitDelay=0;a.moveX=a.moveY=0;a.shieldUntil=this.time+(a.human?3.5:2);a.hurtUntil=0;a.repair=0;a.powerUntil=0;a.leechAt=0;a.leechId=0;a.rushStart=a.rushUntil=0;a.nextShot=this.time+(a.human?0:.3);a.think=0;
   const count=initial?(a.human?8:[6,9,12,15,18,20,7,11,14,22][index]):6;
   for(let i=0;i<count;i++){const item=this.scrap(a.x,a.y);item.origin=a.id;a.seen.add(item.id);this.attach(a,item,false);}
@@ -286,6 +290,8 @@ class MagnetWorld{
   else if(enemy&&a.pieces.length>reserve+3&&enemyDist<670){const dx=enemy.x-a.x,dy=enemy.y-a.y,d=enemyDist||1,radial=enemyDist>340?.8:enemyDist<240?-.7:.05,spin=a.id%2?1:-1;tx=a.x+dx/d*radial*220-dy/d*spin*180;ty=a.y+dy/d*radial*220+dx/d*spin*180;}
   else if(loot){tx=loot.x;ty=loot.y;}
   else if(enemy){tx=enemy.x;ty=enemy.y;}
+  const ring=this.arenaEvent?.kind==='collapse'&&this.time>=this.arenaEvent.start-EVENT.collapseWarn&&this.time<this.arenaEvent.end-EVENT.ring.open?this.arenaEvent:null;
+  if(ring){const safe=Math.max(80,this.collapseRadius(ring,this.time+3)-90),ox=tx-ring.x,oy=ty-ring.y,od=hyp(ox,oy);if(od>safe){tx=ring.x+ox/od*safe;ty=ring.y+oy/od*safe;}}
   tx=limit(tx,70,MM.width-70);ty=limit(ty,70,MM.height-70);const dx=tx-a.x,dy=ty-a.y,len=hyp(dx,dy);a.moveX=len>5?dx/len:0;a.moveY=len>5?dy/len:0;
   if(enemy){const lead=Math.min(.55,enemyDist/MM.shotSpeed),error=(this.random()-.5)*(this.difficulty==='easy'?.38:this.difficulty==='hard'?.065:.17)*(this.eventActive('blackout')?EVENT.blackoutAim:1);a.aim=Math.atan2(enemy.y+enemy.vy*lead-a.y,enemy.x+enemy.vx*lead-a.x)+error;}
  }
@@ -414,7 +420,7 @@ class MagnetWorld{
   for(const a of this.actors){if(!a.alive)continue;a.prevX=a.x;a.prevY=a.y;for(const p of a.pieces){p.prevX=p.x;p.prevY=p.y;}if(!a.human)this.think(a,dt);if(a.human&&this.humanMovementStep)this.humanMovementStep(a,dt);else this.move(a,dt);}
   for(let i=0;i<this.actors.length;i++){const a=this.actors[i];if(!a.alive)continue;for(let j=i+1;j<this.actors.length;j++){const b=this.actors[j];if(!b.alive)continue;const dx=b.x-a.x,dy=b.y-a.y,d=hyp(dx,dy);if(d<33){const len=d||1,px=(d?dx/len:1)*(33-d)*.5,py=(d?dy/len:0)*(33-d)*.5;a.x-=px;a.y-=py;b.x+=px;b.y+=py;this.bound(a);this.bound(b);}}}
   for(const a of this.actors)if(a.alive){advanceShield(a,dt,this.time);this.updateOrbits(a);if(a.fire)this.shoot(a);}
-  this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateStardust(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
+  this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateStardust(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.updateCollapse();this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
   for(const a of this.actors){if(!a.alive){if(this.time>=a.respawnAt)this.spawn(a);continue;}
    const canRepair=a.hp<3&&this.time-a.lastHurt>2&&this.time-a.lastShot>1.5&&this.wells.some(w=>distance(a,w)<w.r-9);
    if(canRepair){a.repair+=dt;if(a.repair>=3){a.hp++;a.repair=0;if(a.human)this.event('repair');}}else a.repair=0;
@@ -603,6 +609,20 @@ class MagnetWorld{
   this.burst(m.x,m.y,'#fff1c4',8,90);
   if(a===this.human)this.event('stardust');
  }
+ // The Collapse ring: from beyond the farthest corner down to EVENT.ring.radius, then back out at the end.
+ collapseRadius(e,t=this.time){const far=Math.max(hyp(e.x,e.y),hyp(MM.width-e.x,e.y),hyp(e.x,MM.height-e.y),hyp(MM.width-e.x,MM.height-e.y))+40;
+  if(t<=e.start||t>=e.end)return far;const k=Math.min(1,(t-e.start)/EVENT.ring.close,(e.end-t)/EVENT.ring.open),eased=k*k*(3-2*k);return far+(EVENT.ring.radius-far)*eased;}
+ updateCollapse(){const e=this.arenaEvent;if(!e||e.kind!=='collapse'||this.time<e.start||this.time>=e.end)return;const r=this.collapseRadius(e),ring=EVENT.ring;
+  for(const a of this.actors){if(!a.alive)continue;const dx=a.x-e.x,dy=a.y-e.y;
+   if(dx*dx+dy*dy<=r*r||a.shieldUntil>this.time){a.ringAt=0;continue;}
+   if(!a.ringAt){a.ringAt=this.time+ring.grace;continue;}if(this.time<a.ringAt)continue;
+   if(a.pieces.length){const p=a.pieces.pop(),ang=Math.atan2(-dy,-dx)+(this.random()-.5)*.9,speed=ring.shedSpeed*(.8+this.random()*.4);
+    this.drop(p.item,p.x,p.y,Math.cos(ang)*speed,Math.sin(ang)*speed,a.id,HOT_SCRAP_SECONDS,true);this.burst(p.x,p.y,EVENT_COLORS.collapse,6,90);a.ringAt=this.time+ring.shedEvery;if(a.human)this.event('ring');}
+   else{this.hitCore(a,0);a.ringAt=this.time+ring.coreEvery;}}}
+ // A free spot inside the Collapse ring as it will be `ahead` seconds from now, or null if no ring is closing.
+ ringPoint(ahead=2){const e=this.arenaEvent;if(!e||e.kind!=='collapse'||this.time+ahead<e.start||this.time>=e.end-EVENT.ring.open)return null;
+  const r=Math.max(60,this.collapseRadius(e,this.time+ahead)-110);let p={x:e.x,y:e.y};
+  for(let i=0;i<40;i++){const ang=this.random()*Math.PI*2,d=Math.sqrt(this.random())*r;p={x:e.x+Math.cos(ang)*d,y:e.y+Math.sin(ang)*d};if(this.covers.every(c=>distance(c,p)>c.r+25))break;}return p;}
  eventActive(kind){const e=this.arenaEvent;return Boolean(e)&&e.kind===kind&&this.time>=e.start&&this.time<e.end;}
  updateEvents(){
   const e=this.arenaEvent;
@@ -626,11 +646,12 @@ class MagnetWorld{
    if(this.nextEventAt==null)this.nextEventAt=EVENT.first;
    if(this.time<this.nextEventAt)return;
    const options=EVENTS.filter(k=>k!==this.lastEvent),kind=options[Math.floor(this.random()*options.length)];
-   const start=this.time+(kind==='jackpot'?EVENT.jackpotWarn:EVENT.warn),end=start+EVENT.length[kind];
+   const start=this.time+(kind==='jackpot'?EVENT.jackpotWarn:kind==='collapse'?EVENT.collapseWarn:EVENT.warn),end=start+EVENT.length[kind];
    if(end>this.duration-2){this.nextEventAt=Infinity;return;}
    const next={kind,start,end,x:0,y:0,drops:[],fired:false};
    if(kind==='jackpot'){const p=this.freePoint(55);next.x=p.x;next.y=p.y;next.panels=15;}
    if(kind==='comet')next.launched=0;
+   if(kind==='collapse'){next.x=Math.round(1000+this.random()*800);next.y=Math.round(850+this.random()*500);}
    if(kind==='rain'){const alive=this.actors.filter(a=>a.alive);
     for(let i=0;i<EVENT.rainDrops;i++){let p;
      if(i%4===0&&alive.length){const a=alive[Math.floor(this.random()*alive.length)];p={x:limit(a.x+(this.random()-.5)*360,60,MM.width-60),y:limit(a.y+(this.random()-.5)*360,60,MM.height-60)};}
@@ -1280,7 +1301,8 @@ function reconcileScrap(previous,next,now){
   $('rebuildPanel').hidden=a.alive||state!=='playing';if(!a.alive)$('rebuildTime').textContent=Math.max(0,a.respawnAt-game.time).toFixed(1);if(best>storedBest&&Math.floor(game.time)%5===0)save();
  }
  function finish(){const rank=game.ranking().indexOf(game.human)+1;awardXp();best=Math.max(best,game.human.score);save();$('finishTitle').textContent=rank===1?'You ruled the orbit.':'Round over.';$('finishCopy').textContent=rank===1?'A full orbit, a steady aim, and a scrapyard full of spare parts.':`${game.ranking()[0].name} took the top spot. There is always another round.`;$('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
- function events(){for(const e of game.events){if(e.type==='shot')play('shot');if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}if(e.type==='cometShot')toast('Comet shattered! Grab the stardust for a speed rush.');}game.events.length=0;}
+ let ringToastFor=-1;
+ function events(){for(const e of game.events){if(e.type==='shot')play('shot');if(e.type==='ring'){play('strip');const at=game.arenaEvent?.start??0;if(ringToastFor!==at){ringToastFor=at;toast('Outside the ring! Your armor is breaking off. Get inside.');}}if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}if(e.type==='cometShot')toast('Comet shattered! Grab the stardust for a speed rush.');}game.events.length=0;}
  function visible(x,y,r=50){return Math.abs(x-cam.x)<width/(2*cam.zoom)+r&&Math.abs(y-cam.y)<height/(2*cam.zoom)+r;}
  function polygon(x,y,r,sides,angle=0){ctx.beginPath();for(let i=0;i<sides;i++){const a=angle+i/sides*Math.PI*2,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;if(i)ctx.lineTo(px,py);else ctx.moveTo(px,py);}ctx.closePath();}
  // ---- Arena depth and combat effects (drawing only; nothing here changes the game) ----
@@ -2064,14 +2086,14 @@ function reconcileScrap(previous,next,now){
   for(const p of game.effects){if(!visible(p.x,p.y,10))continue;const step=Math.ceil(limit(p.life/.45,0,1)*8);if(!step)continue;const key=p.color+'|'+step;let list=groups.get(key);if(!list)groups.set(key,list=[]);list.push(p);}
   for(const [key,list] of groups){const bar=key.indexOf('|');ctx.globalAlpha=+key.slice(bar+1)/8;ctx.fillStyle=key.slice(0,bar);ctx.beginPath();for(const p of list)ctx.rect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);ctx.fill();}ctx.globalAlpha=1;for(const p of game.labels){if(p.salvageTotal!==undefined){drawSalvageTotal(p);continue;}if(!visible(p.x,p.y,100))continue;ctx.save();ctx.globalAlpha=Math.min(1,p.life*3);ctx.fillStyle=p.color;ctx.font='750 11px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.shadowColor='#040a12';ctx.shadowBlur=7;ctx.fillText(p.text,p.x,p.y);ctx.restore();}}
  function reticle(){if(state!=='playing'||touchMode||!pointer.active)return;const x=cam.x+(pointer.x-width/2)/cam.zoom,y=cam.y+(pointer.y-height/2)/cam.zoom;ctx.save();ctx.strokeStyle='#d5fff48f';ctx.lineWidth=1/cam.zoom;ctx.beginPath();ctx.arc(x,y,7/cam.zoom,0,Math.PI*2);ctx.moveTo(x-12/cam.zoom,y);ctx.lineTo(x-8/cam.zoom,y);ctx.moveTo(x+8/cam.zoom,y);ctx.lineTo(x+12/cam.zoom,y);ctx.moveTo(x,y-12/cam.zoom);ctx.lineTo(x,y-8/cam.zoom);ctx.moveTo(x,y+8/cam.zoom);ctx.lineTo(x,y+12/cam.zoom);ctx.stroke();ctx.restore();}
- function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const w of game.wrecks||[])if(w.hp>=0){mc.fillStyle=w.kind===1?'#ffd283':'#78ede2';mc.fillRect(w.x*sx-3,w.y*sy-2,6,4);}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}if(game.arenaEvent?.kind==='jackpot'){const e=game.arenaEvent;mc.fillStyle=EVENT_COLORS.jackpot;mc.globalAlpha=.55+.45*Math.sin(performance.now()/120);mc.fillRect(e.x*sx-4,e.y*sy-4,8,8);mc.globalAlpha=1;}for(const c of game.comets||[]){const age=game.time-c.start,flight=c.end-c.start-COMET.afterglow;if(age>flight||c.shotAt!=null&&game.time>=c.shotAt)continue;mc.strokeStyle=EVENT_COLORS.comet;mc.globalAlpha=age<0?.35:.6;mc.lineWidth=1;mc.beginPath();mc.moveTo(c.x*sx,c.y*sy);mc.lineTo(c.toX*sx,c.toY*sy);mc.stroke();if(age>=0){const p=cometPoint(c,age/flight);mc.globalAlpha=1;mc.fillStyle='#e6fbff';mc.beginPath();mc.arc(p.x*sx,p.y*sy,3,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}for(const v of game.vortices||[]){mc.strokeStyle=POWER_COLORS.vortex;mc.lineWidth=2;mc.beginPath();mc.arc(v.x*sx,v.y*sy,POWER.vortexRadius*sx,0,Math.PI*2);mc.stroke();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);const dark=game.eventActive('blackout');for(const a of game.actors){if(!a.alive||dark&&a.id!==game.human.id)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
+ function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const w of game.wrecks||[])if(w.hp>=0){mc.fillStyle=w.kind===1?'#ffd283':'#78ede2';mc.fillRect(w.x*sx-3,w.y*sy-2,6,4);}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}if(game.arenaEvent?.kind==='jackpot'){const e=game.arenaEvent;mc.fillStyle=EVENT_COLORS.jackpot;mc.globalAlpha=.55+.45*Math.sin(performance.now()/120);mc.fillRect(e.x*sx-4,e.y*sy-4,8,8);mc.globalAlpha=1;}for(const c of game.comets||[]){const age=game.time-c.start,flight=c.end-c.start-COMET.afterglow;if(age>flight||c.shotAt!=null&&game.time>=c.shotAt)continue;mc.strokeStyle=EVENT_COLORS.comet;mc.globalAlpha=age<0?.35:.6;mc.lineWidth=1;mc.beginPath();mc.moveTo(c.x*sx,c.y*sy);mc.lineTo(c.toX*sx,c.toY*sy);mc.stroke();if(age>=0){const p=cometPoint(c,age/flight);mc.globalAlpha=1;mc.fillStyle='#e6fbff';mc.beginPath();mc.arc(p.x*sx,p.y*sy,3,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}if(game.arenaEvent?.kind==='collapse'&&game.time<game.arenaEvent.end){const e=game.arenaEvent;mc.strokeStyle=EVENT_COLORS.collapse;mc.lineWidth=1.5;if(game.time>=e.start){mc.fillStyle='rgba(255,92,40,.14)';mc.beginPath();mc.rect(0,0,w,h);mc.arc(e.x*sx,e.y*sy,game.collapseRadius(e)*sx,0,Math.PI*2,true);mc.fill();mc.beginPath();mc.arc(e.x*sx,e.y*sy,game.collapseRadius(e)*sx,0,Math.PI*2);mc.stroke();}mc.setLineDash([3,3]);mc.beginPath();mc.arc(e.x*sx,e.y*sy,EVENT.ring.radius*sx,0,Math.PI*2);mc.stroke();mc.setLineDash([]);}for(const v of game.vortices||[]){mc.strokeStyle=POWER_COLORS.vortex;mc.lineWidth=2;mc.beginPath();mc.arc(v.x*sx,v.y*sy,POWER.vortexRadius*sx,0,Math.PI*2);mc.stroke();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);const dark=game.eventActive('blackout');for(const a of game.actors){if(!a.alive||dark&&a.id!==game.human.id)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
  function joystick(){if(!touch)return;ctx.save();ctx.fillStyle='#64eee00d';ctx.strokeStyle='#a1fff34a';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(touch.sx,touch.sy,42,0,Math.PI*2);ctx.fill();ctx.stroke();const len=hyp(touch.dx,touch.dy)||1,range=Math.min(35,len);ctx.fillStyle='#89fff0a0';ctx.beginPath();ctx.arc(touch.sx+touch.dx/len*range,touch.sy+touch.dy/len*range,12,0,Math.PI*2);ctx.fill();ctx.restore();}
  function eventNotice(){
   const e=game.arenaEvent;
   if(!e || game.time>=e.end)return '';
   const label=EVENT_LABELS[e.kind];
   if(game.time<e.start)return label+' in '+Math.ceil(e.start-game.time)+'s';
-  const hints={rain:'Collect the falling scrap',jackpot:e.panels?'Shoot the gold panels':'Crate emptied',comet:'Follow the glowing scrap trail',blackout:'Visibility reduced',polarity:'Magnets repel scrap'};
+  const hints={rain:'Collect the falling scrap',jackpot:e.panels?'Shoot the gold panels':'Crate emptied',comet:'Follow the glowing scrap trail',blackout:'Visibility reduced',polarity:'Magnets repel scrap',collapse:'Get inside the ring'};
   return label+' · '+hints[e.kind];
  }
  // Comets: a spinning four-point star head, a thin twinkling tail, and a shower of sparks
@@ -2194,6 +2216,16 @@ function reconcileScrap(previous,next,now){
    }
    ctx.globalAlpha=1;
   }
+  if(e.kind==='collapse'){
+   // Collapse: the area outside the ring is tinted, the edge glows, and the final ring is dashed while it closes.
+   const live=game.time>=e.start,r=game.collapseRadius(e),R=EVENT.ring.radius,col=EVENT_COLORS.collapse;
+   if(live){ctx.save();ctx.fillStyle='rgba(255,92,40,.1)';ctx.beginPath();ctx.rect(-2000,-2000,MM.width+4000,MM.height+4000);ctx.arc(e.x,e.y,r,0,Math.PI*2,true);ctx.fill();
+    ctx.strokeStyle=col;ctx.beginPath();ctx.arc(e.x,e.y,r,0,Math.PI*2);ctx.globalAlpha=.16;ctx.lineWidth=28;ctx.stroke();ctx.globalAlpha=.9;ctx.lineWidth=3;ctx.stroke();ctx.restore();}
+   if(game.time<e.start+EVENT.ring.close){ctx.save();ctx.strokeStyle=col;ctx.setLineDash([16,14]);ctx.lineDashOffset=-game.time*40;ctx.globalAlpha=live?.45:.55+.25*Math.sin(performance.now()/110);ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(e.x,e.y,R,0,Math.PI*2);ctx.stroke();ctx.restore();}
+   const pilot=game.human,dx=e.x-pilot.x,dy=e.y-pilot.y,d=hyp(dx,dy);
+   if(pilot.alive&&d>(live?Math.min(r,R+200):R)-60){ctx.save();ctx.translate(pilot.x,pilot.y);ctx.rotate(Math.atan2(dy,dx));ctx.fillStyle=col;ctx.globalAlpha=.6+.4*Math.sin(performance.now()/120);
+    ctx.beginPath();ctx.moveTo(64,0);ctx.lineTo(48,-8);ctx.lineTo(48,8);ctx.closePath();ctx.fill();ctx.restore();}
+  }
   if(e.kind==='comet' && e.launched==null && !e.shower)drawScrapComet(e);
   if(e.kind==='rain')for(const drop of e.drops){
    const left=drop.t-game.time;
@@ -2212,7 +2244,9 @@ function reconcileScrap(previous,next,now){
   const total=warn?Math.max(.1,e.start-(e.announcedAt??e.start-3)):e.end-e.start,frac=Math.min(1,left/total),y=width<720?150:116,pulse=warn?.75+.25*Math.sin(performance.now()/110):1;
   ctx.save();ctx.font='750 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';const w=ctx.measureText(text).width+40,x=width/2-w/2;
   ctx.globalAlpha=pulse;ctx.fillStyle='rgba(9,19,31,.86)';ctx.beginPath();ctx.roundRect(x,y,w,30,8);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
-  ctx.fillStyle=color;ctx.fillRect(x+8,y+25,(w-16)*frac,2);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,width/2,y+14);ctx.restore();}
+  ctx.fillStyle=color;ctx.fillRect(x+8,y+25,(w-16)*frac,2);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,width/2,y+14);ctx.restore();
+  const me=game.human;if(e.kind==='collapse'&&!warn&&me.alive&&me.shieldUntil<=game.time&&hyp(me.x-e.x,me.y-e.y)>game.collapseRadius(e)){const k=.5+.5*Math.sin(performance.now()/110);
+   ctx.save();ctx.strokeStyle=color;ctx.globalAlpha=.22+.3*k;ctx.lineWidth=14;ctx.strokeRect(7,7,width-14,height-14);ctx.globalAlpha=.8+.2*k;ctx.fillStyle=color;ctx.font='800 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('OUTSIDE THE RING · LOSING ARMOR',width/2,y+52);ctx.restore();}}
  // Comet route previews: a dashed line across the arena and an arrow at the entry point.
  function cometPreview(e){const lead=e.start-game.time;if(lead<=0||lead>COMET.preview+.05)return;const k=1-lead/COMET.preview,dx=e.toX-e.x,dy=e.toY-e.y,len=hyp(dx,dy)||1;
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.25+.55*k;const glow=26+30*k;ctx.drawImage(softSprite('rgba(244,247,255,1)'),e.x-glow,e.y-glow,glow*2,glow*2);ctx.globalCompositeOperation='source-over';
