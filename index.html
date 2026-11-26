@@ -101,14 +101,14 @@ const METAL=['#9dbbd5','#efae72','#ffda79'];
 // their colors); core styles change the center of your ship. Each one unlocks at a level.
 const SKINS=Object.freeze([{name:'Plain',level:1},{name:'Gears',level:8},{name:'Bolts',level:3},{name:'Crystals',level:20},{name:'Hex plates',level:14}]);
 // Tails come from the shop (free for now) and follow your ship in your pilot color.
-const TAILS=Object.freeze([{name:'None'},{name:'Cat tail'},{name:'Fox tail'},{name:'Three-tailed fox'},{name:'Dragon tail'},{name:'Ribbon streamers'},{name:'Comet trail'},{name:'Fish fin'},{name:'Scorpion tail'},{name:'Peacock fan'},{name:'Kite with bows'},{name:'Bubble trail'},{name:'Jellyfish tentacles'},{name:'Leafy vine'},{name:'Constellation'},{name:'Spiked club'},{name:'Devil tail'},{name:'Paper lanterns'},{name:'Chain links'},{name:'Rainbow streamer'},{name:'Feather boa'},{name:'Cherry blossoms'},{name:'Snowflakes'},{name:'Music notes'},{name:'Pixel trail'},{name:'Robot claw'},{name:'Paper cranes'},{name:'Fireflies'},{name:'Ghost wisps'},{name:'Aurora veil'},{name:'Ink brush'},{name:'Party bunting'},{name:'Balloon'},{name:'Gold coins'},{name:'Tiger tail'},{name:'Double helix'},{name:'Neon tube'},{name:'Pearl necklace'},{name:'Pom-pom spring'},{name:'Booster flame'},{name:'Butterflies'},{name:'Hearts'},{name:'Dandelion seeds'},{name:'Bamboo stalk'},{name:'Candy cane'},{name:'Koi fish'},{name:'Water wake'},{name:'Smoke rings'},{name:'Mini galaxy'},{name:'Star wand'},{name:'Ducklings'},{name:'Toy train'}]);
+const TAILS=Object.freeze([{name:'None'},{name:'Cat tail'},{name:'Fox tail'},{name:'Three-tailed fox'},{name:'Dragon tail'},{name:'Ribbon streamers'},{name:'Comet trail'},{name:'Fish fin'},{name:'Scorpion tail'},{name:'Peacock fan'},{name:'Kite with bows'},{name:'Bubble trail'},{name:'Jellyfish tentacles'},{name:'Leafy vine'},{name:'Constellation'},{name:'Spiked club'},{name:'Devil tail'},{name:'Paper lanterns'},{name:'Chain links'},{name:'Rainbow streamer'},{name:'Feather boa'},{name:'Cherry blossoms'},{name:'Snowflakes'},{name:'Music notes'},{name:'Pixel trail'},{name:'Robot claw'},{name:'Paper cranes'},{name:'Fireflies'},{name:'Ghost wisps'},{name:'Aurora veil'},{name:'Ink brush'},{name:'Party bunting'},{name:'Balloon'},{name:'Gold coins'},{name:'Tiger tail'},{name:'Double helix'},{name:'Neon tube'},{name:'Pearl necklace'},{name:'Pom-pom spring'},{name:'Booster flame'},{name:'Butterflies'},{name:'Hearts'},{name:'Dandelion seeds'},{name:'Bamboo stalk'},{name:'Candy cane'},{name:'Koi fish'},{name:'Water wake'},{name:'Smoke rings'},{name:'Mini galaxy'},{name:'Star wand'},{name:'Ducklings'},{name:'Toy train'},{name:'Lava lamp'},{name:'Bone tail'},{name:'Little ghost'},{name:'Bat swarm'},{name:'Anchor rope'},{name:'Ringed planet'},{name:'Thorny rose'},{name:'Gummy worm'},{name:'UFO'}]);
 const CORES=Object.freeze([{name:'Dot',level:1},{name:'Ring',level:5},{name:'Star',level:11},{name:'Eye',level:17},{name:'Reactor',level:25}]);
 // Levels: going from level L to L+1 takes 300 + 100*(L-1) XP; a finished round is worth its score + 100.
 const xpForLevel=level=>{let xp=0;for(let l=1;l<level;l++)xp+=300+100*(l-1);return xp;};
 const levelFromXp=xp=>{let level=1;while(xp>=xpForLevel(level+1))level++;return level;};
 const roundXp=score=>Math.max(0,Math.floor(score||0))+100;
 const cleanLook=look=>{const pick=(v,list)=>Number.isInteger(v)&&v>=0&&v<list.length?v:0;return {skin:pick(look?.skin,SKINS),core:pick(look?.core,CORES),tail:pick(look?.tail,TAILS)};};
-const botLook=i=>({skin:(i*2+1)%SKINS.length,core:(i*3+2)%CORES.length,tail:i%2?0:1+(i/2*11)%(TAILS.length-1)});
+const botLook=i=>({skin:(i*2+1)%SKINS.length,core:(i*3+2)%CORES.length,tail:i%2?0:1+(i/2*13)%(TAILS.length-1)});
 const PALETTE=['#ff927f','#b29eff','#f2b768','#79bafa','#eaa0d4','#a9ce75','#e6d481','#9eaddf','#efa4a0','#88c9b0'];
 const PILOTS=['Rivet','Junkratchet','Polarity','Tin Can','Scrapjack','Flux','Copperhead','Orbit','Loose Bolt','Iron Moth'];
 const limit=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1501,7 +1501,7 @@ function reconcileScrap(previous,next,now){
  }
  // ---- Tails: a short chain of points that follows behind the ship and wags. Drawing only. ----
  // Links per tail (default TAIL_N), and [wag, wag pace, curl] per tail.
- const TAIL_N=12,TAIL_SEG=6,TAIL_LEN={8:10,9:5,12:11,15:10,18:11,20:11,25:10,26:13,29:12,31:13,32:9,34:12,35:14,36:12,37:11,38:9,39:4,43:11,44:10,49:6},TAIL_WAG={1:[4.2],2:[2.4],3:[3.2],4:[2.8],5:[1.2],7:[1.6,.8],8:[1.1,1,2.1],9:[0],10:[1.5,.9],12:[1.3,.6],13:[1.4,.8],15:[2],16:[2,.9],17:[1.3,.7],18:[1,.8],19:[1.2,.8],20:[1.6,.7],25:[1.2,.7],26:[1.2,.6],29:[1.4,.6],31:[1.3,.8],32:[.8,.6],34:[3,.9],35:[.9,.6],36:[1.6,.8],37:[1.4,.7],38:[.7,.8],39:[0],43:[1.2,.7],44:[.6,.7,2.4],49:[.6,.7]},tailState=new Map(),tileState=new WeakMap();
+ const TAIL_N=12,TAIL_SEG=6,TAIL_LEN={8:10,9:5,12:11,15:10,18:11,20:11,25:10,26:13,29:12,31:13,32:9,34:12,35:14,36:12,37:11,38:9,39:4,43:11,44:10,49:6,52:11,53:11,56:10,58:11,59:12},TAIL_WAG={1:[4.2],2:[2.4],3:[3.2],4:[2.8],5:[1.2],7:[1.6,.8],8:[1.1,1,2.1],9:[0],10:[1.5,.9],12:[1.3,.6],13:[1.4,.8],15:[2],16:[2,.9],17:[1.3,.7],18:[1,.8],19:[1.2,.8],20:[1.6,.7],25:[1.2,.7],26:[1.2,.6],29:[1.4,.6],31:[1.3,.8],32:[.8,.6],34:[3,.9],35:[.9,.6],36:[1.6,.8],37:[1.4,.7],38:[.7,.8],39:[0],43:[1.2,.7],44:[.6,.7,2.4],49:[.6,.7],52:[1.2,.6],53:[2,.8],56:[1,.6],58:[1.2,.7],59:[2.6,.8]},tailState=new Map(),tileState=new WeakMap();
  function tailLight(hex,k){const n=parseInt(hex.slice(1,7),16),r=n>>16,g=n>>8&255,b=n&255,m=v=>Math.round(v+(255-v)*k);return 'rgb('+m(r)+','+m(g)+','+m(b)+')';}
  function tailDark(hex,k){const n=parseInt(hex.slice(1,7),16),m=v=>Math.round(v*(1-k));return 'rgb('+m(n>>16)+','+m(n>>8&255)+','+m(n&255)+')';}
  function newTail(h){return {h,x:null,y:null,t:null,kind:-1,spd:0,chains:[],hist:[],parts:[],path:[],acc:0};}
@@ -1524,7 +1524,7 @@ function reconcileScrap(previous,next,now){
  // Companions trail about 16 units further back than the previews so they clear the orbiting scrap.
  // Companions and brush/wisp/wake trails use the path you flew, kept as points about 0.8 apart.
  // Trails shrink back when you stop; companions stay where they were.
- const TAIL_PATH={28:30,30:52,40:96,45:96,46:34,48:96,50:96,51:96},TAIL_RETRACT=new Set([28,30,46]);
+ const TAIL_PATH={28:30,30:52,40:96,45:96,46:34,48:96,50:96,51:96,54:96,55:96,57:96,60:96},TAIL_RETRACT=new Set([28,30,46]);
  function tailTrack(st,kind,bx,by,jump,still){if(jump)st.path=[];const p=st.path,last=p[0];
   if(!last)p.unshift({x:bx,y:by});
   else{const d=Math.hypot(bx-last.x,by-last.y);if(d>.8){const n=Math.min(60,Math.floor(d/.8));for(let i=1;i<=n;i++){const f=i/n;p.unshift({x:last.x+(bx-last.x)*f,y:last.y+(by-last.y)*f});}}
@@ -1694,12 +1694,69 @@ function reconcileScrap(previous,next,now){
    c.fillStyle=i%2?tailLight(col,.3):col;tailBox(c,-4,-2.7,8,5.4,1.2);c.fill();
    if(i===0){c.fillStyle=tailDark(col,.35);tailDot(c,1.8,0,1.3);c.fillStyle=tailLight(col,.6);c.globalAlpha=.6+.4*Math.sin(t*6);tailDot(c,3.6,0,.8);c.globalAlpha=1;}
    else{c.fillStyle=tailLight(col,.65);c.fillRect(-2.6,-1.4,2,2.8);c.fillRect(.6,-1.4,2,2.8);}c.restore();});}
- // Tails 25-51, by kind: (canvas, tail state, color, time).
+ // Tails 25-60, by kind: (canvas, tail state, color, time).
  const TAIL_DRAW={25:(c,s,col,t)=>robotTail(c,s.chains[0],col,t),26:(c,s,col,t)=>craneTail(c,s.chains[0],col,t),27:fireflyTail,28:(c,s,col,t)=>wispTail(c,s.path,col,t),29:(c,s,col,t)=>auroraTail(c,s.chains[0],t),
   30:(c,s,col)=>inkTail(c,s.path,col),31:(c,s,col,t)=>buntingTail(c,s.chains[0],col,t),32:(c,s,col,t)=>balloonTail(c,s.chains[0],col,t),33:(c,s,col,t)=>coinTail(c,s,t),
   34:(c,s,col)=>tigerTail(c,s.chains[0],col),35:(c,s,col,t)=>helixTail(c,s.chains[0],col,t),36:(c,s,col,t)=>neonTail(c,s.chains[0],col,t),37:(c,s,col)=>pearlTail(c,s.chains[0],col),38:(c,s,col,t)=>springTail(c,s.chains[0],col,t),
   39:flameTail,40:(c,s,col,t)=>butterflyTail(c,s.path,col,t),41:heartTail,42:seedTail,43:(c,s,col)=>bambooTail(c,s.chains[0],col),44:(c,s,col)=>caneTail(c,s.chains[0],col),
-  45:(c,s,col,t)=>koiTail(c,s.path,col,t),46:(c,s,col)=>wakeTail(c,s.path,col),47:ringTail,48:(c,s,col,t)=>galaxyTail(c,s.path,col,t),49:wandTail,50:(c,s,col,t)=>duckTail(c,s.path,col,t),51:(c,s,col,t)=>trainTail(c,s.path,col,t)};
+  45:(c,s,col,t)=>koiTail(c,s.path,col,t),46:(c,s,col)=>wakeTail(c,s.path,col),47:ringTail,48:(c,s,col,t)=>galaxyTail(c,s.path,col,t),49:wandTail,50:(c,s,col,t)=>duckTail(c,s.path,col,t),51:(c,s,col,t)=>trainTail(c,s.path,col,t),
+  52:(c,s,col,t)=>lavaTail(c,s.chains[0],col,t),53:(c,s,col)=>boneTail(c,s.chains[0],col),54:(c,s,col,t)=>ghostTail(c,s.path,col,t),55:(c,s,col,t)=>batTail(c,s.path,col,t),56:(c,s,col)=>anchorTail(c,s.chains[0],col),
+  57:(c,s,col,t)=>planetTail(c,s.path,col,t),58:(c,s,col,t)=>roseTail(c,s.chains[0],col,t),59:(c,s,col)=>gummyTail(c,s.chains[0],col),60:(c,s,col,t)=>ufoTail(c,s.path,col,t)};
+ function tailAlpha(hex,a){const n=parseInt(hex.slice(1,7),16);return 'rgba('+(n>>16)+','+(n>>8&255)+','+(n&255)+','+a+')';}
+ function tailAlong(ch,s){const f=Math.max(0,Math.min(.999,s))*(ch.length-1),k=Math.floor(f),r=f-k,p=ch[k],q=ch[k+1];return {x:p.x+(q.x-p.x)*r,y:p.y+(q.y-p.y)*r};}
+ // Lava lamp: a glass tube with glowing wax blobs that rise, sink and merge.
+ function lavaTail(c,ch,col,t){const n=ch.length,glass=ch.slice(1);c.lineCap='round';c.lineJoin='round';
+  c.strokeStyle=tailAlpha(col,.3);c.lineWidth=11;tailCurve(c,glass);c.stroke();c.strokeStyle='rgba(255,255,255,.3)';c.lineWidth=1.2;tailCurve(c,glass);c.stroke();
+  c.save();c.globalCompositeOperation='lighter';
+  for(let i=0;i<5;i++){const p=tailAlong(ch,.12+.8*(.5+.5*Math.sin(t*.7+i*1.9))),r=2.6+1.2*Math.sin(t*1.3+i*2.3)+(i%2?.6:0);
+   c.fillStyle=tailAlpha(col,.35);tailDot(c,p.x,p.y,r*1.9);c.fillStyle=tailLight(col,.25);tailDot(c,p.x,p.y,r);c.fillStyle=tailLight(col,.65);tailDot(c,p.x-r*.3,p.y-r*.3,r*.35);}
+  c.restore();
+  const e=ch[n-1],{ux,uy,nx,ny}=tailDir(ch,n-1);c.fillStyle='#868e96';c.beginPath();c.moveTo(e.x+nx*4.5,e.y+ny*4.5);c.lineTo(e.x+ux*5+nx*2.6,e.y+uy*5+ny*2.6);c.lineTo(e.x+ux*5-nx*2.6,e.y+uy*5-ny*2.6);c.lineTo(e.x-nx*4.5,e.y-ny*4.5);c.closePath();c.fill();}
+ // Bone tail: vertebrae with little side spurs, ending in a pointed tail bone.
+ function boneTail(c,ch,col){const n=ch.length,bone='#f1f3f5',edge='#adb5bd';c.shadowColor=col;c.shadowBlur=5;
+  for(let k=1;k<n;k++){const q=ch[k],{ux,uy}=tailDir(ch,k),s=1-k/n*.45;c.save();c.translate(q.x,q.y);c.rotate(Math.atan2(uy,ux));c.scale(s,s);c.fillStyle=bone;c.strokeStyle=edge;c.lineWidth=.6;
+   for(const side of [1,-1]){c.beginPath();c.moveTo(-1,side*1.6);c.lineTo(-2.6,side*4.4);c.lineTo(.6,side*1.8);c.closePath();c.fill();c.stroke();}
+   c.beginPath();c.ellipse(0,0,2.6,2,0,0,Math.PI*2);c.fill();c.stroke();c.fillStyle=edge;tailDot(c,0,0,.55);c.restore();}
+  c.shadowBlur=0;const e=ch[n-1],{ux,uy,nx,ny}=tailDir(ch,n-1);c.fillStyle=bone;c.strokeStyle=edge;c.lineWidth=.6;c.beginPath();c.moveTo(e.x+nx*1.3,e.y+ny*1.3);c.lineTo(e.x+ux*7,e.y+uy*7);c.lineTo(e.x-nx*1.3,e.y-ny*1.3);c.closePath();c.fill();c.stroke();}
+ // Little ghost: floats along your path, bobbing, facing the way you went.
+ function ghostTail(c,path,col,t){const p=tailOn(path,60);if(!p)return;const face=Math.cos(p.a)>=0?1:-1;c.save();c.translate(p.x,p.y+Math.sin(t*3)*2.2);c.scale(2.1*face,2.1);
+  c.globalAlpha=.85;c.fillStyle=tailLight(col,.35);c.shadowColor=col;c.shadowBlur=8;c.beginPath();c.moveTo(-4.5,1);c.arc(0,-1.5,4.5,Math.PI,0);c.lineTo(4.5,4);
+  for(let i=0;i<3;i++){const x0=4.5-i*3,w=Math.sin(t*6+i)*.8;c.quadraticCurveTo(x0-.75,5.8+w,x0-1.5,4);c.quadraticCurveTo(x0-2.25,2.6-w,x0-3,4);}c.closePath();c.fill();c.shadowBlur=0;c.globalAlpha=1;
+  c.fillStyle='#1c2b3a';c.beginPath();c.ellipse(-1,-1.8,.8,1.2,0,0,Math.PI*2);c.fill();c.beginPath();c.ellipse(1.8,-1.8,.8,1.2,0,0,Math.PI*2);c.fill();c.beginPath();c.ellipse(.4,.9,.7,.5,0,0,Math.PI*2);c.fill();c.restore();}
+ // Bat swarm: three bats flapping and darting along your path.
+ function batTail(c,path,col,t){[52,68,84].forEach((k,i)=>{const p=tailOn(path,k);if(!p)return;const jx=Math.sin(t*3.1+i*2)*4,jy=Math.cos(t*2.6+i*1.3)*4,flap=Math.sin(t*15+i*1.9),s=1.9-i*.15;
+   c.save();c.translate(p.x+jx,p.y+jy);c.rotate(p.a+Math.PI/2);c.scale(s,s);c.fillStyle=tailDark(col,.12);c.shadowColor=col;c.shadowBlur=4;
+   for(const side of [1,-1]){const up=-1.5-flap*2.2;c.beginPath();c.moveTo(side,0);c.quadraticCurveTo(side*3,up,side*6.5,up+.6);c.lineTo(side*5.3,1.3);c.lineTo(side*4,.4);c.lineTo(side*2.8,1.5);c.closePath();c.fill();}
+   c.beginPath();c.ellipse(0,.3,1.4,2.2,0,0,Math.PI*2);c.fill();c.shadowBlur=0;c.fillStyle='#fff3bf';tailDot(c,-.5,-.8,.35);tailDot(c,.5,-.8,.35);c.restore();});}
+ // Anchor rope: a twisted rope ending in a ship's anchor.
+ function anchorTail(c,ch,col){const n=ch.length;c.strokeStyle='#c9a77c';c.lineWidth=2;c.lineCap='round';tailCurve(c,ch);c.stroke();c.strokeStyle='#8d6e4a';c.lineWidth=.8;
+  for(let k=1;k<n;k++){const p=ch[k-1],q=ch[k],{nx,ny}=tailDir(ch,k),mx=(p.x+q.x)/2,my=(p.y+q.y)/2;c.beginPath();c.moveTo(mx+nx-(q.x-p.x)*.15,my+ny-(q.y-p.y)*.15);c.lineTo(mx-nx+(q.x-p.x)*.15,my-ny+(q.y-p.y)*.15);c.stroke();}
+  const e=ch[n-1],{ux,uy}=tailDir(ch,n-1);c.save();c.translate(e.x,e.y);c.rotate(Math.atan2(uy,ux)-Math.PI/2);c.scale(1.35,1.35);c.strokeStyle=col;c.fillStyle=col;c.lineWidth=1.6;c.lineCap='round';
+  c.beginPath();c.arc(0,1.4,1.4,0,Math.PI*2);c.stroke();c.beginPath();c.moveTo(0,2.8);c.lineTo(0,11);c.moveTo(-3,4.8);c.lineTo(3,4.8);c.stroke();
+  c.beginPath();c.arc(0,6.5,5,.25,Math.PI-.25);c.stroke();for(const s of [1,-1]){c.beginPath();c.moveTo(s*4.8,7.7);c.lineTo(s*6.2,6.2);c.lineTo(s*4,6.4);c.closePath();c.fill();}c.restore();}
+ // Ringed planet: a tiny banded planet with a tilted ring, following your path.
+ function planetTail(c,path,col,t){const p=tailOn(path,56);if(!p)return;c.save();c.translate(p.x,p.y);c.scale(1.65,1.65);const tilt=-.45+Math.sin(t*.8)*.08;
+  c.strokeStyle=tailLight(col,.45);c.lineWidth=1.3;c.beginPath();c.ellipse(0,0,10,3.2,tilt,Math.PI,Math.PI*2);c.stroke();
+  c.fillStyle=col;tailDot(c,0,0,5.6);c.save();c.beginPath();c.arc(0,0,5.6,0,Math.PI*2);c.clip();c.fillStyle=tailDark(col,.2);c.fillRect(-6,-1.4,12,1.4);c.fillRect(-6,2.2,12,1);c.fillStyle=tailLight(col,.3);c.fillRect(-6,-3.6,12,.9);c.fillStyle='rgba(0,0,0,.25)';tailDot(c,2.5,2.5,5);c.restore();
+  c.strokeStyle=tailLight(col,.45);c.beginPath();c.ellipse(0,0,10,3.2,tilt,0,Math.PI);c.stroke();c.restore();}
+ // Thorny rose: a thorned stem with leaves and a turning rose at the tip.
+ function roseTail(c,ch,col,t){const n=ch.length,stem='#2f9e44';c.strokeStyle=stem;c.lineWidth=1.8;c.lineCap='round';tailCurve(c,ch);c.stroke();c.fillStyle=stem;
+  for(let k=2;k<n-1;k++){const q=ch[k],{ux,uy,nx,ny}=tailDir(ch,k),s=k%2?1:-1;c.beginPath();c.moveTo(q.x+nx*s*.8-ux*1.2,q.y+ny*s*.8-uy*1.2);c.lineTo(q.x+nx*s*2.6-ux*2.4,q.y+ny*s*2.6-uy*2.4);c.lineTo(q.x+nx*s*.8+ux*.4,q.y+ny*s*.8+uy*.4);c.closePath();c.fill();}
+  for(const [k,s] of [[n-3,1],[n-5,-1]]){const q=ch[k],{ux,uy,nx,ny}=tailDir(ch,k);c.fillStyle='#40c057';c.beginPath();c.ellipse(q.x+nx*s*3,q.y+ny*s*3,3,1.4,Math.atan2(uy,ux)+s*.8,0,Math.PI*2);c.fill();}
+  const e=ch[n-1],{ux,uy}=tailDir(ch,n-1);c.save();c.translate(e.x+ux*4,e.y+uy*4);c.rotate(t*.3);c.scale(1.4,1.4);
+  for(let i=0;i<5;i++){const a=i*Math.PI*2/5;c.fillStyle=i%2?col:tailDark(col,.15);c.beginPath();c.ellipse(Math.cos(a)*2.4,Math.sin(a)*2.4,3.2,2.2,a,0,Math.PI*2);c.fill();}
+  c.fillStyle=tailDark(col,.25);tailDot(c,0,0,2.4);c.strokeStyle=tailLight(col,.3);c.lineWidth=.6;c.beginPath();for(let a=0;a<Math.PI*3.2;a+=.3){const r=.3+a*.22;c.lineTo(Math.cos(a)*r,Math.sin(a)*r);}c.stroke();c.restore();}
+ // Gummy worm: a soft two-tone gummy with a glossy shine and sugar sparkles.
+ function gummyTail(c,ch,col){const n=ch.length;c.lineCap='round';
+  for(let k=1;k<n;k++){c.globalAlpha=.88;c.strokeStyle=k/n<.5?col:'#69db7c';c.lineWidth=5.6-k*.18;c.beginPath();c.moveTo(ch[k-1].x,ch[k-1].y);c.lineTo(ch[k].x,ch[k].y);c.stroke();}
+  c.globalAlpha=.5;c.strokeStyle='#ffffff';c.lineWidth=.9;c.beginPath();for(let k=1;k<n-1;k++){const q=ch[k],{nx,ny}=tailDir(ch,k),w=(5.6-k*.18)*.25;c[k>1?'lineTo':'moveTo'](q.x+nx*w,q.y+ny*w);}c.stroke();
+  c.globalAlpha=.9;c.fillStyle='#ffffff';for(let k=1;k<n;k+=2){const q=ch[k],{nx,ny}=tailDir(ch,k);tailDot(c,q.x-nx*1.5,q.y-ny*1.5,.45);}c.globalAlpha=1;}
+ // UFO: a little saucer with blinking rim lights and a soft glow beneath.
+ function ufoTail(c,path,col,t){const p=tailOn(path,60);if(!p)return;c.save();c.translate(p.x,p.y+Math.sin(t*2.5)*1.8);c.rotate(Math.sin(t*1.7)*.12);c.scale(1.9,1.9);
+  c.globalAlpha=.25+.1*Math.sin(t*4);c.fillStyle=col;c.beginPath();c.ellipse(0,5,6,2,0,0,Math.PI*2);c.fill();c.globalAlpha=1;
+  c.fillStyle='rgba(165,216,255,.85)';c.beginPath();c.ellipse(0,-1.4,3.2,3,0,Math.PI,Math.PI*2);c.fill();c.fillStyle='rgba(255,255,255,.7)';tailDot(c,-1.1,-2.6,.7);
+  c.fillStyle=tailDark(col,.15);c.beginPath();c.ellipse(0,0,7.5,2.6,0,0,Math.PI*2);c.fill();c.fillStyle=col;c.beginPath();c.ellipse(0,-.4,7.5,1.8,0,0,Math.PI*2);c.fill();
+  for(let i=0;i<5;i++){c.fillStyle=Math.sin(t*6-i*1.2)>0?'#fff3bf':tailDark(col,.4);tailDot(c,-5.6+i*2.8,.5,.65);}c.restore();}
  function clubTail(c,ch,col){const n=ch.length;c.lineCap='round';c.strokeStyle=col;for(let k=1;k<n;k++){c.lineWidth=5.5-k*.3;c.beginPath();c.moveTo(ch[k-1].x,ch[k-1].y);c.lineTo(ch[k].x,ch[k].y);c.stroke();}
   const q=ch[n-1],{ux,uy}=tailDir(ch,n-1),cx=q.x+ux*3,cy=q.y+uy*3,rot=Math.atan2(uy,ux);c.fillStyle=tailLight(col,.45);
   for(let i=0;i<6;i++){const a=rot+i*Math.PI/3;c.beginPath();c.moveTo(cx+Math.cos(a-.4)*4.5,cy+Math.sin(a-.4)*4.5);c.lineTo(cx+Math.cos(a)*8.8,cy+Math.sin(a)*8.8);c.lineTo(cx+Math.cos(a+.4)*4.5,cy+Math.sin(a+.4)*4.5);c.closePath();c.fill();}
