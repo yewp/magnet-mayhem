@@ -1174,10 +1174,17 @@ function reconcileScrap(previous,next,now){
  for(let i=0;i<MM.maxArmor;i++)$('armorDots').append(document.createElement('i'));
  try{best=Number(localStorage.getItem('magnet-mayhem-best'))||0;storedBest=best;xp=Math.max(0,Number(localStorage.getItem('orbbitz-xp'))||0);try{look=cleanLook(JSON.parse(localStorage.getItem('orbbitz-look')||'{}'));owned=new Set([0,...(JSON.parse(localStorage.getItem('orbbitz-owned')||'[]')).filter(i=>Number.isInteger(i)&&i>0&&i<TAILS.length)]);try{const o=JSON.parse(localStorage.getItem('orbbitz-owned-looks')||'{}');for(const [kind,list] of [['skin',SKINS],['core',CORES]])ownedLooks[kind]=new Set((Array.isArray(o[kind])?o[kind]:[]).filter(i=>Number.isInteger(i)&&list[i]?.shop));}catch{}}catch{look={skin:0,core:0,tail:0};}if(!owned.has(look.tail))look.tail=0;const lv=levelFromXp(xp);if(!lookAllowed('skin',look.skin,lv))look.skin=0;if(!lookAllowed('core',look.core,lv))look.core=0;$('menuBest').textContent=Math.floor(best).toLocaleString();const name=localStorage.getItem('magnet-mayhem-pilot');if(name)$('playerName').value=name.slice(0,16);const difficulty=localStorage.getItem('magnet-mayhem-difficulty');if(['easy','normal','hard'].includes(difficulty))$('difficulty').value=difficulty;}catch{}
  function save(){try{localStorage.setItem('magnet-mayhem-best',String(Math.floor(best)));localStorage.setItem('magnet-mayhem-pilot',$('playerName').value.trim()||'You');localStorage.setItem('magnet-mayhem-difficulty',$('difficulty').value);xp=Math.max(xp,Number(localStorage.getItem('orbbitz-xp'))||0);localStorage.setItem('orbbitz-xp',String(xp));localStorage.setItem('orbbitz-look',JSON.stringify(look));localStorage.setItem('orbbitz-owned',JSON.stringify([...owned]));localStorage.setItem('orbbitz-owned-looks',JSON.stringify({skin:[...ownedLooks.skin],core:[...ownedLooks.core]}));storedBest=best;}catch{}}
- // Drawing sharpness adapts to the frame rate, online and offline: it steps down when a second is slow or
- // has several dropped frames, and back up after a few fully smooth seconds. A step up that soon fails makes
- // the next try wait twice as long, so it settles instead of flipping back and forth.
- let pixelRatioCap=1.5,smoothSecs=0,lastSharpnessDrop=0,lastSharpnessRise=-1e9,riseWait=8000,droppedFrames=0,lastFrameAt=0,playingSince=0;
+ // Drawing sharpness (canvas pixels per screen point) adapts to the device, online and offline.
+ // Measured on an Iris Xe laptop: above 1x the graphics chip falls behind in busy moments and the screen
+ // freezes for up to ~0.8 s, while 1x stays smooth. So a first visit starts at 1x and steps up only after
+ // smooth seconds; any freeze above 1x, or a step up that fails within 30 s, caps sharpness below that level
+ // on this device for good. Slow seconds or several dropped frames step it down. Level and cap are
+ // remembered, so later visits start where this device is smooth.
+ const readSharpness=()=>{try{const v=JSON.parse(localStorage.getItem('orbbitz-sharpness')||'null');if(v&&v.level>=.75&&v.level<=1.5&&v.ceiling>=1&&v.ceiling<=1.5)return v;}catch{}return {level:1,ceiling:1.5};};
+ const saveSharpness=()=>{try{localStorage.setItem('orbbitz-sharpness',JSON.stringify({level:pixelRatioCap,ceiling:sharpnessCeiling}));}catch{}};
+ const savedSharpness=readSharpness();
+ function capSharpness(now){sharpnessCeiling=Math.max(1,dpr-.25);pixelRatioCap=Math.max(.75,dpr-.25);resize();lastSharpnessDrop=now;lastSharpnessRise=-1e9;sharpnessToSave=false;smoothSecs=0;saveSharpness();}
+ let pixelRatioCap=Math.min(savedSharpness.level,savedSharpness.ceiling),sharpnessCeiling=savedSharpness.ceiling,sharpnessToSave=false,riseDrops=0,smoothSecs=0,lastSharpnessDrop=0,lastSharpnessRise=-1e9,droppedFrames=0,lastFrameAt=0,playingSince=0;
  function resize(){width=innerWidth;height=innerHeight;dpr=Math.min(devicePixelRatio||1,pixelRatioCap);canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);}
  addEventListener('resize',resize);resize();
  function toast(text){$('toast').textContent=text;$('toast').classList.add('show');toastUntil=performance.now()+3000;}
@@ -1464,6 +1471,7 @@ function reconcileScrap(previous,next,now){
  function fields(){for(const a of game.actors){if(!a.alive||!a.magnet||!visible(a.x,a.y,magnetRange(a,game.time)))continue;const range=magnetRange(a,game.time),repel=game.eventActive('polarity'),fc=repel?EVENT_COLORS.polarity:a.color;ctx.save();const grad=ctx.createRadialGradient(a.x,a.y,30,a.x,a.y,range);grad.addColorStop(0,fc+'15');grad.addColorStop(.75,fc+'07');grad.addColorStop(1,fc+'00');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(a.x,a.y,range,0,Math.PI*2);ctx.fill();ctx.strokeStyle=fc+'35';ctx.lineWidth=1;ctx.setLineDash([3,11]);ctx.beginPath();ctx.arc(a.x,a.y,range,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<3;i++){const t=(game.time*.75+i/3)%1,r=repel?range*t:range*(1-t);ctx.globalAlpha=(repel?.16:.07)*(1-t);ctx.strokeStyle=fc;ctx.beginPath();ctx.arc(a.x,a.y,r,0,Math.PI*2);ctx.stroke();}ctx.restore();}}
  // Glows drawn into cached images: blurring each piece every frame was the main cost in crowded fights.
  // R = image pixels per world unit; blur is converted so it matches the old on-screen blur at normal zoom.
+ const ARMOR_SPOTS=[],SPARK_GROUPS=new Map();
  function bakedGlow(key,halfW,halfH,blur,glowColor,draw){if(spriteCache.has(key))return spriteCache.get(key);const R=4,dpr=Math.max(1,devicePixelRatio||1),m=blur/dpr+1,c=document.createElement('canvas');
   c.width=Math.ceil((halfW+m)*2*R);c.height=Math.ceil((halfH+m)*2*R);const g=c.getContext('2d');g.translate(c.width/2,c.height/2);g.scale(R,R);g.shadowColor=glowColor;g.shadowBlur=blur*R/dpr;draw(g);
   const out={img:c,w:c.width/R,h:c.height/R};spriteCache.set(key,out);return out;}
@@ -1491,15 +1499,18 @@ function reconcileScrap(previous,next,now){
   spriteCache.set(key,sprite);return sprite;
  }
  function drawScrap(){
-  const now=performance.now();
+  // One combined transform per piece (no save/restore each), since a brawl can show hundreds of pieces.
+  const now=performance.now();let m=null,lastAlpha=-1;
   for(const p of game.ground){
    const blend=scrapBlend(p,now),x=p.x+(p.blendX||0)*blend,y=p.y+(p.blendY||0)*blend;
    if(!visible(x,y,15))continue;
-   ctx.save();ctx.translate(x,y);ctx.rotate(p.id*2.39996);
-   ctx.globalAlpha=game.time<p.pickupAt?.5:.92;
+   if(!m){m=ctx.getTransform();ctx.save();}
+   const c=Math.cos(p.id*2.39996),sn=Math.sin(p.id*2.39996),alpha=game.time<p.pickupAt?.5:.92;
+   ctx.setTransform(m.a*c+m.c*sn,m.b*c+m.d*sn,m.c*c-m.a*sn,m.d*c-m.b*sn,m.a*x+m.c*y+m.e,m.b*x+m.d*y+m.f);if(alpha!==lastAlpha){ctx.globalAlpha=alpha;lastAlpha=alpha;}
    const hot=hotForPilot(game.human,p,game.time);
-   if(hot)drawBaked(ctx,hotScrapGlow(p.kind),0,0);else ctx.drawImage(scrapSprite(p.color,p.kind),-18,-18);ctx.restore();
+   if(hot)drawBaked(ctx,hotScrapGlow(p.kind),0,0);else ctx.drawImage(scrapSprite(p.color,p.kind),-18,-18);
   }
+  if(m)ctx.restore();
  }
  function drawShots(){
   const live=new Set();
@@ -1985,9 +1996,15 @@ function reconcileScrap(previous,next,now){
   for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,175))continue;ctx.save();const isYou=a.id===game.human.id;if(hasPower(a,'phase',game.time))ctx.globalAlpha=.35+.12*Math.sin(now/90);const outer=a.pieces.length?shieldRadius(a,Math.max(...a.pieces.map(p=>orbitSlot(p.slot).radius))):26;
    if(isYou){ctx.fillStyle='#64eee006';ctx.beginPath();ctx.arc(a.x,a.y,outer+13,0,Math.PI*2);ctx.fill();}
    const rings=new Set(a.pieces.map(p=>orbitSlot(p.slot).radius));for(const r of rings){ctx.strokeStyle=a.color+'1c';ctx.lineWidth=1;ctx.beginPath();ctx.arc(a.x,a.y,shieldRadius(a,r),0,Math.PI*2);ctx.stroke();}
-   for(const p of a.pieces){const item=p.item,blend=scrapBlend(p,now);
-    const x=p.x+(p.blendX||0)*blend,y=p.y+(p.blendY||0)*blend;
-    ctx.strokeStyle=a.color+'15';ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(x,y);ctx.stroke();ctx.save();ctx.translate(x,y);ctx.rotate(p.angle+Math.PI/2);ctx.drawImage(orbitSprite(a.color,item.kind,isYou,a.skin||0),-21,-19);ctx.restore();}
+   // Armor is drawn with as few canvas commands as possible (hundreds of pieces per frame): every faint
+   // spoke in one path, and each piece placed with a single combined transform instead of save/translate/rotate/restore.
+   const spots=ARMOR_SPOTS;spots.length=0;
+   for(const p of a.pieces){const blend=scrapBlend(p,now);spots.push(p.x+(p.blendX||0)*blend,p.y+(p.blendY||0)*blend);}
+   ctx.strokeStyle=a.color+'15';ctx.lineWidth=.6;ctx.beginPath();for(let k=0;k<spots.length;k+=2){ctx.moveTo(a.x,a.y);ctx.lineTo(spots[k],spots[k+1]);}ctx.stroke();
+   {const m=ctx.getTransform();
+    for(let k=0;k<a.pieces.length;k++){const p=a.pieces[k],x=spots[2*k],y=spots[2*k+1],c=Math.cos(p.angle+Math.PI/2),sn=Math.sin(p.angle+Math.PI/2);
+     ctx.setTransform(m.a*c+m.c*sn,m.b*c+m.d*sn,m.c*c-m.a*sn,m.d*c-m.b*sn,m.a*x+m.c*y+m.e,m.b*x+m.d*y+m.f);ctx.drawImage(orbitSprite(a.color,p.item.kind,isYou,a.skin||0),-21,-19);}
+    ctx.setTransform(m);}
    if(a.shieldUntil>game.time){ctx.strokeStyle=a.color+'9a';ctx.lineWidth=1.4;ctx.setLineDash([4,5]);ctx.beginPath();ctx.arc(a.x,a.y,outer+13,game.time,Math.PI*2+game.time);ctx.stroke();ctx.setLineDash([]);}
    const speed=hyp(a.vx,a.vy);if(speed>15){const angle=Math.atan2(a.vy,a.vx);ctx.strokeStyle=a.color+'70';ctx.lineWidth=3;for(const offset of [-.3,.3]){const x=a.x-Math.cos(angle+offset)*19,y=a.y-Math.sin(angle+offset)*19;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-Math.cos(angle)*(7+speed*.04),y-Math.sin(angle)*(7+speed*.04));ctx.stroke();}}
    const glitch=glitchLevel(a,now);if(glitch){const j=7*glitch;ctx.save();ctx.translate((Math.random()-.5)*2*j,(Math.random()-.5)*j);}
@@ -2016,7 +2033,11 @@ function reconcileScrap(previous,next,now){
   ctx.strokeStyle='#07111d';ctx.strokeText(label.text,0,0);
   ctx.fillStyle=label.color;ctx.fillText(label.text,0,0);ctx.restore();
  }
- function effects(){for(const p of game.effects){if(!visible(p.x,p.y,10))continue;ctx.globalAlpha=limit(p.life/.45,0,1);ctx.fillStyle=p.color;ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;for(const p of game.labels){if(p.salvageTotal!==undefined){drawSalvageTotal(p);continue;}if(!visible(p.x,p.y,100))continue;ctx.save();ctx.globalAlpha=Math.min(1,p.life*3);ctx.fillStyle=p.color;ctx.font='750 11px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.shadowColor='#040a12';ctx.shadowBlur=7;ctx.fillText(p.text,p.x,p.y);ctx.restore();}}
+ function effects(){
+  // Sparks are grouped by color and fade step (eighths) so each group is one fill, not one command per spark.
+  const groups=SPARK_GROUPS;groups.clear();
+  for(const p of game.effects){if(!visible(p.x,p.y,10))continue;const step=Math.ceil(limit(p.life/.45,0,1)*8);if(!step)continue;const key=p.color+'|'+step;let list=groups.get(key);if(!list)groups.set(key,list=[]);list.push(p);}
+  for(const [key,list] of groups){const bar=key.indexOf('|');ctx.globalAlpha=+key.slice(bar+1)/8;ctx.fillStyle=key.slice(0,bar);ctx.beginPath();for(const p of list)ctx.rect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);ctx.fill();}ctx.globalAlpha=1;for(const p of game.labels){if(p.salvageTotal!==undefined){drawSalvageTotal(p);continue;}if(!visible(p.x,p.y,100))continue;ctx.save();ctx.globalAlpha=Math.min(1,p.life*3);ctx.fillStyle=p.color;ctx.font='750 11px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.shadowColor='#040a12';ctx.shadowBlur=7;ctx.fillText(p.text,p.x,p.y);ctx.restore();}}
  function reticle(){if(state!=='playing'||touchMode||!pointer.active)return;const x=cam.x+(pointer.x-width/2)/cam.zoom,y=cam.y+(pointer.y-height/2)/cam.zoom;ctx.save();ctx.strokeStyle='#d5fff48f';ctx.lineWidth=1/cam.zoom;ctx.beginPath();ctx.arc(x,y,7/cam.zoom,0,Math.PI*2);ctx.moveTo(x-12/cam.zoom,y);ctx.lineTo(x-8/cam.zoom,y);ctx.moveTo(x+8/cam.zoom,y);ctx.lineTo(x+12/cam.zoom,y);ctx.moveTo(x,y-12/cam.zoom);ctx.lineTo(x,y-8/cam.zoom);ctx.moveTo(x,y+8/cam.zoom);ctx.lineTo(x,y+12/cam.zoom);ctx.stroke();ctx.restore();}
  function minimap(){const w=272,h=214,sx=w/MM.width,sy=h/MM.height;mc.clearRect(0,0,w,h);mc.strokeStyle='#1a354a';mc.lineWidth=1;mc.beginPath();for(let i=1;i<4;i++){mc.moveTo(i*w/4,0);mc.lineTo(i*w/4,h);mc.moveTo(0,i*h/4);mc.lineTo(w,i*h/4);}mc.stroke();for(const c of game.covers){mc.fillStyle='#314b5f';mc.fillRect(c.x*sx-3,c.y*sy-3,6,6);}mc.strokeStyle='#63cbaa';mc.lineWidth=2;for(const p of game.wells){const x=p.x*sx,y=p.y*sy;mc.beginPath();mc.moveTo(x-4,y);mc.lineTo(x+4,y);mc.moveTo(x,y-4);mc.lineTo(x,y+4);mc.stroke();}for(const w of game.wrecks||[])if(w.hp>=0){mc.fillStyle=w.kind===1?'#ffd283':'#78ede2';mc.fillRect(w.x*sx-3,w.y*sy-2,6,4);}for(const pad of game.pads||[]){const kind=POWERS[pad.kind];mc.fillStyle=kind?POWER_COLORS[kind]:'#3d5568';mc.save();mc.translate(pad.x*sx,pad.y*sy);mc.rotate(Math.PI/4);mc.fillRect(kind?-4:-3,kind?-4:-3,kind?8:6,kind?8:6);mc.restore();}if(game.arenaEvent?.kind==='jackpot'){const e=game.arenaEvent;mc.fillStyle=EVENT_COLORS.jackpot;mc.globalAlpha=.55+.45*Math.sin(performance.now()/120);mc.fillRect(e.x*sx-4,e.y*sy-4,8,8);mc.globalAlpha=1;}for(const c of game.comets||[]){const age=game.time-c.start,flight=c.end-c.start-COMET.afterglow;if(age>flight||c.shotAt!=null&&game.time>=c.shotAt)continue;mc.strokeStyle=EVENT_COLORS.comet;mc.globalAlpha=age<0?.35:.6;mc.lineWidth=1;mc.beginPath();mc.moveTo(c.x*sx,c.y*sy);mc.lineTo(c.toX*sx,c.toY*sy);mc.stroke();if(age>=0){const p=cometPoint(c,age/flight);mc.globalAlpha=1;mc.fillStyle='#e6fbff';mc.beginPath();mc.arc(p.x*sx,p.y*sy,3,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}for(const v of game.vortices||[]){mc.strokeStyle=POWER_COLORS.vortex;mc.lineWidth=2;mc.beginPath();mc.arc(v.x*sx,v.y*sy,POWER.vortexRadius*sx,0,Math.PI*2);mc.stroke();}mc.strokeStyle='#64eee055';mc.fillStyle='#64eee009';const x=(cam.x-width/(2*cam.zoom))*sx,y=(cam.y-height/(2*cam.zoom))*sy,rw=width/cam.zoom*sx,rh=height/cam.zoom*sy;mc.fillRect(x,y,rw,rh);mc.strokeRect(x,y,rw,rh);const dark=game.eventActive('blackout');for(const a of game.actors){if(!a.alive||dark&&a.id!==game.human.id)continue;mc.fillStyle=a.color;mc.globalAlpha=a.id===game.human.id?1:.75;mc.beginPath();mc.arc(a.x*sx,a.y*sy,a.id===game.human.id?4:2.7,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
  function joystick(){if(!touch)return;ctx.save();ctx.fillStyle='#64eee00d';ctx.strokeStyle='#a1fff34a';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(touch.sx,touch.sy,42,0,Math.PI*2);ctx.fill();ctx.stroke();const len=hyp(touch.dx,touch.dy)||1,range=Math.min(35,len);ctx.fillStyle='#89fff0a0';ctx.beginPath();ctx.arc(touch.sx+touch.dx/len*range,touch.sy+touch.dy/len*range,12,0,Math.PI*2);ctx.fill();ctx.restore();}
@@ -2196,9 +2217,9 @@ function reconcileScrap(previous,next,now){
   ctx.restore();
  }
  function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);if(state!=='menu'){watchEvent();watchRush();}ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();drawWrecks();drawEventMarkers();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawStardust();drawSmoke();powerAuras();drawRush();drawTails(drawNow);drawPilots();drawHeals(drawNow);drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();drawBlackout();cometIndicators();vignette();eventBanner();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
- function frame(now){if(lastFrameAt&&now-lastFrameAt>25)droppedFrames++;lastFrameAt=now;if(state!=='playing')playingSince=now;frames++;if(now-framesAt>=1000){
+ function frame(now){const gap=lastFrameAt?now-lastFrameAt:0;if(gap>25){droppedFrames++;if(state==='playing'&&!document.hidden&&now-playingSince>2500&&dpr>1.01&&(gap>90&&gap<1000||now-lastSharpnessRise<2500&&++riseDrops>=3))capSharpness(now);}lastFrameAt=now;if(state!=='playing')playingSince=now;frames++;if(now-framesAt>=1000){
   const fps=frames*1000/(now-framesAt);
-  if(state==='playing'&&!document.hidden&&frames>8&&now-playingSince>2500){if((fps<50||droppedFrames>5)&&dpr>.75){pixelRatioCap=Math.max(.75,dpr-.25);resize();smoothSecs=0;if(now-lastSharpnessRise<30000)riseWait=Math.min(120000,riseWait*2);lastSharpnessDrop=now;}else if(fps>=57&&droppedFrames<=1&&dpr<Math.min(devicePixelRatio||1,1.5)-.01&&now-lastSharpnessDrop>riseWait){if(++smoothSecs>=4){pixelRatioCap=Math.min(1.5,dpr+.25);resize();smoothSecs=0;lastSharpnessRise=now;}}else smoothSecs=0;}droppedFrames=0;
+  if(state==='playing'&&!document.hidden&&frames>8&&now-playingSince>2500){if((fps<50||droppedFrames>5)&&dpr>.75){if(now-lastSharpnessRise<30000)sharpnessCeiling=Math.max(1,dpr-.25);pixelRatioCap=Math.max(.75,dpr-.25);resize();smoothSecs=0;lastSharpnessDrop=now;sharpnessToSave=false;saveSharpness();}else if(fps>=57&&droppedFrames<=1&&dpr<Math.min(devicePixelRatio||1,sharpnessCeiling)-.01&&now-lastSharpnessDrop>8000){if(++smoothSecs>=4){pixelRatioCap=Math.min(1.5,dpr+.25);resize();smoothSecs=0;lastSharpnessRise=now;riseDrops=0;sharpnessToSave=true;}}else smoothSecs=0;if(sharpnessToSave&&now-lastSharpnessRise>30000){sharpnessToSave=false;saveSharpness();}}droppedFrames=0;
   $('perfValue').textContent=Math.round(frames*1000/(now-framesAt))+' fps'+(online?' · '+Math.round(online.rtt||0)+' ms'+(online.updateGap?' · '+Math.round(1000/online.updateGap)+' updates/s':'')+' · queue '+(online.queued||0)+(online.dropped?' · skipped '+online.dropped:''):'');frames=0;framesAt=now;}const dt=Math.min(online?.25:.08,(now-(last||now))/1000);last=now;if(online&&state!=='menu'){if(state==='playing')input();onlineVisualStep(dt);events();updateCamera(dt);if(now-hudAt>120){hudAt=now;updateHUD();}}else if(state==='playing'){input();acc+=dt;let ticks=0;while(acc>=1/120&&ticks<10){game.step(1/120);acc-=1/120;ticks++;if(game.finished)break;}events();updateCamera(dt);if(now-hudAt>120){hudAt=now;updateHUD();}if(game.finished)finish();}else if(state==='menu'||state==='customize'||state==='shop'){game.time+=dt;for(const a of game.actors)game.updateOrbits(a,true);}if(state!=='menu')updateScrapHUD(game.human.pieces.length);draw();if(toastUntil&&now>toastUntil){$('toast').classList.remove('show');toastUntil=0;}if(state==='customize'||state==='shop')drawCustomize();requestAnimationFrame(frame);}
  requestAnimationFrame(frame);
 })();
