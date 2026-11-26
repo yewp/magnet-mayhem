@@ -1457,15 +1457,17 @@ function reconcileScrap(previous,next,now){
   ctx.restore();
  }
  // ---- Arena edge: an amber energy wall that shimmers where ships touch it ----
- const edgeHits=[],edgeTouchAt=new Map(),EDGE_TOUCH=MM.coreRadius+5.5;
+ const edgeHits=[],edgeTouchAt=new Map(),EDGE_TOUCH=MM.coreRadius+5.5,RIPPLE_LIFE=2.4,RIPPLE_SPEED=200,ripplePts=new Float64Array(32);
  function watchWalls(now){
   for(const a of game.actors){if(!a.alive)continue;let side=null,x=a.x,y=a.y;
    if(a.x<=EDGE_TOUCH){side='left';x=2;}else if(a.x>=MM.width-EDGE_TOUCH){side='right';x=MM.width-2;}
    else if(a.y<=EDGE_TOUCH){side='top';y=2;}else if(a.y>=MM.height-EDGE_TOUCH){side='bottom';y=MM.height-2;}
-   if(!side||now-(edgeTouchAt.get(a.id)||0)<260)continue;edgeTouchAt.set(a.id,now);
-   if(visible(x,y,200))edgeHits.push({x,y,side,color:a.color,start:now});}
-  while(edgeHits.length&&now-edgeHits[0].start>750)edgeHits.shift();
+   if(!side||now-(edgeTouchAt.get(a.id)||0)<500)continue;edgeTouchAt.set(a.id,now);
+   if(visible(x,y,600)&&edgeHits.length<40)edgeHits.push({x,y,s:perimeterS(x,y,side),side,color:a.color,start:now});}
+  while(edgeHits.length&&now-edgeHits[0].start>RIPPLE_LIFE*1000)edgeHits.shift();
  }
+ // Where a wall point sits along the perimeter (the inverse of perimeterPoint).
+ function perimeterS(x,y,side){const W=MM.width-4,H=MM.height-4;return side==='top'?x-2:side==='right'?W+y-2:side==='bottom'?W+H+MM.width-2-x:2*W+H+MM.height-2-y;}
  // A point and direction along the wall, s measured clockwise from the top-left corner.
  function perimeterPoint(s){const W=MM.width-4,H=MM.height-4;s=wrap(s,2*(W+H));
   if(s<W)return [2+s,2,1,0];s-=W;if(s<H)return [MM.width-2,2+s,0,1];s-=H;if(s<W)return [MM.width-2-s,MM.height-2,-1,0];s-=W;return [2,MM.height-2-s,0,-1];}
@@ -1490,13 +1492,15 @@ function reconcileScrap(previous,next,now){
   for(const [cx,cy,sx,sy] of [[2,2,1,1],[W-2,2,-1,1],[W-2,H-2,-1,-1],[2,H-2,1,-1]]){if(!visible(cx,cy,90))continue;
    ctx.beginPath();ctx.moveTo(cx+sx*70,cy);ctx.lineTo(cx,cy);ctx.lineTo(cx,cy+sy*70);ctx.stroke();
    ctx.fillStyle='rgba(201,164,106,.1)';ctx.fillRect(cx+(sx<0?-24:4),cy+(sy<0?-24:4),20,20);}
-  // Shimmer where ships touched the wall.
-  ctx.globalCompositeOperation='lighter';
-  for(const h of edgeHits){const k=(now-h.start)/750;if(k>=1)continue;const along=h.side==='left'||h.side==='right'?[0,1]:[1,0],out=h.side==='left'?[1,0]:h.side==='right'?[-1,0]:h.side==='top'?[0,1]:[0,-1];
-   ctx.globalAlpha=.35*(1-k);ctx.drawImage(softSprite('rgba(214,198,170,1)'),h.x-55,h.y-55,110,110);
-   for(const [width,alpha,color] of [[7,.22,h.color],[2.2,.85,'#ece4d6']]){ctx.globalAlpha=alpha*(1-k);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();
-    for(let u=-110;u<=110;u+=6){const env=Math.exp(-(u/60)*(u/60)),wave=Math.sin(u*.16-k*22)*7*(1-k)*env+3*env*(1-k);const x=h.x+along[0]*u+out[0]*wave,y=h.y+along[1]*u+out[1]*wave;if(u===-110)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
-    ctx.stroke();}}
+  // Ripples where ships touched the wall: two soft swells run along the wall from the touch point in opposite
+  // directions (round the corners too), bulging slightly inward and fading as they go.
+  ctx.globalCompositeOperation='lighter';ctx.lineCap='round';ctx.lineJoin='round';
+  for(const h of edgeHits){const age=(now-h.start)/1000,k=age/RIPPLE_LIFE;if(k>=1)continue;const fade=Math.pow(1-k,.7),amp=1+2*fade;
+   for(const dir of [1,-1]){const centre=h.s+dir*age*RIPPLE_SPEED,[cx,cy]=perimeterPoint(centre);if(!visible(cx,cy,80))continue;
+    let n=0;for(let u=-42;u<=42;u+=6){const [x,y,dx,dy]=perimeterPoint(centre+u),off=amp*Math.exp(-(u/22)*(u/22));ripplePts[n++]=x-dy*off;ripplePts[n++]=y+dx*off;}
+    for(const [width,alpha,color] of [[5,.24,h.color],[1.7,.8,'#ece4d6']]){ctx.globalAlpha=alpha*fade;ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(ripplePts[0],ripplePts[1]);for(let i=2;i<n;i+=2)ctx.lineTo(ripplePts[i],ripplePts[i+1]);ctx.stroke();}}
+   // a faint glow where it started, gone within a third of a second
+   if(age<.35){ctx.globalAlpha=.16*(1-age/.35);ctx.drawImage(softSprite('rgba(214,198,170,1)'),h.x-30,h.y-30,60,60);}}
   ctx.restore();
  }
  function background(){
