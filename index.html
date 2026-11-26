@@ -42,7 +42,7 @@
 .overlay .finish-rank{background:#64eee014;border-color:#64eee040}
 .wordmark{font-family:Fredoka,Inter,ui-sans-serif,sans-serif;font-weight:600;font-size:21px;letter-spacing:.01em}.wordmark span{color:var(--cyan)}
 body:has(#menuScreen:not([hidden])) .brand,body:has(#customizeScreen:not([hidden])) .brand,body:has(#shopScreen:not([hidden])) .brand{visibility:hidden}
-.level-row .text-btn+.text-btn{margin-left:2px}.cz-grid.tail-grid{grid-template-columns:repeat(7,minmax(0,1fr))}.tail-grid .cz-tile span{font-size:10px;text-align:center;line-height:1.2}.cz-grid.shop-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.shop-grid .cz-tile canvas{width:96px;height:96px}.shop-tile small{color:var(--gold)}.shop-tile[aria-pressed="true"] small{color:var(--cyan)}
+.level-row .text-btn+.text-btn{margin-left:2px}.cz-grid.tail-grid{grid-template-columns:repeat(7,minmax(0,1fr))}.tail-grid .cz-tile span{font-size:10px;text-align:center;line-height:1.2}.cz-grid.shop-grid{grid-template-columns:repeat(6,minmax(0,1fr))}#shopScreen .customize{width:min(100%,780px)}.shop-grid .cz-tile canvas{width:88px;height:88px}@media(max-width:820px){.cz-grid.shop-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}.shop-tile small{color:var(--gold)}.shop-tile[aria-pressed="true"] small{color:var(--cyan)}
 @media(max-width:620px){.cz-grid.tail-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.cz-grid.shop-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .level-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}.level-badge{font-size:12px;color:var(--muted);letter-spacing:.08em;white-space:nowrap}.level-badge b{font-size:18px;color:var(--text);font-weight:600;margin-left:2px}
 .level-bar{flex:1;height:6px;border-radius:3px;background:#ffffff14;overflow:hidden}.level-bar i{display:block;height:100%;width:0;border-radius:3px;background:var(--cyan);transition:width .6s}
@@ -101,14 +101,14 @@ const METAL=['#9dbbd5','#efae72','#ffda79'];
 // their colors); core styles change the center of your ship. Each one unlocks at a level.
 const SKINS=Object.freeze([{name:'Plain',level:1},{name:'Gears',level:8},{name:'Bolts',level:3},{name:'Crystals',level:20},{name:'Hex plates',level:14}]);
 // Tails come from the shop (free for now) and follow your ship in your pilot color.
-const TAILS=Object.freeze([{name:'None'},{name:'Cat tail'},{name:'Fox tail'},{name:'Three-tailed fox'},{name:'Dragon tail'},{name:'Ribbon streamers'},{name:'Comet trail'},{name:'Fish fin'},{name:'Scorpion tail'},{name:'Peacock fan'},{name:'Kite with bows'},{name:'Bubble trail'},{name:'Jellyfish tentacles'},{name:'Leafy vine'},{name:'Constellation'},{name:'Spiked club'}]);
+const TAILS=Object.freeze([{name:'None'},{name:'Cat tail'},{name:'Fox tail'},{name:'Three-tailed fox'},{name:'Dragon tail'},{name:'Ribbon streamers'},{name:'Comet trail'},{name:'Fish fin'},{name:'Scorpion tail'},{name:'Peacock fan'},{name:'Kite with bows'},{name:'Bubble trail'},{name:'Jellyfish tentacles'},{name:'Leafy vine'},{name:'Constellation'},{name:'Spiked club'},{name:'Devil tail'},{name:'Paper lanterns'},{name:'Chain links'},{name:'Rainbow streamer'},{name:'Feather boa'},{name:'Cherry blossoms'},{name:'Snowflakes'},{name:'Music notes'},{name:'Pixel trail'}]);
 const CORES=Object.freeze([{name:'Dot',level:1},{name:'Ring',level:5},{name:'Star',level:11},{name:'Eye',level:17},{name:'Reactor',level:25}]);
 // Levels: going from level L to L+1 takes 300 + 100*(L-1) XP; a finished round is worth its score + 100.
 const xpForLevel=level=>{let xp=0;for(let l=1;l<level;l++)xp+=300+100*(l-1);return xp;};
 const levelFromXp=xp=>{let level=1;while(xp>=xpForLevel(level+1))level++;return level;};
 const roundXp=score=>Math.max(0,Math.floor(score||0))+100;
 const cleanLook=look=>{const pick=(v,list)=>Number.isInteger(v)&&v>=0&&v<list.length?v:0;return {skin:pick(look?.skin,SKINS),core:pick(look?.core,CORES),tail:pick(look?.tail,TAILS)};};
-const botLook=i=>({skin:(i*2+1)%SKINS.length,core:(i*3+2)%CORES.length,tail:i%2?0:1+(i/2*3)%(TAILS.length-1)});
+const botLook=i=>({skin:(i*2+1)%SKINS.length,core:(i*3+2)%CORES.length,tail:i%2?0:1+(i/2*5)%(TAILS.length-1)});
 const PALETTE=['#ff927f','#b29eff','#f2b768','#79bafa','#eaa0d4','#a9ce75','#e6d481','#9eaddf','#efa4a0','#88c9b0'];
 const PILOTS=['Rivet','Junkratchet','Polarity','Tin Can','Scrapjack','Flux','Copperhead','Orbit','Loose Bolt','Iron Moth'];
 const limit=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1501,7 +1501,7 @@ function reconcileScrap(previous,next,now){
  }
  // ---- Tails: a short chain of points that follows behind the ship and wags. Drawing only. ----
  // Links per tail (default TAIL_N), and [wag, wag pace, curl] per tail.
- const TAIL_N=12,TAIL_SEG=6,TAIL_LEN={8:10,9:5,12:11,15:10},TAIL_WAG={1:[4.2],2:[2.4],3:[3.2],4:[2.8],5:[1.2],7:[1.6,.8],8:[1.1,1,2.1],9:[0],10:[1.5,.9],12:[1.3,.6],13:[1.4,.8],15:[2]},tailState=new Map(),tileState=new WeakMap();
+ const TAIL_N=12,TAIL_SEG=6,TAIL_LEN={8:10,9:5,12:11,15:10,18:11,20:11},TAIL_WAG={1:[4.2],2:[2.4],3:[3.2],4:[2.8],5:[1.2],7:[1.6,.8],8:[1.1,1,2.1],9:[0],10:[1.5,.9],12:[1.3,.6],13:[1.4,.8],15:[2],16:[2,.9],17:[1.3,.7],18:[1,.8],19:[1.2,.8],20:[1.6,.7]},tailState=new Map(),tileState=new WeakMap();
  function tailLight(hex,k){const n=parseInt(hex.slice(1,7),16),r=n>>16,g=n>>8&255,b=n&255,m=v=>Math.round(v+(255-v)*k);return 'rgb('+m(r)+','+m(g)+','+m(b)+')';}
  function tailDark(hex,k){const n=parseInt(hex.slice(1,7),16),m=v=>Math.round(v*(1-k));return 'rgb('+m(n>>16)+','+m(n>>8&255)+','+m(n&255)+')';}
  function newTail(h){return {h,x:null,y:null,t:null,kind:-1,spd:0,chains:[],hist:[],parts:[],acc:0};}
@@ -1512,7 +1512,7 @@ function reconcileScrap(previous,next,now){
   if(st.kind!==kind){st.kind=kind;const n=TAIL_LEN[kind]||TAIL_N;st.chains=Array.from({length:kind===3?3:kind===12?4:1},()=>Array.from({length:n},()=>({x:0,y:0})));st.hist=[];st.parts=[];jump=true;}
   st.x=x;st.y=y;st.t=t;
   if(kind===6){if(jump)st.hist=[];const last=st.hist[0];if(!last||Math.hypot(bx-last.x,by-last.y)>.5){st.hist.unshift({x:bx,y:by});if(st.hist.length>26)st.hist.pop();}else st.hist.pop();return;}
-  if(kind===11||kind===14){tailParts(st,kind,bx,by,h,dt,t,jump);return;}
+  if(kind===11||kind===14||kind>=21){tailParts(st,kind,bx,by,h,dt,t,jump);return;}
   const [wag,pace=1,curl=0]=TAIL_WAG[kind]||[2.8],spread=kind===3?[-.55,0,.55]:kind===12?[-5.8,-1.9,1.9,5.8]:[0];
   spread.forEach((a,j)=>{const ch=st.chains[j],side=kind===12,ux=Math.cos(side?h:h+a),uy=Math.sin(side?h:h+a),ox=side?bx-Math.sin(h)*a:bx-ux*2,oy=side?by+Math.cos(h)*a:by-uy*2;
    if(jump)ch.forEach((p,k)=>{p.x=ox-ux*k*TAIL_SEG;p.y=oy-uy*k*TAIL_SEG;});
@@ -1520,6 +1520,13 @@ function reconcileScrap(previous,next,now){
    tailFollow(ch,ox,oy,wag,t*pace,phase+j*(side?1.4:1.7),curl);});}
  // Bubbles drift off and fade; constellation stars are dropped as you travel and fade out.
  function tailParts(st,kind,bx,by,h,dt,t,jump){if(jump)st.parts=[];st.acc+=dt;
+  // Cherry blossoms, snowflakes, music notes and pixels: drift off behind you and fade (slower while you're still).
+  if(kind>=21){const every=[.12,.15,.28,.045][kind-21]*(st.spd>.08?1:4),life=[1.7,1.9,1.6,1.3][kind-21],r=Math.random;
+   while(st.acc>every){st.acc-=every;
+    if(kind===24)st.parts.push({x:Math.round(bx/3.5)*3.5,y:Math.round(by/3.5)*3.5,vx:0,vy:0,age:0,life,shade:r()<.5});
+    else st.parts.push({x:bx+(r()-.5)*6,y:by+(r()-.5)*6,vx:-Math.cos(h)*7+(r()-.5)*8,vy:-Math.sin(h)*7+(r()-.5)*8,age:0,life,rot:r()*Math.PI*2,spin:(r()-.5)*3,size:.8+r()*.5,ph:r()*6,full:r()<.35,two:r()<.35});}
+   for(const p of st.parts){p.age+=dt;p.x+=p.vx*dt+(kind===23?Math.sin(t*3+p.ph)*.18:0);p.y+=p.vy*dt;p.rot+=(p.spin||0)*dt;}
+   st.parts=st.parts.filter(p=>p.age<p.life);return;}
   if(kind===11){const every=st.spd>.08?.08:.3;while(st.acc>every){st.acc-=every;st.parts.push({x:bx+(Math.random()-.5)*5,y:by+(Math.random()-.5)*5,vx:-Math.cos(h)*8+(Math.random()-.5)*6,vy:-Math.sin(h)*8+(Math.random()-.5)*6,age:0,r:1.5+Math.random()*2.2,ph:Math.random()*6});}
    for(const b of st.parts){b.age+=dt;b.x+=b.vx*dt+Math.sin(t*3+b.ph)*.12;b.y+=b.vy*dt+Math.cos(t*3+b.ph)*.12;}st.parts=st.parts.filter(b=>b.age<1.3);return;}
   const lastStar=st.parts[0];if(st.acc>.13&&(!lastStar||Math.hypot(bx-lastStar.x,by-lastStar.y)>10)){st.acc=0;st.parts.unshift({x:bx+(Math.random()-.5)*6,y:by+(Math.random()-.5)*6,age:0,ph:Math.random()*6});}
@@ -1550,6 +1557,31 @@ function reconcileScrap(previous,next,now){
  function starTail(c,st,col,t){const s=st.parts;c.strokeStyle=col;c.lineWidth=.9;for(let k=1;k<s.length;k++){c.globalAlpha=.4*(1-s[k].age/1.8);c.beginPath();c.moveTo(s[k-1].x,s[k-1].y);c.lineTo(s[k].x,s[k].y);c.stroke();}
   c.fillStyle=tailLight(col,.4);for(const p of s){const f=p.age/1.8,r=(3.6+Math.sin(t*6+p.ph)*1.1)*(1-f*.45);c.globalAlpha=1-f;c.beginPath();
    [[0,-1],[.3,-.3],[1,0],[.3,.3],[0,1],[-.3,.3],[-1,0],[-.3,-.3]].forEach(([px,py],i)=>c[i?'lineTo':'moveTo'](p.x+px*r,p.y+py*r));c.closePath();c.fill();}c.globalAlpha=1;}
+ function devilTail(c,ch,col){const n=ch.length;c.strokeStyle=col;c.lineCap='round';for(let k=1;k<n;k++){c.lineWidth=2.8-k*.12;c.beginPath();c.moveTo(ch[k-1].x,ch[k-1].y);c.lineTo(ch[k].x,ch[k].y);c.stroke();}
+  const q=ch[n-1],{ux,uy,nx,ny}=tailDir(ch,n-1),P=(a,b)=>[q.x+ux*a+nx*b,q.y+uy*a+ny*b];
+  c.fillStyle=tailLight(col,.15);c.beginPath();c.moveTo(...P(11,0));c.quadraticCurveTo(...P(6,8),...P(0,5));c.lineTo(...P(2.5,0));c.lineTo(...P(0,-5));c.quadraticCurveTo(...P(6,-8),...P(11,0));c.fill();}
+ function lanternTail(c,ch,col,t){c.strokeStyle=tailDark(col,.45);c.lineWidth=1;tailCurve(c,ch);c.stroke();
+  [3,7,11].forEach((k,i)=>{const q=ch[k],{ux,uy}=tailDir(ch,k),s=1-i*.12,flick=.75+.25*Math.sin(t*9+i*2.1);
+   c.save();c.translate(q.x,q.y);c.rotate(Math.atan2(uy,ux));c.shadowColor=col;c.shadowBlur=10*flick;c.fillStyle=col;c.beginPath();c.ellipse(0,0,4.6*s,5.4*s,0,0,Math.PI*2);c.fill();c.shadowBlur=0;
+   c.globalAlpha=flick;c.fillStyle=tailLight(col,.6);c.beginPath();c.ellipse(0,0,2.2*s,3*s,0,0,Math.PI*2);c.fill();c.globalAlpha=1;
+   c.strokeStyle=tailDark(col,.35);c.lineWidth=1.4;c.beginPath();c.moveTo(-4.6*s,-2.4*s);c.lineTo(-4.6*s,2.4*s);c.moveTo(4.6*s,-2.4*s);c.lineTo(4.6*s,2.4*s);c.stroke();c.restore();});}
+ function chainTail(c,ch,col){const n=ch.length;for(let k=1;k<n;k++){const p=ch[k-1],q=ch[k],s=1-k/n*.35;c.strokeStyle=k%2?col:tailLight(col,.35);c.lineWidth=1.7*s+.3;c.beginPath();c.ellipse((p.x+q.x)/2,(p.y+q.y)/2,4.4*s,(k%2?2.6:.9)*s,Math.atan2(q.y-p.y,q.x-p.x),0,Math.PI*2);c.stroke();}}
+ function rainbowTail(c,ch,t){['#ff6b6b','#ffa94d','#ffe066','#69db7c','#4dabf7','#b197fc'].forEach((band,i)=>{const off=(i-2.5)*1.5,pts=ch.map((p,k)=>{const {nx,ny}=tailDir(ch,Math.max(1,k)),w=off+Math.sin(t*5-k*.7)*1.6*(k/ch.length);return {x:p.x+nx*w,y:p.y+ny*w};});
+   c.strokeStyle=band;c.lineCap='round';c.lineWidth=1.7;for(let k=1;k<pts.length;k++){c.globalAlpha=1-k/pts.length*.7;c.beginPath();c.moveTo(pts[k-1].x,pts[k-1].y);c.lineTo(pts[k].x,pts[k].y);c.stroke();}});c.globalAlpha=1;}
+ function boaTail(c,ch,col,t){const n=ch.length;for(let k=1;k<n;k++){const q=ch[k],r=4.6*(1-k/n*.45);c.globalAlpha=.35;c.fillStyle=col;tailDot(c,q.x,q.y,r);c.globalAlpha=1;c.lineCap='round';c.lineWidth=1;
+   for(let s=0;s<7;s++){const a=s/7*Math.PI*2+k*.9+Math.sin(t*2.5+k+s)*.25,L=r*(1.05+.25*Math.sin(s*3.1+k));c.strokeStyle=s%2?col:tailLight(col,.4);c.beginPath();c.moveTo(q.x,q.y);c.lineTo(q.x+Math.cos(a)*L,q.y+Math.sin(a)*L);c.stroke();}}}
+ function driftTail(c,st,kind,col){for(const p of st.parts){const f=p.age/p.life;c.save();
+   if(kind===24){const step=Math.ceil((1-f)*3)/3,s=3.5*(.4+step*.6);c.globalAlpha=step;c.fillStyle=p.shade?col:tailLight(col,.4);c.fillRect(p.x-s/2,p.y-s/2,s,s);c.restore();continue;}
+   c.translate(p.x,p.y);
+   if(kind===21){c.globalAlpha=1-f*f;c.rotate(p.rot);c.scale(p.size,p.size);c.fillStyle=col;
+    if(p.full){for(let i=0;i<5;i++){const a=i*Math.PI*2/5;c.beginPath();c.ellipse(Math.cos(a)*2,Math.sin(a)*2,1.9,1.3,a,0,Math.PI*2);c.fill();}c.fillStyle='#ffe066';tailDot(c,0,0,1);}
+    else{c.beginPath();c.ellipse(0,0,2.8,1.5,0,0,Math.PI*2);c.fill();c.fillStyle=tailLight(col,.5);c.beginPath();c.ellipse(-.6,0,1.2,.6,0,0,Math.PI*2);c.fill();}}
+   else if(kind===22){const s=3.4*p.size;c.globalAlpha=1-f;c.rotate(p.rot);c.strokeStyle=col;c.lineWidth=.8;c.lineCap='round';
+    for(let i=0;i<3;i++){c.rotate(Math.PI/3);c.beginPath();c.moveTo(-s,0);c.lineTo(s,0);for(const e of [-1,1]){c.moveTo(e*s*.6,0);c.lineTo(e*s*.85,s*.25);c.moveTo(e*s*.6,0);c.lineTo(e*s*.85,-s*.25);}c.stroke();}}
+   else{c.globalAlpha=Math.min(1,(1-f)*1.6);c.rotate(Math.sin(p.ph+p.age*2)*.25);c.scale(p.size,p.size);c.fillStyle=col;c.strokeStyle=col;c.lineWidth=1;
+    const head=x=>{c.beginPath();c.ellipse(x,0,2.3,1.7,-.4,0,Math.PI*2);c.fill();c.beginPath();c.moveTo(x+2,-.6);c.lineTo(x+2,-8);c.stroke();};
+    if(p.two){head(-2.5);head(3.5);c.lineWidth=1.8;c.beginPath();c.moveTo(-.5,-8);c.lineTo(5.5,-8);c.stroke();}else{head(0);c.beginPath();c.moveTo(2,-8);c.quadraticCurveTo(5,-6.5,4.2,-3.5);c.stroke();}}
+   c.restore();}}
  function clubTail(c,ch,col){const n=ch.length;c.lineCap='round';c.strokeStyle=col;for(let k=1;k<n;k++){c.lineWidth=5.5-k*.3;c.beginPath();c.moveTo(ch[k-1].x,ch[k-1].y);c.lineTo(ch[k].x,ch[k].y);c.stroke();}
   const q=ch[n-1],{ux,uy}=tailDir(ch,n-1),cx=q.x+ux*3,cy=q.y+uy*3,rot=Math.atan2(uy,ux);c.fillStyle=tailLight(col,.45);
   for(let i=0;i<6;i++){const a=rot+i*Math.PI/3;c.beginPath();c.moveTo(cx+Math.cos(a-.4)*4.5,cy+Math.sin(a-.4)*4.5);c.lineTo(cx+Math.cos(a)*8.8,cy+Math.sin(a)*8.8);c.lineTo(cx+Math.cos(a+.4)*4.5,cy+Math.sin(a+.4)*4.5);c.closePath();c.fill();}
@@ -1575,6 +1607,12 @@ function reconcileScrap(previous,next,now){
   else if(kind===13)vineTail(c,ch,col);
   else if(kind===14)starTail(c,st,col,t);
   else if(kind===15)clubTail(c,ch,col);
+  else if(kind===16)devilTail(c,ch,col);
+  else if(kind===17)lanternTail(c,ch,col,t);
+  else if(kind===18)chainTail(c,ch,col);
+  else if(kind===19)rainbowTail(c,ch,t);
+  else if(kind===20)boaTail(c,ch,col,t);
+  else if(kind>=21)driftTail(c,st,kind,col);
   c.restore();}
  function drawTails(now){const t=now/1000,seen=new Set();
   for(const a of game.actors){if(!a.alive||!a.tail)continue;seen.add(a.id);let st=tailState.get(a.id);if(!st){st=newTail(a.aim);tailState.set(a.id,st);}
