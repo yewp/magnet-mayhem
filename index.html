@@ -101,14 +101,14 @@ const METAL=['#9dbbd5','#efae72','#ffda79'];
 // their colors); core styles change the center of your ship. Each one unlocks at a level.
 const SKINS=Object.freeze([{name:'Plain',level:1},{name:'Gears',level:8},{name:'Bolts',level:3},{name:'Crystals',level:20},{name:'Hex plates',level:14}]);
 // Tails come from the shop (free for now) and follow your ship in your pilot color.
-const TAILS=Object.freeze([{name:'None'},{name:'Cat tail'},{name:'Fox tail'},{name:'Three-tailed fox'},{name:'Dragon tail'},{name:'Ribbon streamers'},{name:'Comet trail'},{name:'Fish fin'},{name:'Scorpion tail'},{name:'Peacock fan'},{name:'Kite with bows'},{name:'Bubble trail'},{name:'Jellyfish tentacles'},{name:'Leafy vine'},{name:'Constellation'},{name:'Spiked club'},{name:'Devil tail'},{name:'Paper lanterns'},{name:'Chain links'},{name:'Rainbow streamer'},{name:'Feather boa'},{name:'Cherry blossoms'},{name:'Snowflakes'},{name:'Music notes'},{name:'Pixel trail'}]);
+const TAILS=Object.freeze([{name:'None'},{name:'Cat tail'},{name:'Fox tail'},{name:'Three-tailed fox'},{name:'Dragon tail'},{name:'Ribbon streamers'},{name:'Comet trail'},{name:'Fish fin'},{name:'Scorpion tail'},{name:'Peacock fan'},{name:'Kite with bows'},{name:'Bubble trail'},{name:'Jellyfish tentacles'},{name:'Leafy vine'},{name:'Constellation'},{name:'Spiked club'},{name:'Devil tail'},{name:'Paper lanterns'},{name:'Chain links'},{name:'Rainbow streamer'},{name:'Feather boa'},{name:'Cherry blossoms'},{name:'Snowflakes'},{name:'Music notes'},{name:'Pixel trail'},{name:'Robot claw'},{name:'Paper cranes'},{name:'Fireflies'},{name:'Ghost wisps'},{name:'Aurora veil'},{name:'Ink brush'},{name:'Party bunting'},{name:'Balloon'},{name:'Gold coins'},{name:'Tiger tail'},{name:'Double helix'},{name:'Neon tube'},{name:'Pearl necklace'},{name:'Pom-pom spring'},{name:'Booster flame'},{name:'Butterflies'},{name:'Hearts'},{name:'Dandelion seeds'},{name:'Bamboo stalk'},{name:'Candy cane'},{name:'Koi fish'},{name:'Water wake'},{name:'Smoke rings'},{name:'Mini galaxy'},{name:'Star wand'},{name:'Ducklings'},{name:'Toy train'}]);
 const CORES=Object.freeze([{name:'Dot',level:1},{name:'Ring',level:5},{name:'Star',level:11},{name:'Eye',level:17},{name:'Reactor',level:25}]);
 // Levels: going from level L to L+1 takes 300 + 100*(L-1) XP; a finished round is worth its score + 100.
 const xpForLevel=level=>{let xp=0;for(let l=1;l<level;l++)xp+=300+100*(l-1);return xp;};
 const levelFromXp=xp=>{let level=1;while(xp>=xpForLevel(level+1))level++;return level;};
 const roundXp=score=>Math.max(0,Math.floor(score||0))+100;
 const cleanLook=look=>{const pick=(v,list)=>Number.isInteger(v)&&v>=0&&v<list.length?v:0;return {skin:pick(look?.skin,SKINS),core:pick(look?.core,CORES),tail:pick(look?.tail,TAILS)};};
-const botLook=i=>({skin:(i*2+1)%SKINS.length,core:(i*3+2)%CORES.length,tail:i%2?0:1+(i/2*5)%(TAILS.length-1)});
+const botLook=i=>({skin:(i*2+1)%SKINS.length,core:(i*3+2)%CORES.length,tail:i%2?0:1+(i/2*11)%(TAILS.length-1)});
 const PALETTE=['#ff927f','#b29eff','#f2b768','#79bafa','#eaa0d4','#a9ce75','#e6d481','#9eaddf','#efa4a0','#88c9b0'];
 const PILOTS=['Rivet','Junkratchet','Polarity','Tin Can','Scrapjack','Flux','Copperhead','Orbit','Loose Bolt','Iron Moth'];
 const limit=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1501,23 +1501,43 @@ function reconcileScrap(previous,next,now){
  }
  // ---- Tails: a short chain of points that follows behind the ship and wags. Drawing only. ----
  // Links per tail (default TAIL_N), and [wag, wag pace, curl] per tail.
- const TAIL_N=12,TAIL_SEG=6,TAIL_LEN={8:10,9:5,12:11,15:10,18:11,20:11},TAIL_WAG={1:[4.2],2:[2.4],3:[3.2],4:[2.8],5:[1.2],7:[1.6,.8],8:[1.1,1,2.1],9:[0],10:[1.5,.9],12:[1.3,.6],13:[1.4,.8],15:[2],16:[2,.9],17:[1.3,.7],18:[1,.8],19:[1.2,.8],20:[1.6,.7]},tailState=new Map(),tileState=new WeakMap();
+ const TAIL_N=12,TAIL_SEG=6,TAIL_LEN={8:10,9:5,12:11,15:10,18:11,20:11,25:10,26:13,29:12,31:13,32:9,34:12,35:14,36:12,37:11,38:9,39:4,43:11,44:10,49:6},TAIL_WAG={1:[4.2],2:[2.4],3:[3.2],4:[2.8],5:[1.2],7:[1.6,.8],8:[1.1,1,2.1],9:[0],10:[1.5,.9],12:[1.3,.6],13:[1.4,.8],15:[2],16:[2,.9],17:[1.3,.7],18:[1,.8],19:[1.2,.8],20:[1.6,.7],25:[1.2,.7],26:[1.2,.6],29:[1.4,.6],31:[1.3,.8],32:[.8,.6],34:[3,.9],35:[.9,.6],36:[1.6,.8],37:[1.4,.7],38:[.7,.8],39:[0],43:[1.2,.7],44:[.6,.7,2.4],49:[.6,.7]},tailState=new Map(),tileState=new WeakMap();
  function tailLight(hex,k){const n=parseInt(hex.slice(1,7),16),r=n>>16,g=n>>8&255,b=n&255,m=v=>Math.round(v+(255-v)*k);return 'rgb('+m(r)+','+m(g)+','+m(b)+')';}
  function tailDark(hex,k){const n=parseInt(hex.slice(1,7),16),m=v=>Math.round(v*(1-k));return 'rgb('+m(n>>16)+','+m(n>>8&255)+','+m(n&255)+')';}
- function newTail(h){return {h,x:null,y:null,t:null,kind:-1,spd:0,chains:[],hist:[],parts:[],acc:0};}
+ function newTail(h){return {h,x:null,y:null,t:null,kind:-1,spd:0,chains:[],hist:[],parts:[],path:[],acc:0};}
  function tailFollow(ch,hx,hy,wag,t,phase,curl=0){const n=ch.length;ch[0].x=hx;ch[0].y=hy;for(let k=1;k<n;k++){const p=ch[k-1],q=ch[k];const dx=q.x-p.x,dy=q.y-p.y,d=Math.hypot(dx,dy)||1,nx=-dy/d,ny=dx/d,f=k/n,w=wag*Math.sin(t*6+phase-k*.55)*f+curl*f*f;q.x=p.x+dx/d*TAIL_SEG+nx*w;q.y=p.y+dy/d*TAIL_SEG+ny*w;}}
  // ref is the speed that counts as "fast" (it folds the peacock fan).
- function tailStep(st,kind,x,y,t,phase,ref=245){const h=st.h,bx=x-Math.cos(h)*15,by=y-Math.sin(h)*15,dt=st.t==null?0:Math.min(.1,Math.max(0,t-st.t));let jump=st.x==null||Math.hypot(x-st.x,y-st.y)>150;
+ function tailStep(st,kind,x,y,t,phase,ref=245){const h=st.h,bx=x-Math.cos(h)*15,by=y-Math.sin(h)*15,dt=st.t==null?0:Math.min(.1,Math.max(0,t-st.t));let jump=st.x==null||Math.hypot(x-st.x,y-st.y)>150;const still=st.x!=null&&Math.hypot(x-st.x,y-st.y)<.05;
   if(dt>0&&!jump)st.spd+=(Math.hypot(x-st.x,y-st.y)/dt/ref-st.spd)*Math.min(1,dt*5);
-  if(st.kind!==kind){st.kind=kind;const n=TAIL_LEN[kind]||TAIL_N;st.chains=Array.from({length:kind===3?3:kind===12?4:1},()=>Array.from({length:n},()=>({x:0,y:0})));st.hist=[];st.parts=[];jump=true;}
+  if(st.kind!==kind){st.kind=kind;const n=TAIL_LEN[kind]||TAIL_N;st.chains=Array.from({length:kind===3?3:kind===12?4:1},()=>Array.from({length:n},()=>({x:0,y:0})));st.hist=[];st.parts=[];st.path=[];jump=true;}
   st.x=x;st.y=y;st.t=t;
   if(kind===6){if(jump)st.hist=[];const last=st.hist[0];if(!last||Math.hypot(bx-last.x,by-last.y)>.5){st.hist.unshift({x:bx,y:by});if(st.hist.length>26)st.hist.pop();}else st.hist.pop();return;}
-  if(kind===11||kind===14||kind>=21){tailParts(st,kind,bx,by,h,dt,t,jump);return;}
+  if(kind===11||kind===14||(kind>=21&&kind<=24)){tailParts(st,kind,bx,by,h,dt,t,jump);return;}
+  if(TAIL_PATH[kind]){tailTrack(st,kind,bx,by,jump,still);return;}
+  if(TAIL_DRIFT[kind]){tailDrift(st,kind,bx,by,h,dt,jump);return;}
   const [wag,pace=1,curl=0]=TAIL_WAG[kind]||[2.8],spread=kind===3?[-.55,0,.55]:kind===12?[-5.8,-1.9,1.9,5.8]:[0];
   spread.forEach((a,j)=>{const ch=st.chains[j],side=kind===12,ux=Math.cos(side?h:h+a),uy=Math.sin(side?h:h+a),ox=side?bx-Math.sin(h)*a:bx-ux*2,oy=side?by+Math.cos(h)*a:by-uy*2;
    if(jump)ch.forEach((p,k)=>{p.x=ox-ux*k*TAIL_SEG;p.y=oy-uy*k*TAIL_SEG;});
    if(kind===3){ch[1].x-=ux*1.2;ch[1].y-=uy*1.2;}
-   tailFollow(ch,ox,oy,wag,t*pace,phase+j*(side?1.4:1.7),curl);});}
+   tailFollow(ch,ox,oy,wag,t*pace,phase+j*(side?1.4:1.7),curl);});
+  if(kind===49)tailSparkles(st,dt,jump);}
+ // Companions trail about 16 units further back than the previews so they clear the orbiting scrap.
+ // Companions and brush/wisp/wake trails use the path you flew, kept as points about 0.8 apart.
+ // Trails shrink back when you stop; companions stay where they were.
+ const TAIL_PATH={28:30,30:52,40:96,45:96,46:34,48:96,50:96,51:96},TAIL_RETRACT=new Set([28,30,46]);
+ function tailTrack(st,kind,bx,by,jump,still){if(jump)st.path=[];const p=st.path,last=p[0];
+  if(!last)p.unshift({x:bx,y:by});
+  else{const d=Math.hypot(bx-last.x,by-last.y);if(d>.8){const n=Math.min(60,Math.floor(d/.8));for(let i=1;i<=n;i++){const f=i/n;p.unshift({x:last.x+(bx-last.x)*f,y:last.y+(by-last.y)*f});}}
+   else if(still&&TAIL_RETRACT.has(kind)&&p.length>1)p.pop();}
+  while(p.length>TAIL_PATH[kind])p.pop();}
+ function tailOn(p,k){if(p.length<k+2)return null;const q=p[k],o=p[k+1];return {x:q.x,y:q.y,a:Math.atan2(q.y-o.y,q.x-o.x)};}
+ // Fireflies, coins, hearts, dandelion seeds and smoke rings: [spawn every, lifetime], slower while you're still.
+ const TAIL_DRIFT={27:[.2,2.4],33:[.17,1.5],41:[.22,1.6],42:[.2,2.2],47:[.32,1.6]};
+ function tailDrift(st,kind,bx,by,h,dt,jump){if(jump)st.parts=[];st.acc+=dt;const [base,life]=TAIL_DRIFT[kind],every=base*(st.spd>.08?1:3),r=Math.random,ring=kind===47;
+  while(st.acc>every){st.acc-=every;st.parts.push({x:bx+(ring?0:(r()-.5)*6),y:by+(ring?0:(r()-.5)*6),ox:(r()-.5)*10,oy:(r()-.5)*10,vx:-Math.cos(h)*(ring?10:6)+(ring?0:(r()-.5)*6),vy:-Math.sin(h)*(ring?10:6)+(ring?0:(r()-.5)*6),a:h,age:0,life,ph:r()*6,rot:(r()-.5)*.8,size:.8+r()*.45,fx:1+r(),fy:1+r()});}
+  for(const p of st.parts){p.age+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;}st.parts=st.parts.filter(p=>p.age<p.life);}
+ function tailSparkles(st,dt,jump){const ch=st.chains[0],q=ch[ch.length-1],{ux,uy}=tailDir(ch,ch.length-1),sx=q.x+ux*4,sy=q.y+uy*4;if(jump)st.parts=[];st.acc+=dt;
+  while(st.acc>.07){st.acc-=.07;st.parts.push({x:sx+(Math.random()-.5)*8,y:sy+(Math.random()-.5)*8,age:0});}for(const p of st.parts)p.age+=dt;st.parts=st.parts.filter(p=>p.age<.7);}
  // Bubbles drift off and fade; constellation stars are dropped as you travel and fade out.
  function tailParts(st,kind,bx,by,h,dt,t,jump){if(jump)st.parts=[];st.acc+=dt;
   // Cherry blossoms, snowflakes, music notes and pixels: drift off behind you and fade (slower while you're still).
@@ -1582,6 +1602,104 @@ function reconcileScrap(previous,next,now){
     const head=x=>{c.beginPath();c.ellipse(x,0,2.3,1.7,-.4,0,Math.PI*2);c.fill();c.beginPath();c.moveTo(x+2,-.6);c.lineTo(x+2,-8);c.stroke();};
     if(p.two){head(-2.5);head(3.5);c.lineWidth=1.8;c.beginPath();c.moveTo(-.5,-8);c.lineTo(5.5,-8);c.stroke();}else{head(0);c.beginPath();c.moveTo(2,-8);c.quadraticCurveTo(5,-6.5,4.2,-3.5);c.stroke();}}
    c.restore();}}
+ function tailBox(c,x,y,w,h,r){c.beginPath();if(c.roundRect)c.roundRect(x,y,w,h,r);else c.rect(x,y,w,h);}
+ function tailStar(c,r,points=5,inner=.45){c.beginPath();for(let i=0;i<points*2;i++){const a=-Math.PI/2+i*Math.PI/points,rr=i%2?r*inner:r;c[i?'lineTo':'moveTo'](Math.cos(a)*rr,Math.sin(a)*rr);}c.closePath();}
+ const TAU2=Math.PI*2;
+ function robotTail(c,ch,col,t){const n=ch.length;
+  for(let k=1;k<n;k++){const p=ch[k-1],q=ch[k],s=1-k/n*.4;c.save();c.translate((p.x+q.x)/2,(p.y+q.y)/2);c.rotate(Math.atan2(q.y-p.y,q.x-p.x));c.fillStyle=k%2?col:tailLight(col,.25);tailBox(c,-3.6,-2.7*s,7.2,5.4*s,1.4);c.fill();c.fillStyle=tailDark(col,.4);tailDot(c,0,0,.8);c.restore();}
+  c.fillStyle=tailDark(col,.35);for(let k=1;k<n;k++)tailDot(c,ch[k].x,ch[k].y,1.5*(1-k/n*.4)+.4);
+  const q=ch[n-1],{ux,uy,nx,ny}=tailDir(ch,n-1),open=.5+.5*Math.sin(t*3);c.strokeStyle=tailLight(col,.4);c.lineWidth=2;c.lineCap='round';
+  for(const side of [1,-1]){c.beginPath();c.moveTo(q.x,q.y);c.quadraticCurveTo(q.x+ux*3+nx*side*(3.5+open*2.5),q.y+uy*3+ny*side*(3.5+open*2.5),q.x+ux*8+nx*side*(1+open*3),q.y+uy*8+ny*side*(1+open*3));c.stroke();}
+  c.fillStyle=col;tailDot(c,q.x,q.y,2.2);}
+ function craneTail(c,ch,col,t){c.strokeStyle=tailLight(col,.1);c.globalAlpha=.35;c.lineWidth=.7;c.setLineDash([1.5,2.5]);tailCurve(c,ch);c.stroke();c.setLineDash([]);c.globalAlpha=1;
+  [4,8,12].forEach((k,i)=>{const q=ch[k],{ux,uy}=tailDir(ch,k),s=1.35-i*.15,span=6.5*(.55+.45*Math.sin(t*7+i*1.7));c.save();c.translate(q.x,q.y);c.rotate(Math.atan2(uy,ux)+Math.PI);c.scale(s,s);
+   c.fillStyle=tailLight(col,.35);for(const side of [1,-1]){c.beginPath();c.moveTo(1.2,0);c.lineTo(-1.5,side*span);c.lineTo(-3,0);c.closePath();c.fill();}
+   c.fillStyle=col;c.beginPath();c.moveTo(5,0);c.lineTo(0,1.3);c.lineTo(-5.5,0);c.lineTo(0,-1.3);c.closePath();c.fill();c.strokeStyle=col;c.lineWidth=1;c.beginPath();c.moveTo(4,0);c.lineTo(6.5,-1.6);c.stroke();c.restore();});}
+ function fireflyTail(c,st,col,t){for(const p of st.parts){const f=p.age/p.life,blink=.35+.65*Math.max(0,Math.sin(t*4+p.ph)),x=p.x+p.ox+Math.sin(t*p.fx+p.ph)*4,y=p.y+p.oy+Math.cos(t*p.fy+p.ph)*4;
+   c.globalAlpha=blink*(1-f)*.25;c.fillStyle=col;tailDot(c,x,y,4.5);c.globalAlpha=blink*(1-f);c.shadowColor=col;c.shadowBlur=8;tailDot(c,x,y,1.5);c.shadowBlur=0;}c.globalAlpha=1;}
+ function wispTail(c,h,col,t){const n=h.length;if(n<3)return;c.strokeStyle=col;c.lineCap='round';
+  for(let w=0;w<3;w++){let prev=null;for(let k=0;k<n;k++){const a=h[Math.max(0,k-1)],b=h[Math.min(n-1,k+1)],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1,off=Math.sin(t*3+k*.35+w*2.1)*k*.18,pt={x:h[k].x-dy/d*off,y:h[k].y+dx/d*off};
+    if(prev){const f=k/n;c.globalAlpha=.32*(1-f);c.lineWidth=5.5*(1-f)+.8;c.beginPath();c.moveTo(prev.x,prev.y);c.lineTo(pt.x,pt.y);c.stroke();}prev=pt;}}c.globalAlpha=1;}
+ function auroraTail(c,ch,t){const n=ch.length;for(let k=1;k<n;k++){const p=ch[k-1],q=ch[k],{nx,ny}=tailDir(ch,k),w0=6+Math.sin(t*3+k*.6)*1.8,w1=6+Math.sin(t*3+(k+1)*.6)*1.8,f=k/n;
+   c.globalAlpha=(.75*(1-f*.8))*(.75+.25*Math.sin(t*4+k));c.fillStyle='hsl('+(135+k*6)+',90%,72%)';c.beginPath();c.moveTo(p.x+nx*w0,p.y+ny*w0);c.lineTo(q.x+nx*w1,q.y+ny*w1);c.lineTo(q.x-nx*w1*.4,q.y-ny*w1*.4);c.lineTo(p.x-nx*w0*.4,p.y-ny*w0*.4);c.closePath();c.fill();}c.globalAlpha=1;}
+ function inkTail(c,h,col){const n=h.length;c.strokeStyle=col;c.lineCap='round';for(let k=1;k<n;k++){const f=k/n;c.globalAlpha=.9*(1-f);c.lineWidth=Math.max(.4,6.2*(1-f)*(.55+.45*Math.sin(k*.3)));c.beginPath();c.moveTo(h[k-1].x,h[k-1].y);c.lineTo(h[k].x,h[k].y);c.stroke();}
+  c.fillStyle=col;for(const [k,o] of [[12,3],[24,-3.5],[36,2.5]])if(h[k]){c.globalAlpha=.6*(1-k/n);tailDot(c,h[k].x+o,h[k].y-o*.6,1.1);}c.globalAlpha=1;}
+ function buntingTail(c,ch,col,t){c.strokeStyle=tailLight(col,.5);c.lineWidth=.9;tailCurve(c,ch);c.stroke();const cols=[col,'#ffe066','#66d9e8'];
+  for(let k=2;k<ch.length;k+=2){const p=ch[k-1],q=ch[k],{nx,ny}=tailDir(ch,k),L=(5.2-k*.17)*(1+.12*Math.sin(t*8+k));c.fillStyle=cols[(k/2)%3];c.beginPath();c.moveTo(p.x,p.y);c.lineTo(q.x,q.y);c.lineTo((p.x+q.x)/2+nx*L,(p.y+q.y)/2+ny*L);c.closePath();c.fill();}}
+ function balloonTail(c,ch,col,t){c.strokeStyle='#dee2e6';c.globalAlpha=.7;c.lineWidth=.8;tailCurve(c,ch);c.stroke();c.globalAlpha=1;
+  const q=ch[ch.length-1],{ux,uy}=tailDir(ch,ch.length-1);c.save();c.translate(q.x+ux*7,q.y+uy*7);c.rotate(Math.atan2(uy,ux)+Math.sin(t*2.2)*.06);
+  c.fillStyle=tailDark(col,.2);c.beginPath();c.moveTo(-7,0);c.lineTo(-8.6,1.4);c.lineTo(-8.6,-1.4);c.closePath();c.fill();
+  c.fillStyle=col;c.beginPath();c.ellipse(0,0,7.2,6.2,0,0,TAU2);c.fill();c.fillStyle=tailLight(col,.55);c.globalAlpha=.8;c.beginPath();c.ellipse(2.5,-2.4,2,1.2,-.6,0,TAU2);c.fill();c.globalAlpha=1;c.restore();}
+ function coinTail(c,st,t){const col='#ffd43b';for(const p of st.parts){const f=p.age/p.life,spin=Math.cos(t*6+p.ph),w=3.2*Math.max(.15,Math.abs(spin));c.globalAlpha=1-f*f;
+   c.fillStyle=tailDark(col,.25);c.beginPath();c.ellipse(p.x,p.y,w+.6,3.8,0,0,TAU2);c.fill();c.fillStyle=spin>0?col:tailLight(col,.15);c.beginPath();c.ellipse(p.x,p.y,w,3.2,0,0,TAU2);c.fill();
+   if(w>1.5){c.fillStyle=tailLight(col,.6);c.beginPath();c.ellipse(p.x-w*.3,p.y-1.2,w*.25,.7,0,0,TAU2);c.fill();}}c.globalAlpha=1;}
+ function tigerTail(c,ch,col){const n=ch.length;c.lineCap='round';c.strokeStyle=col;for(let k=1;k<n;k++){c.lineWidth=5.6-k*.25;c.beginPath();c.moveTo(ch[k-1].x,ch[k-1].y);c.lineTo(ch[k].x,ch[k].y);c.stroke();}
+  c.strokeStyle=tailDark(col,.62);c.lineWidth=1.7;for(let k=2;k<n-1;k+=2){const q=ch[k],{ux,uy,nx,ny}=tailDir(ch,k),w=(5.6-k*.25)/2;c.beginPath();c.moveTo(q.x+nx*w-ux,q.y+ny*w-uy);c.lineTo(q.x-nx*w+ux*.8,q.y-ny*w+uy*.8);c.stroke();}
+  c.fillStyle=tailDark(col,.6);tailDot(c,ch[n-1].x,ch[n-1].y,1.6);}
+ function helixTail(c,ch,col,t){const n=ch.length,A=[],B=[],Z=[];
+  for(let k=0;k<n;k++){const {nx,ny}=tailDir(ch,Math.max(1,k)),s=Math.sin(k*.75-t*4),amp=4.5*(1-k/n*.4);A.push({x:ch[k].x+nx*s*amp,y:ch[k].y+ny*s*amp});B.push({x:ch[k].x-nx*s*amp,y:ch[k].y-ny*s*amp});Z.push(Math.cos(k*.75-t*4));}
+  c.lineWidth=.8;c.strokeStyle=tailLight(col,.5);for(let k=1;k<n;k++){c.globalAlpha=.45*(1-k/n*.6);c.beginPath();c.moveTo(A[k].x,A[k].y);c.lineTo(B[k].x,B[k].y);c.stroke();}c.globalAlpha=1;
+  c.lineCap='round';c.lineWidth=1.6;c.strokeStyle=col;tailCurve(c,A);c.stroke();c.strokeStyle=tailLight(col,.45);tailCurve(c,B);c.stroke();
+  for(let k=1;k<n;k++){c.fillStyle=col;tailDot(c,A[k].x,A[k].y,1+.5*Z[k]+.5);c.fillStyle=tailLight(col,.45);tailDot(c,B[k].x,B[k].y,1-.5*Z[k]+.5);}}
+ function neonTail(c,ch,col,t){const pulse=.8+.2*Math.sin(t*5);c.lineCap='round';c.lineJoin='round';
+  c.globalAlpha=.25*pulse;c.strokeStyle=col;c.lineWidth=6;c.shadowColor=col;c.shadowBlur=12;tailCurve(c,ch);c.stroke();c.shadowBlur=0;
+  c.globalAlpha=pulse;c.lineWidth=2.6;tailCurve(c,ch);c.stroke();c.strokeStyle=tailLight(col,.75);c.lineWidth=1;tailCurve(c,ch);c.stroke();c.globalAlpha=1;
+  const e=ch[ch.length-1];c.fillStyle=tailLight(col,.75);tailDot(c,e.x,e.y,1.6);}
+ function pearlTail(c,ch,col){const n=ch.length;c.strokeStyle=tailDark(col,.4);c.lineWidth=.6;tailCurve(c,ch);c.stroke();
+  for(let k=n-1;k>=1;k--){const q=ch[k],r=2.9-k*.1;c.fillStyle=tailDark(col,.18);tailDot(c,q.x,q.y,r);c.fillStyle=col;tailDot(c,q.x-.3,q.y-.3,r*.85);c.fillStyle='#ffffff';c.globalAlpha=.85;tailDot(c,q.x-r*.35,q.y-r*.35,r*.3);c.globalAlpha=1;}}
+ function springTail(c,ch,col,t){const n=ch.length,pts=[];
+  for(let k=1;k<n;k++){const p=ch[k-1],q=ch[k],{nx,ny}=tailDir(ch,k);for(let j=0;j<4;j++){const f=j/4,off=Math.sin(((k-1)*4+j)*Math.PI/2)*3*(1-k/n*.3);pts.push({x:p.x+(q.x-p.x)*f+nx*off,y:p.y+(q.y-p.y)*f+ny*off});}}
+  c.strokeStyle=tailLight(col,.45);c.lineWidth=1.1;c.lineJoin='round';c.beginPath();pts.forEach((p,i)=>c[i?'lineTo':'moveTo'](p.x,p.y));c.stroke();
+  const e=ch[n-1],{ux,uy}=tailDir(ch,n-1),cx=e.x+ux*5,cy=e.y+uy*5,s=1+.08*Math.sin(t*6);c.fillStyle=col;tailDot(c,cx,cy,5.8*s);c.strokeStyle=tailLight(col,.3);c.lineWidth=1;c.lineCap='round';
+  for(let i=0;i<14;i++){const a=i/14*TAU2+Math.sin(t*2+i)*.15;c.beginPath();c.moveTo(cx+Math.cos(a)*4*s,cy+Math.sin(a)*4*s);c.lineTo(cx+Math.cos(a)*7.2*s,cy+Math.sin(a)*7.2*s);c.stroke();}
+  c.fillStyle=tailLight(col,.5);tailDot(c,cx-1.8,cy-1.8,1.4);}
+ function flameTail(c,st,col,t){const b=st.chains[0][0],ux=-Math.cos(st.h),uy=-Math.sin(st.h),nx=-uy,ny=ux,L=(25+4*Math.sin(t*13)+2*Math.sin(t*29))*(.55+.45*Math.min(1,st.spd));
+  const tear=(len,w,fill,alpha)=>{c.globalAlpha=alpha;c.fillStyle=fill;c.beginPath();c.moveTo(b.x+nx*w,b.y+ny*w);c.quadraticCurveTo(b.x+ux*len*.45+nx*w*1.1,b.y+uy*len*.45+ny*w*1.1,b.x+ux*len,b.y+uy*len);c.quadraticCurveTo(b.x+ux*len*.45-nx*w*1.1,b.y+uy*len*.45-ny*w*1.1,b.x-nx*w,b.y-ny*w);c.closePath();c.fill();};
+  c.shadowColor=col;c.shadowBlur=10;tear(L,5.2,col,.5);c.shadowBlur=0;tear(L*.72,3.4,tailLight(col,.35),.85);tear(L*.45,1.9,'#fffbe6',.95);c.globalAlpha=1;}
+ function butterflyTail(c,path,col,t){[42,66].forEach((k,i)=>{const p=tailOn(path,k);if(!p)return;const sx=Math.sin(t*2.3+i*2)*4,fl=.35+.65*Math.abs(Math.sin(t*12+i*2)),s=1.6-i*.2;
+   c.save();c.translate(p.x-Math.sin(p.a)*sx,p.y+Math.cos(p.a)*sx);c.rotate(p.a);c.scale(s,s);
+   for(const side of [1,-1]){c.fillStyle=col;c.beginPath();c.ellipse(1.2,side*3*fl,2.5,3*fl+.3,side*.3,0,TAU2);c.fill();c.fillStyle=tailLight(col,.35);c.beginPath();c.ellipse(-1.8,side*2.3*fl,1.8,2.2*fl+.3,-side*.3,0,TAU2);c.fill();}
+   c.strokeStyle=tailDark(col,.55);c.lineWidth=1.1;c.lineCap='round';c.beginPath();c.moveTo(-3,0);c.lineTo(3,0);c.stroke();c.restore();});}
+ function heartTail(c,st,col,t){for(const p of st.parts){const f=p.age/p.life,s=p.size*(f<.15?f/.15:1)*(1+.08*Math.sin(t*8+p.ph))*1.15;c.globalAlpha=1-f*f;c.save();c.translate(p.x,p.y);c.rotate(p.rot);c.scale(s,s);
+   c.fillStyle=f<.5?col:tailLight(col,.25);c.beginPath();c.moveTo(0,2);c.bezierCurveTo(-4.2,-1,-2,-4.2,0,-1.6);c.bezierCurveTo(2,-4.2,4.2,-1,0,2);c.fill();c.fillStyle=tailLight(col,.6);tailDot(c,-1.4,-1.8,.6);c.restore();}c.globalAlpha=1;}
+ function seedTail(c,st,col,t){for(const p of st.parts){const f=p.age/p.life;c.globalAlpha=Math.min(1,(1-f)*1.5);c.save();c.translate(p.x+Math.sin(t*2+p.ph)*2,p.y);c.rotate(p.rot+Math.sin(t*1.5+p.ph)*.3);c.scale(p.size*1.2,p.size*1.2);
+   c.strokeStyle=col;c.lineWidth=.5;c.beginPath();c.moveTo(0,0);c.lineTo(0,4.2);c.stroke();c.fillStyle=tailDark(col,.45);c.beginPath();c.ellipse(0,4.8,.6,1,0,0,TAU2);c.fill();
+   c.fillStyle=col;for(let i=0;i<7;i++){const a=-Math.PI/2+(i-3)*.36,ex=Math.cos(a)*3.8,ey=Math.sin(a)*3.8;c.beginPath();c.moveTo(0,0);c.lineTo(ex,ey);c.stroke();tailDot(c,ex,ey,.45);}c.restore();}c.globalAlpha=1;}
+ function bambooTail(c,ch,col){const n=ch.length;c.lineCap='butt';c.strokeStyle=col;for(let k=1;k<n;k++){c.lineWidth=4.4-k*.15;c.beginPath();c.moveTo(ch[k-1].x,ch[k-1].y);c.lineTo(ch[k].x,ch[k].y);c.stroke();}
+  c.strokeStyle=tailDark(col,.45);c.lineWidth=1.5;for(let k=3;k<n;k+=3){const q=ch[k],{nx,ny}=tailDir(ch,k),w=(4.4-k*.15)/2+.6;c.beginPath();c.moveTo(q.x+nx*w,q.y+ny*w);c.lineTo(q.x-nx*w,q.y-ny*w);c.stroke();}
+  const q=ch[n-1],{ux,uy}=tailDir(ch,n-1),a=Math.atan2(uy,ux);c.fillStyle=tailLight(col,.2);for(const s of [1,-1]){c.beginPath();c.ellipse(q.x+Math.cos(a+s*.6)*4,q.y+Math.sin(a+s*.6)*4,4.5,1.5,a+s*.6,0,TAU2);c.fill();}}
+ function caneTail(c,ch,col){const n=ch.length;c.lineCap='round';c.strokeStyle='#fff5f5';for(let k=1;k<n;k++){c.lineWidth=4.6;c.beginPath();c.moveTo(ch[k-1].x,ch[k-1].y);c.lineTo(ch[k].x,ch[k].y);c.stroke();}
+  c.strokeStyle=col;c.lineWidth=1.7;c.lineCap='butt';for(let k=1;k<n;k++){const p=ch[k-1],q=ch[k],{ux,uy,nx,ny}=tailDir(ch,k);for(const f of [.25,.75]){const x=p.x+(q.x-p.x)*f,y=p.y+(q.y-p.y)*f;c.beginPath();c.moveTo(x+nx*2.2-ux*1.4,y+ny*2.2-uy*1.4);c.lineTo(x-nx*2.2+ux*1.4,y-ny*2.2+uy*1.4);c.stroke();}}}
+ function koiTail(c,path,col,t){const p=tailOn(path,50);if(!p)return;c.save();c.translate(p.x,p.y);c.rotate(p.a+Math.sin(t*4)*.1);c.scale(1.75,1.75);
+  c.fillStyle=tailLight(col,.25);c.save();c.translate(-5.2,0);c.rotate(Math.sin(t*8)*.45);c.beginPath();c.moveTo(0,0);c.quadraticCurveTo(-3,-1,-5.5,-3.4);c.lineTo(-4.2,0);c.lineTo(-5.5,3.4);c.quadraticCurveTo(-3,1,0,0);c.fill();c.restore();
+  c.fillStyle=tailLight(col,.3);for(const s of [1,-1]){c.beginPath();c.ellipse(1.5,s*2.7,1.9,.9,s*.6,0,TAU2);c.fill();}
+  c.fillStyle=col;c.beginPath();c.ellipse(0,0,6,2.7,0,0,TAU2);c.fill();c.fillStyle='#fff8f0';c.beginPath();c.ellipse(1.6,.6,2,1.1,.3,0,TAU2);c.fill();c.beginPath();c.ellipse(-2.6,-.7,1.3,.8,-.2,0,TAU2);c.fill();
+  c.fillStyle='#1c1c1c';tailDot(c,4.2,1,.45);tailDot(c,4.2,-1,.45);c.restore();}
+ function wakeTail(c,h,col){const n=h.length;if(n<4)return;c.lineCap='round';c.strokeStyle=col;c.lineWidth=1.2;
+  for(const side of [1,-1]){let prev=null;for(let k=1;k<n;k++){const a=h[k-1],b=h[k],dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy)||1,spread=2.5+k*.42,pt={x:b.x-dy/d*spread*side,y:b.y+dx/d*spread*side};
+    if(prev){c.globalAlpha=.75*(1-k/n);c.beginPath();c.moveTo(prev.x,prev.y);c.lineTo(pt.x,pt.y);c.stroke();}prev=pt;}}
+  c.fillStyle=tailLight(col,.5);for(let k=3;k<n;k+=4){c.globalAlpha=.6*(1-k/n);tailDot(c,h[k].x,h[k].y,1.1);}c.globalAlpha=1;}
+ function ringTail(c,st,col){for(const p of st.parts){const f=p.age/p.life,r=3+f*10;c.globalAlpha=.75*(1-f);c.strokeStyle=col;c.lineWidth=2.6*(1-f)+.6;c.beginPath();c.ellipse(p.x,p.y,r*.6,r,p.a,0,TAU2);c.stroke();}c.globalAlpha=1;}
+ function galaxyTail(c,path,col,t){const p=tailOn(path,42);if(!p)return;c.save();c.translate(p.x,p.y);c.scale(1.6,1.6);
+  c.globalAlpha=.35;c.fillStyle=col;c.shadowColor=col;c.shadowBlur=10;tailDot(c,0,0,3);c.shadowBlur=0;c.globalAlpha=1;c.fillStyle=tailLight(col,.7);tailDot(c,0,0,1.2);
+  for(const arm of [0,1])for(let i=0;i<14;i++){const a=t*1.4+i*.42+arm*Math.PI,r=1.6+i*.55;c.globalAlpha=1-i/16;c.fillStyle=i%3?col:tailLight(col,.6);tailDot(c,Math.cos(a)*r,Math.sin(a)*r*.75,.95-i*.03);}c.globalAlpha=1;c.restore();}
+ function wandTail(c,st,col,t){const ch=st.chains[0];c.strokeStyle=tailLight(col,.55);c.lineWidth=1.4;c.lineCap='round';c.beginPath();c.moveTo(ch[0].x,ch[0].y);for(const q of ch)c.lineTo(q.x,q.y);c.stroke();
+  for(const p of st.parts){const f=p.age/.7;c.globalAlpha=1-f;c.fillStyle=tailLight(col,.4);c.save();c.translate(p.x,p.y);tailStar(c,1.8*(1-f),4,.3);c.fill();c.restore();}c.globalAlpha=1;
+  const q=ch[ch.length-1],{ux,uy}=tailDir(ch,ch.length-1);c.save();c.translate(q.x+ux*4,q.y+uy*4);c.rotate(t*1.2);c.shadowColor=col;c.shadowBlur=8;c.fillStyle=col;tailStar(c,5.5);c.fill();c.shadowBlur=0;c.fillStyle=tailLight(col,.6);tailStar(c,2.4);c.fill();c.restore();}
+ function duckTail(c,path,col,t){[38,56,74].forEach((k,i)=>{const p=tailOn(path,k);if(!p)return;const s=1.65-i*.15;c.save();c.translate(p.x,p.y);c.rotate(p.a+Math.sin(t*10+i*1.4)*.18);c.scale(s,s);
+   c.fillStyle=col;c.beginPath();c.ellipse(-.6,0,3.4,2.7,0,0,TAU2);c.fill();tailDot(c,2.6,0,1.9);c.fillStyle=tailLight(col,.35);c.beginPath();c.ellipse(-1,1.2,1.6,1,.3,0,TAU2);c.fill();
+   c.fillStyle='#ff922b';c.beginPath();c.moveTo(4.1,-.6);c.lineTo(5.6,0);c.lineTo(4.1,.6);c.closePath();c.fill();c.fillStyle='#1c1c1c';tailDot(c,3,-.8,.35);c.restore();});}
+ function trainTail(c,path,col,t){const cars=[36,54,72].map(k=>tailOn(path,k)).filter(Boolean);c.strokeStyle=tailDark(col,.3);c.lineWidth=1;for(let i=1;i<cars.length;i++){c.beginPath();c.moveTo(cars[i-1].x,cars[i-1].y);c.lineTo(cars[i].x,cars[i].y);c.stroke();}
+  cars.forEach((p,i)=>{c.save();c.translate(p.x,p.y);c.rotate(p.a);c.scale(1.5,1.5);c.fillStyle='#343a40';for(const [x,y] of [[2.4,3],[-2.4,3],[2.4,-3],[-2.4,-3]])tailDot(c,x,y,1.1);
+   c.fillStyle=i%2?tailLight(col,.3):col;tailBox(c,-4,-2.7,8,5.4,1.2);c.fill();
+   if(i===0){c.fillStyle=tailDark(col,.35);tailDot(c,1.8,0,1.3);c.fillStyle=tailLight(col,.6);c.globalAlpha=.6+.4*Math.sin(t*6);tailDot(c,3.6,0,.8);c.globalAlpha=1;}
+   else{c.fillStyle=tailLight(col,.65);c.fillRect(-2.6,-1.4,2,2.8);c.fillRect(.6,-1.4,2,2.8);}c.restore();});}
+ // Tails 25-51, by kind: (canvas, tail state, color, time).
+ const TAIL_DRAW={25:(c,s,col,t)=>robotTail(c,s.chains[0],col,t),26:(c,s,col,t)=>craneTail(c,s.chains[0],col,t),27:fireflyTail,28:(c,s,col,t)=>wispTail(c,s.path,col,t),29:(c,s,col,t)=>auroraTail(c,s.chains[0],t),
+  30:(c,s,col)=>inkTail(c,s.path,col),31:(c,s,col,t)=>buntingTail(c,s.chains[0],col,t),32:(c,s,col,t)=>balloonTail(c,s.chains[0],col,t),33:(c,s,col,t)=>coinTail(c,s,t),
+  34:(c,s,col)=>tigerTail(c,s.chains[0],col),35:(c,s,col,t)=>helixTail(c,s.chains[0],col,t),36:(c,s,col,t)=>neonTail(c,s.chains[0],col,t),37:(c,s,col)=>pearlTail(c,s.chains[0],col),38:(c,s,col,t)=>springTail(c,s.chains[0],col,t),
+  39:flameTail,40:(c,s,col,t)=>butterflyTail(c,s.path,col,t),41:heartTail,42:seedTail,43:(c,s,col)=>bambooTail(c,s.chains[0],col),44:(c,s,col)=>caneTail(c,s.chains[0],col),
+  45:(c,s,col,t)=>koiTail(c,s.path,col,t),46:(c,s,col)=>wakeTail(c,s.path,col),47:ringTail,48:(c,s,col,t)=>galaxyTail(c,s.path,col,t),49:wandTail,50:(c,s,col,t)=>duckTail(c,s.path,col,t),51:(c,s,col,t)=>trainTail(c,s.path,col,t)};
  function clubTail(c,ch,col){const n=ch.length;c.lineCap='round';c.strokeStyle=col;for(let k=1;k<n;k++){c.lineWidth=5.5-k*.3;c.beginPath();c.moveTo(ch[k-1].x,ch[k-1].y);c.lineTo(ch[k].x,ch[k].y);c.stroke();}
   const q=ch[n-1],{ux,uy}=tailDir(ch,n-1),cx=q.x+ux*3,cy=q.y+uy*3,rot=Math.atan2(uy,ux);c.fillStyle=tailLight(col,.45);
   for(let i=0;i<6;i++){const a=rot+i*Math.PI/3;c.beginPath();c.moveTo(cx+Math.cos(a-.4)*4.5,cy+Math.sin(a-.4)*4.5);c.lineTo(cx+Math.cos(a)*8.8,cy+Math.sin(a)*8.8);c.lineTo(cx+Math.cos(a+.4)*4.5,cy+Math.sin(a+.4)*4.5);c.closePath();c.fill();}
@@ -1612,7 +1730,8 @@ function reconcileScrap(previous,next,now){
   else if(kind===18)chainTail(c,ch,col);
   else if(kind===19)rainbowTail(c,ch,t);
   else if(kind===20)boaTail(c,ch,col,t);
-  else if(kind>=21)driftTail(c,st,kind,col);
+  else if(kind>=21&&kind<=24)driftTail(c,st,kind,col);
+  else if(TAIL_DRAW[kind])TAIL_DRAW[kind](c,st,col,t);
   c.restore();}
  function drawTails(now){const t=now/1000,seen=new Set();
   for(const a of game.actors){if(!a.alive||!a.tail)continue;seen.add(a.id);let st=tailState.get(a.id);if(!st){st=newTail(a.aim);tailState.set(a.id,st);}
