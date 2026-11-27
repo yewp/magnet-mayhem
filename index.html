@@ -1244,28 +1244,29 @@ function reconcileScrap(previous,next,now){
  //  Auto   - (default) starts at 1x on a new device, steps up 0.25 after 4 smooth seconds and down 0.25 after
  //           a slow second. A "strike" at a level is a graphics stall there (a frame over 90 ms while the game
  //           code was quick and the page was not busy with other work), or a step up that drops frames soon
- //           after. One strike blocks that level for a minute; a second caps sharpness below it on this device.
- //           Level and cap are remembered per screen and graphics chip, and a cap is retried after a week.
- const GRAPHICS_MODES=['auto','sharp','smooth'],GRAPHICS_NAMES={auto:'Auto',sharp:'Sharp',smooth:'Smooth'},WEEK=6048e5;
+ //           after. Above 1x the first strike caps sharpness below that level for the rest of the session (at 1x
+ //           it only steps down for a minute). Level and cap are remembered per screen and graphics chip; each
+ //           time the game is opened again, Auto may retry one step (0.25) above the remembered cap, so a device
+ //           that was capped gets another chance at most one step at a time - at most one stall per session.
+ const GRAPHICS_MODES=['auto','sharp','smooth'],GRAPHICS_NAMES={auto:'Auto',sharp:'Sharp',smooth:'Smooth'};
  const GRAPHICS_TIPS={auto:'Sharpness adapts to keep the game smooth on this device',sharp:'Always full resolution (can stutter on weaker graphics)',smooth:'1x resolution or lower, for the steadiest frame rate'};
  function deviceSetup(){let chip='';try{const g=document.createElement('canvas').getContext('webgl'),info=g&&g.getExtension('WEBGL_debug_renderer_info');chip=info?g.getParameter(info.UNMASKED_RENDERER_WEBGL):'';g?.getExtension('WEBGL_lose_context')?.loseContext();}catch{}return screen.width+'x'+screen.height+'@'+(devicePixelRatio||1)+' '+chip;}
  const sharpSetup=deviceSetup();
- function readSharpness(){const fresh={level:1,ceiling:1.5,cappedAt:0};try{const v=JSON.parse(localStorage.getItem('orbbitz-sharpness')||'null');
+ function readSharpness(){const fresh={level:1,ceiling:1.5};try{const v=JSON.parse(localStorage.getItem('orbbitz-sharpness')||'null');
   if(!v||!(v.level>=.75&&v.level<=1.5&&v.ceiling>=1&&v.ceiling<=1.5)||v.setup&&v.setup!==sharpSetup)return fresh;
-  const cappedAt=v.cappedAt??(v.ceiling<1.5?Date.now():0);
-  return v.ceiling<1.5&&Date.now()-cappedAt>WEEK?{level:v.level,ceiling:1.5,cappedAt:0}:{level:v.level,ceiling:v.ceiling,cappedAt};}catch{return fresh;}}
+  return {level:v.level,ceiling:v.ceiling};}catch{return fresh;}}
  const savedSharpness=readSharpness();
  let graphicsMode=(()=>{try{const m=localStorage.getItem('orbbitz-graphics');return GRAPHICS_MODES.includes(m)?m:'auto';}catch{return 'auto';}})();
- let autoLevel=Math.min(Math.max(1,savedSharpness.level),savedSharpness.ceiling),// a visit never starts below 1x: drops below that are for heavy moments
- sharpnessCeiling=savedSharpness.ceiling,cappedAt=savedSharpness.cappedAt;
+ // This session may go one step above the remembered cap (a retry); a visit never starts below 1x.
+ // The remembered cap only changes on proof: down after a stall, up after a level held smoothly for 30 s.
+ let learnedCeiling=savedSharpness.ceiling,sharpnessCeiling=Math.min(1.5,learnedCeiling+.25),autoLevel=Math.min(Math.max(1,savedSharpness.level),sharpnessCeiling);
  let pixelRatioCap=graphicsMode==='sharp'?1.5:graphicsMode==='smooth'?1:autoLevel,blockedCap=1.5,blockedUntil=0,sharpnessToSave=false,riseDrops=0,smoothSecs=0,lastSharpnessDrop=0,lastSharpnessRise=-1e9,droppedFrames=0,lastFrameAt=0,playingSince=0,frameWork=0,longTaskEnd=0;
- const sharpnessStrikes=new Map();
  try{new PerformanceObserver(list=>{for(const e of list.getEntries())longTaskEnd=Math.max(longTaskEnd,e.startTime+e.duration);}).observe({type:'longtask'});}catch{}
- function saveSharpness(){if(graphicsMode!=='auto')return;try{localStorage.setItem('orbbitz-sharpness',JSON.stringify({setup:sharpSetup,level:autoLevel,ceiling:sharpnessCeiling,cappedAt}));}catch{}}
+ function saveSharpness(){if(graphicsMode!=='auto')return;try{localStorage.setItem('orbbitz-sharpness',JSON.stringify({setup:sharpSetup,level:autoLevel,ceiling:learnedCeiling}));}catch{}}
  function sharpnessLimit(now){if(graphicsMode==='sharp')return 1.5;if(graphicsMode==='smooth')return 1;return Math.min(sharpnessCeiling,now<blockedUntil?blockedCap:1.5);}
  function setSharpness(level){pixelRatioCap=level;resize();smoothSecs=0;if(graphicsMode==='auto')autoLevel=level;}
- function sharpnessStrike(now){const level=dpr,n=(sharpnessStrikes.get(level)||0)+1;sharpnessStrikes.set(level,n);
-  blockedCap=Math.max(.75,level-.25);blockedUntil=now+60000;if(n>=2&&level>1.01){sharpnessCeiling=Math.max(1,level-.25);cappedAt=Date.now();}
+ function sharpnessStrike(now){const level=dpr;
+  blockedCap=Math.max(.75,level-.25);blockedUntil=now+60000;if(level>1.01){sharpnessCeiling=Math.max(1,level-.25);learnedCeiling=Math.min(learnedCeiling,sharpnessCeiling);}
   lastSharpnessDrop=now;lastSharpnessRise=-1e9;sharpnessToSave=false;setSharpness(blockedCap);saveSharpness();}
  function showGraphicsMode(){for(const id of ['graphicsBtn','pauseGraphicsBtn']){const b=$(id);if(b){b.textContent='Graphics: '+GRAPHICS_NAMES[graphicsMode];b.title=GRAPHICS_TIPS[graphicsMode];}}}
  function nextGraphicsMode(){graphicsMode=GRAPHICS_MODES[(GRAPHICS_MODES.indexOf(graphicsMode)+1)%GRAPHICS_MODES.length];try{localStorage.setItem('orbbitz-graphics',graphicsMode);}catch{}
@@ -2370,9 +2371,9 @@ function reconcileScrap(previous,next,now){
   if(graphicsMode!=='sharp'&&state==='playing'&&!document.hidden&&frames>8&&now-playingSince>2500){const limit=Math.min(devicePixelRatio||1,sharpnessLimit(now));
    if(dpr>limit+.01){lastSharpnessDrop=now;setSharpness(limit);}
    // A second slowed by long page work (game code, garbage collection) is not a graphics problem: lower sharpness would not help.
-   else if((fps<50||droppedFrames>5)&&dpr>.75&&!(longTaskEnd>framesAt)){if(graphicsMode==='auto'&&now-lastSharpnessRise<30000)sharpnessStrike(now);else{lastSharpnessDrop=now;sharpnessToSave=false;setSharpness(Math.max(.75,dpr-.25));saveSharpness();}}
+   else if((fps<50||droppedFrames>5)&&dpr>.75&&!(longTaskEnd>framesAt)&&now-lastSharpnessDrop>1500){if(graphicsMode==='auto'&&now-lastSharpnessRise<30000)sharpnessStrike(now);else{lastSharpnessDrop=now;sharpnessToSave=false;setSharpness(Math.max(.75,dpr-.25));saveSharpness();}}
    else if(fps>=57&&droppedFrames<=1&&dpr<limit-.01&&now-lastSharpnessDrop>8000){if(++smoothSecs>=4){setSharpness(Math.min(limit,dpr+.25));lastSharpnessRise=now;riseDrops=0;sharpnessToSave=true;}}else smoothSecs=0;
-   if(sharpnessToSave&&now-lastSharpnessRise>30000){sharpnessToSave=false;saveSharpness();}}droppedFrames=0;
+   if(sharpnessToSave&&now-lastSharpnessRise>30000){sharpnessToSave=false;learnedCeiling=Math.max(learnedCeiling,Math.min(dpr,sharpnessCeiling));saveSharpness();}}droppedFrames=0;
   $('perfValue').textContent=Math.round(frames*1000/(now-framesAt))+' fps · '+Math.round(dpr*100)/100+'×'+(online?' · '+Math.round(online.rtt||0)+' ms'+(online.updateGap?' · '+Math.round(1000/online.updateGap)+' updates/s':'')+' · queue '+(online.queued||0)+(online.dropped?' · skipped '+online.dropped:''):'');frames=0;framesAt=now;}const dt=Math.min(online?.25:.08,(now-(last||now))/1000);last=now;if(online&&state!=='menu'){if(state==='playing')input();onlineVisualStep(dt);events();updateCamera(dt);if(now-hudAt>120){hudAt=now;updateHUD();}}else if(state==='playing'){input();acc+=dt;let ticks=0;while(acc>=1/120&&ticks<10){game.step(1/120);acc-=1/120;ticks++;if(game.finished)break;}events();updateCamera(dt);if(now-hudAt>120){hudAt=now;updateHUD();}if(game.finished)finish();}else if(state==='menu'||state==='customize'||state==='shop'){game.time+=dt;for(const a of game.actors)game.updateOrbits(a,true);}if(state!=='menu')updateScrapHUD(game.human.pieces.length);draw();if(toastUntil&&now>toastUntil){$('toast').classList.remove('show');toastUntil=0;}if(state==='customize'||state==='shop')drawCustomize();frameWork=performance.now()-workStart;requestAnimationFrame(frame);}
  requestAnimationFrame(frame);
 })();
