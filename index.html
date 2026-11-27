@@ -114,6 +114,8 @@ const xpForLevel=level=>{let xp=0;for(let l=1;l<level;l++)xp+=300+100*(l-1);retu
 const levelFromXp=xp=>{let level=1;while(xp>=xpForLevel(level+1))level++;return level;};
 const roundXp=score=>Math.max(0,Math.floor(score||0))+100;
 const cleanLook=look=>{const pick=(v,list)=>Number.isInteger(v)&&v>=0&&v<list.length?v:0;return {skin:pick(look?.skin,SKINS),core:pick(look?.core,CORES),tail:pick(look?.tail,TAILS)};};
+// The browser listens for shots hitting cover (to flash it); the server never sets this.
+let coverHitSink=null;const onCoverHit=fn=>{coverHitSink=fn;};
 const botLook=i=>({skin:(i*4+1)%SKINS.length,core:(i*5+2)%CORES.length,tail:i%2?0:1+(i/2*13)%(TAILS.length-1)});
 const PALETTE=['#ff927f','#b29eff','#f2b768','#79bafa','#eaa0d4','#a9ce75','#e6d481','#9eaddf','#efa4a0','#88c9b0'];
 const PILOTS=['Rivet','Junkratchet','Polarity','Tin Can','Scrapjack','Flux','Copperhead','Orbit','Loose Bolt','Iron Moth'];
@@ -363,7 +365,7 @@ class MagnetWorld{
      if(Math.abs(across)<=CRATE_RADIUS)test(t,{kind:'crate',side});
     }
    }
-   for(const c of this.covers){const t=movingHit(s.prevX,s.prevY,s.x,s.y,c.x,c.y,c.x,c.y,c.r+4);if(t!=null)test(t,{kind:'cover'});}
+   for(const c of this.covers){const t=movingHit(s.prevX,s.prevY,s.x,s.y,c.x,c.y,c.x,c.y,c.r+4);if(t!=null)test(t,{kind:'cover',c});}
    const shotStep=hyp(s.x-s.prevX,s.y-s.prevY);
    for(let i=0;i<this.actors.length;i++){const a=this.actors[i];if(!a.alive||a.id===s.owner||a.shieldUntil>this.time||hasPower(a,'phase',this.time))continue;
     const near=this.checkEveryPiece||!(hyp(s.x-a.x,s.y-a.y)>reach[i]+shotStep);// checkEveryPiece: tests compare against the full check// missing positions (NaN) fall back to checking every piece
@@ -398,6 +400,7 @@ class MagnetWorld{
      this.burst(s.x,s.y,EVENT_COLORS.jackpot,10,100);
     }
     else if(hit.kind==='core')this.hitCore(hit.a,s.owner);
+    else if(hit.kind==='cover'){coverHitSink?.(hit.c,s.x,s.y,s.item.id);this.burst(s.x,s.y,'#9bb3c8',5,70);}
     else this.burst(s.x,s.y,'#9bb3c8',5,70);
     const ignoreId=hit.kind==='armor'?0:(hit.a?.id??s.owner);
     this.drop(s.item,s.x,s.y,-s.vx*.12,-s.vy*.12,ignoreId,hit.a?HOT_SCRAP_SECONDS:.45,Boolean(hit.a));s.dead=true;break;
@@ -1463,11 +1466,13 @@ function reconcileScrap(previous,next,now){
   ctx.restore();
  }
  // ---- Arena edge: an amber energy wall that shimmers where ships touch it ----
- const edgeHits=[],edgeTouchAt=new Map(),EDGE_TOUCH=MM.coreRadius+5.5,WALL_GLOW_LIFE=1.5,WALL_GLOW_SPREAD=230,SHOT_GLOW_LIFE=.9,SHOT_GLOW_SPREAD=330,shotLast=new Map(),shotSeen=new Set(),coverFlash=new Map(),COVER_FLASH_MS=650;
- // Where a vanished shot's path reaches a cover (its 4 px-padded circle, as in the engine) within 0.12 s, or null.
- function coverHit(r){for(const c of game.covers){const dx=r.x-c.x,dy=r.y-c.y,R=c.r+4,a=r.vx*r.vx+r.vy*r.vy,b=2*(dx*r.vx+dy*r.vy),cc=dx*dx+dy*dy-R*R;let t;
-  if(cc<=0)t=0;else{const disc=b*b-4*a*cc;if(disc<0||!a)continue;t=(-b-Math.sqrt(disc))/(2*a);}
-  if(t>-.02&&t<.12){const x=r.x+r.vx*Math.max(0,t),y=r.y+r.vy*Math.max(0,t);return {c,x,y,ang:Math.atan2(y-c.y,x-c.x)};}}return null;}
+ const edgeHits=[],edgeTouchAt=new Map(),EDGE_TOUCH=MM.coreRadius+5.5,WALL_GLOW_LIFE=1.5,WALL_GLOW_SPREAD=230,SHOT_GLOW_LIFE=.9,SHOT_GLOW_SPREAD=330,shotLast=new Map(),shotSeen=new Set(),coverFlash=new Map(),coverShots=new Map(),COVER_HOLD=120,COVER_FADE=780;
+ // The engine reports each shot that hits cover (also point-blank shots that are never drawn). Online a snapshot can
+ // bring back a shot the client already stopped, so each shot counts once.
+ onCoverHit((c,x,y,shotId)=>{const now=performance.now();if(now-(coverShots.get(shotId)??-1e9)<1500)return;coverShots.set(shotId,now);
+  if(coverShots.size>100)for(const [k,t] of coverShots)if(now-t>1500)coverShots.delete(k);
+  if(!visible(c.x,c.y,300))return;coverFlash.set(c.x+','+c.y,{at:now,x,y});const ang=Math.atan2(y-c.y,x-c.x),nx=Math.cos(ang),ny=Math.sin(ang);
+  for(let i=0;i<5;i++){const along=(Math.random()-.5)*2,sp=110+Math.random()*150;sparks.push({x,y,vx:(nx*.8-ny*along)*sp,vy:(ny*.8+nx*along)*sp,life:.28,max:.28});}});
  function watchWalls(now){
   for(const a of game.actors){if(!a.alive)continue;let side=null,x=a.x,y=a.y;
    if(a.x<=EDGE_TOUCH){side='left';x=2;}else if(a.x>=MM.width-EDGE_TOUCH){side='right';x=MM.width-2;}
@@ -1478,8 +1483,6 @@ function reconcileScrap(previous,next,now){
   // reached the wall within 0.12 s is taken as a wall hit at that point. Seen from the outside, so it works online.
   shotSeen.clear();for(const sh of game.shots){const id=sh.item.id;shotSeen.add(id);let r=shotLast.get(id);if(!r){r={};shotLast.set(id,r);}r.x=sh.x;r.y=sh.y;r.vx=sh.vx;r.vy=sh.vy;r.color=sh.item.color;}
   for(const [id,r] of shotLast){if(shotSeen.has(id))continue;shotLast.delete(id);
-   const ch=coverHit(r);if(ch){if(visible(ch.c.x,ch.c.y,300)){coverFlash.set(ch.c,{at:now,x:ch.x,y:ch.y});const nx=Math.cos(ch.ang),ny=Math.sin(ch.ang);
-    for(let i=0;i<5;i++){const along=(Math.random()-.5)*2,sp=110+Math.random()*150;sparks.push({x:ch.x,y:ch.y,vx:(nx*.8-ny*along)*sp,vy:(ny*.8+nx*along)*sp,life:.28,max:.28});}}continue;}
    const W=MM.width,H=MM.height,tx=r.vx<0?(5-r.x)/r.vx:r.vx>0?(W-5-r.x)/r.vx:Infinity,ty=r.vy<0?(5-r.y)/r.vy:r.vy>0?(H-5-r.y)/r.vy:Infinity,t=Math.min(tx,ty);
    if(!(t>-.02&&t<.12)||edgeHits.length>=60)continue;let side,x=r.x+r.vx*t,y=r.y+r.vy*t;
    if(tx<=ty){side=r.vx<0?'left':'right';x=side==='left'?2:W-2;y=limit(y,2,H-2);}else{side=r.vy<0?'top':'bottom';y=side==='top'?2:H-2;x=limit(x,2,W-2);}
@@ -1547,7 +1550,7 @@ function reconcileScrap(previous,next,now){
    ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.fillStyle='#3dbea00c';ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(99,222,190,${pulse})`;ctx.lineWidth=1.5;ctx.setLineDash([7,8]);ctx.beginPath();ctx.arc(w.x,w.y,w.r,game.time*.12,Math.PI*2+game.time*.12);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#4fb89c45';ctx.lineWidth=1;ctx.beginPath();ctx.arc(w.x,w.y,w.r-11,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#7ce8c4a0';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(w.x-9,w.y);ctx.lineTo(w.x+9,w.y);ctx.moveTo(w.x,w.y-9);ctx.lineTo(w.x,w.y+9);ctx.stroke();ctx.fillStyle='#75c9b08c';ctx.font='600 9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';if(hyp(game.human.x-w.x,game.human.y-w.y)>w.r+30)ctx.fillText('REPAIR WELL',w.x,w.y+w.r+17);ctx.restore();}
   for(const c of game.covers){if(!visible(c.x,c.y,c.r+10))continue;ctx.save();ctx.shadowColor='#0006';ctx.shadowBlur=8;polygon(c.x,c.y+3,c.r,6,Math.PI/6);ctx.fillStyle='#07111d';ctx.fill();ctx.shadowBlur=0;polygon(c.x,c.y,c.r,6,Math.PI/6);ctx.fillStyle='#152b3c';ctx.strokeStyle='#3a5365';ctx.lineWidth=2;ctx.fill();ctx.stroke();polygon(c.x,c.y,c.r*.72,6,Math.PI/6);ctx.fillStyle='#0b1c2b';ctx.strokeStyle='#294355';ctx.lineWidth=1;ctx.fill();ctx.stroke();ctx.fillStyle='#66899c';for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;ctx.fillRect(c.x+Math.cos(a)*c.r*.87-1.5,c.y+Math.sin(a)*c.r*.87-1.5,3,3);}
    // Amber center light: breathes slowly; flashes (and lights the inner hex and the impact point) when shot.
-   const fl=coverFlash.get(c),f=fl?Math.max(0,1-(now-fl.at)/COVER_FLASH_MS):0;if(fl&&!f)coverFlash.delete(c);const p=.55+.15*Math.sin(now/1000*1.6+c.x);
+   const key=c.x+','+c.y,fl=coverFlash.get(key),el=fl?now-fl.at:1e9,f=el<COVER_HOLD?1:Math.max(0,1-((el-COVER_HOLD)/COVER_FADE)**2);if(fl&&!f)coverFlash.delete(key);const p=.55+.15*Math.sin(now/1000*1.6+c.x);
    ctx.fillStyle='#07131e';ctx.beginPath();ctx.arc(c.x,c.y,6.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#3a5365';ctx.lineWidth=1.2;ctx.stroke();
    ctx.globalCompositeOperation='lighter';const gr=14+f*(c.r*.75-14);ctx.globalAlpha=Math.min(1,.5*p+f*.9);ctx.drawImage(softSprite('rgba(255,190,100,1)'),c.x-gr,c.y-gr,gr*2,gr*2);
    if(f){ctx.globalAlpha=f*.85;ctx.strokeStyle='#ffd68c';ctx.lineWidth=2;polygon(c.x,c.y,c.r*.72,6,Math.PI/6);ctx.stroke();ctx.globalAlpha=f;ctx.drawImage(softSprite('rgba(255,214,140,1)'),fl.x-24,fl.y-24,48,48);}
