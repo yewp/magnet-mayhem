@@ -172,13 +172,16 @@ const POWER=Object.freeze({first:20,recharge:25,radius:34,
 //            scrap outside it is hot: nobody can pull or collect it until the ring passes it or the event ends.
 //  hole      18 s black hole near the middle that grows, pulls ships (inside their movement step, so
 //            online prediction matches) and loose scrap, and eats scrap and armor that reach its
-//            horizon; a bare core inside takes a hit every 1.5 s. When it ends it bursts: what it ate
+//            horizon; a ship pulled inside the dark core is swallowed (knocked out). When it ends it bursts: what it ate
 //            (up to 70) plus 16 rich pieces fly out, and ships right next to it lose 2 pieces.
-const EVENTS=['rain','jackpot','blackout','polarity','comet','collapse','hole'];
-const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY',comet:'COMET SHOWER',collapse:'COLLAPSE',hole:'BLACK HOLE'};
-const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c',comet:'#eef3ff',collapse:'#ff8a3d',hole:'#b48cff'};
+//  items     14 s Item Rush: 8 extra power-up pads appear at spots marked 3 s ahead, every pad is loaded,
+//            and a taken pad reloads after 2.5 s. When it ends the extra pads vanish.
+const EVENTS=['rain','jackpot','blackout','polarity','comet','collapse','hole','items'];
+const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY',comet:'COMET SHOWER',collapse:'COLLAPSE',hole:'BLACK HOLE',items:'ITEM RUSH'};
+const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c',comet:'#eef3ff',collapse:'#ff8a3d',hole:'#b48cff',items:'#f27bff'};
 const EVENT=Object.freeze({first:20,gapMin:35,gapMax:45,warn:3,jackpotWarn:5,collapseWarn:5,holeWarn:5,
- length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:13.2,collapse:30,hole:18}),
+ length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:13.2,collapse:30,hole:18,items:14}),
+ items:Object.freeze({pads:8,refill:2.5,spacing:230}),
  hole:Object.freeze({pullFrom:300,pullTo:780,horizonFrom:20,horizonTo:62,shipPull:165,scrapPull:820,eatEvery:.2,spillMax:70,bonus:16,burstRadius:230,burstStrip:2}),
  ring:Object.freeze({radius:560,close:9,open:4,shedEvery:.45,coreEvery:2,grace:.3,shedSpeed:420}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
 const CRATE_RADIUS=28;
@@ -292,7 +295,7 @@ class MagnetWorld{
   const hotRing=this.arenaEvent?.kind==='collapse'&&this.time>=this.arenaEvent.start&&this.time<this.arenaEvent.end?this.arenaEvent:null,hotR=hotRing?this.collapseRadius(hotRing):0;
   let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,this.time)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;if(hotRing&&(item.x-hotRing.x)*(item.x-hotRing.x)+(item.y-hotRing.y)*(item.y-hotRing.y)>hotR*hotR)continue;const d=distance(a,item);if(d<lootDist){loot=item;lootDist=d;}}
   let tx=a.x,ty=a.y;const reserve=this.difficulty==='easy'?5:3;
-  let pad=null,padDist=520;if(!holdsPower(a,this.time))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
+  let pad=null,padDist=this.eventActive('items')?850:520;if(!holdsPower(a,this.time))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
   a.magnet=Boolean(loot&&lootDist<270&&(enemyDist>260||a.pieces.length<3))&&!this.eventActive('polarity');a.fire=Boolean(enemy&&enemyDist<650&&a.pieces.length>reserve&&!a.magnet&&this.time>a.shieldUntil);
   const jackpot=this.arenaEvent?.kind==='jackpot'&&this.arenaEvent.panels&&distance(a,this.arenaEvent)<900?this.arenaEvent:null;
   if(a.hp===1&&this.time-a.lastHurt>1){const well=this.wells.reduce((best,w)=>distance(a,w)<distance(a,best)?w:best);tx=well.x;ty=well.y;a.fire=false;if(distance(a,well)<30){tx=a.x;ty=a.y;}}
@@ -483,7 +486,7 @@ class MagnetWorld{
    if(pad.kind<0){if(this.time>=pad.readyAt)pad.kind=Math.floor(this.random()*POWERS.length);continue;}
    const taker=this.actors.find(a=>a.alive&&distance(a,pad)<POWER.radius&&!holdsPower(a,this.time));
    if(!taker)continue;
-   const kind=POWERS[pad.kind];pad.kind=-1;pad.readyAt=this.time+POWER.recharge;this.empower(taker,kind,pad);
+   const kind=POWERS[pad.kind];pad.kind=-1;pad.readyAt=this.time+(this.eventActive('items')?EVENT.items.refill:POWER.recharge);this.empower(taker,kind,pad);
   }
  }
  empower(a,kind,at=a){
@@ -688,7 +691,7 @@ class MagnetWorld{
    for(const comet of this.comets)this.updateComet(comet);
    this.comets=this.comets.filter(comet=>this.time<(comet.shotAt!=null?Math.min(comet.end,comet.shotAt+COMET.afterglow):comet.end));
   }
-  if(e&&this.time>=e.end){if(e.kind==='hole')this.holeBurst(e);if(e.kind==='jackpot')for(let side=0;side<4;side++){if(e.panels & (1<<side))this.spillCrate(e,side);}this.arenaEvent=null;this.nextEventAt=this.time+EVENT.gapMin+this.random()*(EVENT.gapMax-EVENT.gapMin);return;}
+  if(e&&this.time>=e.end){if(e.kind==='items')this.endItemRush();if(e.kind==='hole')this.holeBurst(e);if(e.kind==='jackpot')for(let side=0;side<4;side++){if(e.panels & (1<<side))this.spillCrate(e,side);}this.arenaEvent=null;this.nextEventAt=this.time+EVENT.gapMin+this.random()*(EVENT.gapMax-EVENT.gapMin);return;}
   if(!e){
    if(this.nextEventAt==null)this.nextEventAt=EVENT.first;
    if(this.time<this.nextEventAt)return;
@@ -700,6 +703,10 @@ class MagnetWorld{
    if(kind==='comet')next.launched=0;
    if(kind==='hole'){const p=this.freePoint(90);next.x=Math.round(limit(p.x,950,1850));next.y=Math.round(limit(p.y,750,1450));next.eaten=0;}
    if(kind==='collapse'){next.x=Math.round(1000+this.random()*800);next.y=Math.round(850+this.random()*500);}
+   // Spots spread apart (the farthest of 30 tries if none is far enough from the pads and earlier spots).
+   if(kind==='items')for(let i=0;i<EVENT.items.pads;i++){let p=null,best=-1;
+    for(let k=0;k<30;k++){const q=this.freePoint(70),gap=Math.min(...[...PAD_SPOTS,...next.drops].map(o=>distance(o,q)));if(gap>best){p=q;best=gap;}if(gap>EVENT.items.spacing)break;}
+    next.drops.push({x:Math.round(limit(p.x,90,MM.width-90)),y:Math.round(limit(p.y,90,MM.height-90)),t:start});}
    if(kind==='rain'){const alive=this.actors.filter(a=>a.alive);
     for(let i=0;i<EVENT.rainDrops;i++){let p;
      if(i%4===0&&alive.length){const a=alive[Math.floor(this.random()*alive.length)];p={x:limit(a.x+(this.random()-.5)*360,60,MM.width-60),y:limit(a.y+(this.random()-.5)*360,60,MM.height-60)};}
@@ -708,12 +715,19 @@ class MagnetWorld{
    this.arenaEvent=next;this.lastEvent=kind;return;
   }
   if(this.time<e.start)return;
+  if(e.kind==='items'&&!e.fired)this.startItemRush(e);
   if(e.kind==='rain'){
    for(const d of e.drops)if(!d.landed&&this.time>=d.t){d.landed=true;const n=this.random(),item=this.scrap(d.x,d.y,n<.2?2:n<.5?1:0);item.pickupAt=this.time+.25;this.ground.push(item);this.burst(d.x,d.y,'#c9d6e3',6,90);}
    // Keep landed drops briefly so clients can draw the impact.
    e.drops=e.drops.filter(d=>!d.landed||this.time-d.t<.5);
   }
  }
+ // Item Rush. Online, the room adds and removes the extra pads (clients get them with the pads in each update).
+ startItemRush(e){e.fired=true;if(this.predictInteractions)return;
+  for(const pad of this.pads)if(pad.kind<0)pad.kind=Math.floor(this.random()*POWERS.length);
+  for(const d of e.drops){this.pads.push({x:d.x,y:d.y,kind:Math.floor(this.random()*POWERS.length),readyAt:e.start,temp:true});this.burst(d.x,d.y,EVENT_COLORS.items,14,150);}}
+ endItemRush(){if(this.predictInteractions)return;this.pads=this.pads.filter(p=>!p.temp&&PAD_SPOTS.some(s=>s.x===p.x&&s.y===p.y));
+  for(const pad of this.pads)if(pad.kind<0)pad.readyAt=Math.max(pad.readyAt,this.time+POWER.recharge*.5);}
  ranking(){return this.actors.slice().sort((a,b)=>b.score-a.score||b.kills-a.kills||b.pieces.length-a.pieces.length);}
 }
 /* ENGINE_END */
@@ -2291,7 +2305,7 @@ function reconcileScrap(previous,next,now){
   if(!e || game.time>=e.end)return '';
   const label=EVENT_LABELS[e.kind];
   if(game.time<e.start)return label+' in '+Math.ceil(e.start-game.time)+'s';
-  const hints={rain:'Collect the falling scrap',jackpot:e.panels?'Shoot the gold panels':'Crate emptied',comet:'Follow the glowing scrap trail',blackout:'Visibility reduced',polarity:'Magnets repel scrap',collapse:'Get inside · scrap outside is hot',hole:'Keep clear · it bursts at the end'};
+  const hints={rain:'Collect the falling scrap',jackpot:e.panels?'Shoot the gold panels':'Crate emptied',comet:'Follow the glowing scrap trail',blackout:'Visibility reduced',polarity:'Magnets repel scrap',collapse:'Get inside · scrap outside is hot',hole:'Keep clear · it bursts at the end',items:'Power-ups everywhere · grab one'};
   return label+' · '+hints[e.kind];
  }
  // Comets: a spinning four-point star head, a thin twinkling tail, and a shower of sparks
@@ -2446,6 +2460,10 @@ function reconcileScrap(previous,next,now){
     ctx.beginPath();ctx.moveTo(64,0);ctx.lineTo(48,-8);ctx.lineTo(48,8);ctx.closePath();ctx.fill();ctx.restore();}
   }
   if(e.kind==='comet' && e.launched==null && !e.shower)drawScrapComet(e);
+  // Item Rush: pulsing markers where the extra power-up pads will appear, closing in as the start nears.
+  if(e.kind==='items'&&game.time<e.start){const left=e.start-game.time,t=performance.now()/1000,col=EVENT_COLORS.items;ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;
+   for(const d of e.drops){if(!visible(d.x,d.y,80))continue;ctx.globalAlpha=.35+.3*Math.sin(t*8);ctx.lineWidth=2;ctx.setLineDash([6,6]);ctx.lineDashOffset=-t*20;ctx.beginPath();ctx.arc(d.x,d.y,30+left*12,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+    ctx.globalAlpha=.8;polygon(d.x,d.y,9,4,0);ctx.stroke();ctx.beginPath();ctx.arc(d.x,d.y,3,0,Math.PI*2);ctx.fill();}ctx.restore();}
   if(e.kind==='rain')for(const drop of e.drops){
    const left=drop.t-game.time;
    if(left<-.35 || left>2 || !visible(drop.x,drop.y))continue;
