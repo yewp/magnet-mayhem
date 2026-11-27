@@ -105,7 +105,7 @@ const METAL=['#9dbbd5','#c98d7a','#ffde85'];
 const SKINS=Object.freeze([{name:'Plain',level:1},{name:'Cogs',level:8},{name:'Bolts',level:3},{name:'Crystals',level:20},{name:'Hex plates',level:14},
  {name:'Mochi',shop:true},{name:'Shuriken',shop:true},{name:'Paper charms',shop:true},{name:'Heartbeat',shop:true},{name:'Flower pins',shop:true},{name:'Planets',shop:true},
  {name:'Space junk',shop:true},{name:'Asteroids',shop:true},{name:'Moon phases',shop:true},{name:'Koi',shop:true},{name:'Candy',shop:true},{name:'Slimes',shop:true},{name:'Coins',shop:true},{name:'Dice',shop:true},{name:'Pumpkins',shop:true},{name:'Watching eyes',shop:true},{name:'Lanterns',shop:true},
- {name:'Balls',shop:true},{name:'Moods',shop:true},{name:'Bombs',shop:true}]);
+ {name:'Balls',shop:true},{name:'Moods',shop:true},{name:'Bombs',shop:true},{name:'Crowns',shop:true},{name:'Popcorn',shop:true}]);
 // Tails come from the shop (free for now) and follow your ship in your pilot color.
 const TAILS=Object.freeze([{name:'None'},{name:'Cat tail'},{name:'Fox tail'},{name:'Three-tailed fox'},{name:'Dragon tail'},{name:'Ribbon streamers'},{name:'Comet trail'},{name:'Fish fin'},{name:'Scorpion tail'},{name:'Peacock fan'},{name:'Kite with bows'},{name:'Bubble trail'},{name:'Jellyfish tentacles'},{name:'Leafy vine'},{name:'Constellation'},{name:'Spiked club'},{name:'Devil tail'},{name:'Paper lanterns'},{name:'Chain links'},{name:'Rainbow streamer'},{name:'Feather boa'},{name:'Cherry blossoms'},{name:'Snowflakes'},{name:'Music notes'},{name:'Pixel trail'},{name:'Robot claw'},{name:'Paper cranes'},{name:'Fireflies'},{name:'Ghost wisps'},{name:'Aurora veil'},{name:'Ink brush'},{name:'Party bunting'},{name:'Balloon'},{name:'Gold coins'},{name:'Tiger tail'},{name:'Double helix'},{name:'Neon tube'},{name:'Pearl necklace'},{name:'Pom-pom spring'},{name:'Booster flame'},{name:'Butterflies'},{name:'Hearts'},{name:'Dandelion seeds'},{name:'Bamboo stalk'},{name:'Candy cane'},{name:'Koi fish'},{name:'Water wake'},{name:'Smoke rings'},{name:'Mini galaxy'},{name:'Star wand'},{name:'Ducklings'},{name:'Toy train'},{name:'Lava lamp'},{name:'Bone tail'},{name:'Little ghost'},{name:'Bat swarm'},{name:'Anchor rope'},{name:'Ringed planet'},{name:'Thorny rose'},{name:'Gummy worm'},{name:'UFO'}]);
 const CORES=Object.freeze([{name:'Dot',level:1},{name:'Ring',level:5},{name:'Star',level:11},{name:'Eye',level:17},{name:'Reactor',level:25},{name:'Spirit flame',shop:true},{name:'Atom',shop:true},{name:'Gyroscope',shop:true},{name:'Pulsar',shop:true},{name:'Turbine',shop:true},{name:'Hex lock',shop:true},{name:'Binary',shop:true},{name:'Reticle',shop:true},{name:'Vortex',shop:true},{name:'Plasma',shop:true},{name:'Compass',shop:true},{name:'Aperture',shop:true},{name:'Vitals',shop:true},{name:'Gauge',shop:true},{name:'Magnet',shop:true},{name:'Recoil',shop:true},{name:'Pulse',shop:true},{name:'Drift',shop:true},{name:'Lock-on',shop:true}]);
@@ -114,7 +114,7 @@ const xpForLevel=level=>{let xp=0;for(let l=1;l<level;l++)xp+=300+100*(l-1);retu
 const levelFromXp=xp=>{let level=1;while(xp>=xpForLevel(level+1))level++;return level;};
 const roundXp=score=>Math.max(0,Math.floor(score||0))+100;
 const cleanLook=look=>{const pick=(v,list)=>Number.isInteger(v)&&v>=0&&v<list.length?v:0;return {skin:pick(look?.skin,SKINS),core:pick(look?.core,CORES),tail:pick(look?.tail,TAILS)};};
-const botLook=i=>({skin:(i*3+1)%SKINS.length,core:(i*5+2)%CORES.length,tail:i%2?0:1+(i/2*13)%(TAILS.length-1)});
+const botLook=i=>({skin:(i*4+1)%SKINS.length,core:(i*5+2)%CORES.length,tail:i%2?0:1+(i/2*13)%(TAILS.length-1)});
 const PALETTE=['#ff927f','#b29eff','#f2b768','#79bafa','#eaa0d4','#a9ce75','#e6d481','#9eaddf','#efa4a0','#88c9b0'];
 const PILOTS=['Rivet','Junkratchet','Polarity','Tin Can','Scrapjack','Flux','Copperhead','Orbit','Loose Bolt','Iron Moth'];
 const limit=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1723,7 +1723,7 @@ function reconcileScrap(previous,next,now){
    else if(v===1){c.lineWidth=1;c.beginPath();c.moveTo(-3.4,-2.9);c.lineTo(-1,-1.9);c.moveTo(3.4,-2.9);c.lineTo(1,-1.9);c.stroke();for(const x of [-2,2]){c.beginPath();c.arc(x,-.7,.8,0,7);c.fill();}
     c.fillStyle='#fff';c.fillRect(-2.3,1.5,4.6,1.8);c.lineWidth=.6;c.strokeRect(-2.3,1.5,4.6,1.8);c.beginPath();c.moveTo(0,1.5);c.lineTo(0,3.3);c.stroke();}
    else{for(const x of [-2,2]){c.beginPath();c.arc(x,-1,.85,0,7);c.fill();}c.lineWidth=.9;c.beginPath();c.arc(0,.9,2,.25,Math.PI-.25);c.stroke();c.fillStyle=col;c.globalAlpha=.55;for(const x of [-3.6,3.6]){c.beginPath();c.ellipse(x,1.3,1,.6,0,0,7);c.fill();}c.globalAlpha=1;}},
-  // Heartbeat (slot 8, replaced Hearts): a metal heart scaled each frame to beat; variant 1 = cracked, at 1 core health. Drawn upright.
+  // Heartbeat (slot 8, replaced Hearts): a metal heart scaled each frame to beat; variant 1 = cracked, at 1 core health.
   8:(c,k,m,col,v)=>{const sc=[1.23,1.38,1.52][k];c.scale(sc,sc);c.fillStyle=m;c.beginPath();c.moveTo(0,5.6);c.bezierCurveTo(-8,0,-5,-6.8,0,-2.6);c.bezierCurveTo(5,-6.8,8,0,0,5.6);c.closePath();c.fill();c.shadowBlur=0;skinShade(c,6,0,-.5);c.fill();
    c.strokeStyle=SKIN_DARK;c.lineWidth=.8;c.stroke();c.fillStyle='#ffffffaa';c.beginPath();c.ellipse(-2.6,-2.4,1.3,.8,-.6,0,7);c.fill();c.fillStyle=col;c.globalAlpha=.7;c.beginPath();c.arc(2.4,1,.8,0,7);c.fill();c.globalAlpha=1;
    if(v===1){c.lineWidth=.95;c.beginPath();c.moveTo(.4,-2.4);c.lineTo(-.8,-.4);c.lineTo(.9,1.3);c.lineTo(-.3,3.6);c.stroke();}},
@@ -1732,6 +1732,25 @@ function reconcileScrap(previous,next,now){
    c.fillStyle=m;c.fillRect(-1.9,-r-.4,3.8,2.4);c.strokeStyle='#d9c79c';c.lineWidth=.9;c.beginPath();c.moveTo(0,-r-.4);c.quadraticCurveTo(2.2,-r-2.8,3.6,-r-1.7);c.stroke();
    c.fillStyle='#ffffff66';c.beginPath();c.arc(-r*.4,1.2-r*.4,r*.25,0,7);c.fill();c.fillStyle=col;c.globalAlpha=.7;c.beginPath();c.arc(r*.35,1.2+r*.35,r*.18,0,7);c.fill();c.globalAlpha=1;
    if(v){const sx=3.8,sy=-r-1.8,R=v===1?2.7:3.5;c.fillStyle='#fff4b0';c.beginPath();for(let i=0;i<8;i++){const a=i/8*Math.PI*2+(v===2?.4:0),rr=i%2?R*.4:R;c.lineTo(sx+Math.cos(a)*rr,sy+Math.sin(a)*rr);}c.closePath();c.fill();c.fillStyle='#ff8a3d';c.beginPath();c.arc(sx,sy,.9,0,7);c.fill();}}};
+ // Crowns: point outward like other armor; variant 1/2 = the two twinkle frames while the ship leads the board.
+ // Popcorn: variant 0 = kernel, 1 = popped (each piece pops in turn while the magnet pulls, and closes again after).
+ function skinStar(c,x,y,r,f,rot=0){c.fillStyle=f;c.beginPath();for(let i=0;i<8;i++){const a=rot+i*Math.PI/4,rr=i%2?r*.32:r;c.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr);}c.closePath();c.fill();}
+ Object.assign(SKIN_DRAW,{
+  25:(c,k,m,col,v)=>{const s=[1,1.1,1.2][k];c.scale(s,s);const pts=[[-6,4],[-6,-3.4],[-3,-.4],[0,-5.6],[3,-.4],[6,-3.4],[6,4]];
+   if(v){c.save();c.shadowColor='#fff3b0';c.shadowBlur=9;}c.fillStyle=m;skinPoly(c,pts);c.fill();if(v)c.restore();c.shadowBlur=0;skinShade(c,7);skinPoly(c,pts);c.fill();c.strokeStyle=SKIN_DARK;c.lineWidth=.8;c.lineJoin='round';c.stroke();
+   c.fillStyle='rgba(9,19,31,.28)';c.fillRect(-6,1.4,12,2.6);c.fillStyle=col;c.beginPath();c.arc(0,2.7,1.25,0,7);c.fill();for(const x of [-3.7,3.7]){c.beginPath();c.arc(x,2.7,.8,0,7);c.fill();}
+   for(const [x,y] of [[-6,-3.4],[0,-5.6],[6,-3.4]]){c.fillStyle=m;c.beginPath();c.arc(x,y,1.05,0,7);c.fill();c.strokeStyle=SKIN_DARK;c.lineWidth=.5;c.stroke();}
+   if(v){const t=v===2;skinStar(c,4.4,-6.6,t?2.2:3,'#fffbe0',t?.4:0);skinStar(c,-5.2,-6.4,t?1.9:1.4,'#fffbe0',t?0:.4);}},
+  26:(c,k,m,col,v)=>{if(!v){const s=[1.1,1.2,1.3][k];c.scale(s,s);c.fillStyle=m;c.beginPath();c.moveTo(0,-5.8);c.bezierCurveTo(4.6,-4.6,4.4,3.8,0,5.2);c.bezierCurveTo(-4.4,3.8,-4.6,-4.6,0,-5.8);c.fill();c.shadowBlur=0;skinShade(c,5.6);c.fill();c.strokeStyle=SKIN_DARK;c.lineWidth=.7;c.stroke();
+    c.fillStyle='#ffffff88';c.beginPath();c.ellipse(-1.3,-2,.8,1.7,.3,0,7);c.fill();c.fillStyle=col;c.globalAlpha=.7;c.beginPath();c.arc(1.2,2.4,.7,0,7);c.fill();c.globalAlpha=1;return;}
+   const s=[1.1,1.2,1.3][k];c.scale(s,s);const P=[[-2.7,-1.9,3.2],[2.5,-2.5,3.3],[0,1.7,3.6],[-3.3,2.1,2.6],[3.5,1.7,2.6]];
+   c.fillStyle='#fff3d6';for(const [x,y,r] of P){c.beginPath();c.arc(x,y,r,0,7);c.fill();}c.shadowBlur=0;c.strokeStyle=SKIN_DARK;c.lineWidth=1.6;for(const [x,y,r] of P){c.beginPath();c.arc(x,y,r,0,7);c.stroke();}
+   c.fillStyle='#fff3d6';for(const [x,y,r] of P){c.beginPath();c.arc(x,y,r-.05,0,7);c.fill();}c.fillStyle='#e9d3a6';for(const [x,y,r] of P){c.beginPath();c.arc(x+r*.25,y+r*.3,r*.55,0,7);c.fill();}
+   c.fillStyle=m;c.beginPath();c.ellipse(.5,.8,2,1.4,.5,0,7);c.fill();c.fillStyle='#ffffffdd';c.beginPath();c.arc(-3.3,-3,1,0,7);c.fill();}});
+ // Popcorn remembers when each ship's magnet last switched, so pieces pop (and close) one after another.
+ const popStates=new Map();
+ function popState(a,now){const on=!!a.magnet;let st=popStates.get(a.id);if(!st){st={on,at:-1e9};popStates.set(a.id,st);}if(st.on!==on){st.on=on;st.at=now;}return st;}
+ function leaderId(){const top=game.ranking()[0];return top&&top.score>0?top.id:null;}
  const EYE_R=[5.4,5.8,6.2],COMET_DARK=['#46607a','#7a3b2a','#a8741c'],BOMB_BODY=['#2c3644','#3a2622','#3e3420'];
  // Cogs keep spinning between frames (online, ships are rebuilt from each update, so the angle lives here).
  const cogSpins=new Map();
@@ -2191,7 +2210,7 @@ function reconcileScrap(previous,next,now){
    ctx.shadowColor=p.color;ctx.shadowBlur=p.big?18:8;ctx.fillStyle=p.color;ctx.fillText(p.text,0,0);ctx.restore();}
  }
  function drawPilots(){
-  const now=performance.now();
+  const now=performance.now();let lead;
   for(const a of game.actors){if(!a.alive||!visible(a.x,a.y,175))continue;ctx.save();const isYou=a.id===game.human.id;if(hasPower(a,'phase',game.time))ctx.globalAlpha=.35+.12*Math.sin(now/90);const outer=a.pieces.length?shieldRadius(a,Math.max(...a.pieces.map(p=>orbitSlot(p.slot).radius))):26;
    if(isYou){ctx.fillStyle='#64eee006';ctx.beginPath();ctx.arc(a.x,a.y,outer+13,0,Math.PI*2);ctx.fill();}
    const rings=new Set(a.pieces.map(p=>orbitSlot(p.slot).radius));for(const r of rings){ctx.strokeStyle=a.color+'1c';ctx.lineWidth=1;ctx.beginPath();ctx.arc(a.x,a.y,shieldRadius(a,r),0,Math.PI*2);ctx.stroke();}
@@ -2202,13 +2221,14 @@ function reconcileScrap(previous,next,now){
    ctx.strokeStyle=a.color+'15';ctx.lineWidth=.6;ctx.beginPath();for(let k=0;k<spots.length;k+=2){ctx.moveTo(a.x,a.y);ctx.lineTo(spots[k],spots[k+1]);}ctx.stroke();
    {const m=ctx.getTransform();
     const skin=a.skin||0,aim=a.aim||0,speed=hyp(a.vx||0,a.vy||0),firing=a.fire||game.time-(a.lastShot??-9)<.25,hurt=(a.hurtUntil||0)>game.time;
-    let variant=skin===20||skin===21&&a.magnet?1:0,beat=1,spin=0;const upright=skin===8||skin===23||skin===24;
+    let variant=skin===20||skin===21&&a.magnet?1:0,beat=1,spin=0;const upright=skin===23||skin===24,pop=skin===26?popState(a,now):null;
+    if(skin===25){if(lead===undefined)lead=leaderId();variant=lead===a.id?1:0;}
     if(skin===23)variant=hurt?2:firing?1:0;
     else if(skin===8){const hp=Math.max(1,Math.min(3,a.hp|0)),ph=(now/1000*[0,2.6,1.7,1.1][hp])%1*Math.PI*2;variant=hp===1?1:0;beat=1+.18*Math.max(0,Math.sin(ph))**3+.09*Math.max(0,Math.sin(ph-1.3))**3;}
     else if(skin===24)variant=firing?1+Math.floor(now/70)%2:0;
     else if(skin===1)spin=cogSpin(a,now,speed);
     for(let k=0;k<a.pieces.length;k++){const p=a.pieces[k],x=spots[2*k],y=spots[2*k+1],ang=upright?0:p.angle+Math.PI/2+spin,c=Math.cos(ang)*beat,sn=Math.sin(ang)*beat,flip=skin===14&&orbitSlot(p.slot).spin<0?-1:1;
-     ctx.setTransform(flip*(m.a*c+m.c*sn),flip*(m.b*c+m.d*sn),m.c*c-m.a*sn,m.d*c-m.b*sn,m.a*x+m.c*y+m.e,m.b*x+m.d*y+m.f);ctx.drawImage(orbitSprite(a.color,p.item.kind,isYou,skin,variant),-21,-19);
+     ctx.setTransform(flip*(m.a*c+m.c*sn),flip*(m.b*c+m.d*sn),m.c*c-m.a*sn,m.d*c-m.b*sn,m.a*x+m.c*y+m.e,m.b*x+m.d*y+m.f);ctx.drawImage(orbitSprite(a.color,p.item.kind,isYou,skin,pop?(pop.on?now-pop.at>k*55:now-pop.at<k*55)?1:0:skin===25&&variant?1+(Math.floor(now/260)+k)%2:variant),-21,-19);
      if(skin===20){const look=aim-p.angle-Math.PI/2,r=EYE_R[p.item.kind]*.32;ctx.drawImage(irisSprite(p.item.kind),Math.cos(look)*r-6,Math.sin(look)*r-6);}}
     ctx.setTransform(m);}
    if(a.shieldUntil>game.time){ctx.strokeStyle=a.color+'9a';ctx.lineWidth=1.4;ctx.setLineDash([4,5]);ctx.beginPath();ctx.arc(a.x,a.y,outer+13,game.time,Math.PI*2+game.time);ctx.stroke();ctx.setLineDash([]);}
