@@ -3,7 +3,7 @@
 // its icons are kept in a cache: each request goes to the network first (so a new version shows as soon as it is
 // online) and falls back to the cache without a connection, so Practice offline works with no network. Requests to
 // other origins (the online arena, Google Fonts) are left alone; offline, the page uses the system fonts.
-const CACHE = 'orbbitz-v1';
+const CACHE = 'orbbitz-v2';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png',
   './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/favicon-32.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
@@ -14,7 +14,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  e.respondWith(fetch(req).then(res => {
+  // 'no-cache' asks GitHub Pages whether the file changed instead of reusing the browser's copy for up to 10 minutes
+  // (its max-age=600), so a deploy shows on the next load; an unchanged file costs only a tiny 304 reply.
+  e.respondWith(fetch(req, { cache: 'no-cache' }).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
   }).catch(() => caches.match(req, { ignoreSearch: true }).then(hit => hit || (req.mode === 'navigate' ? caches.match('./index.html') : undefined))));
