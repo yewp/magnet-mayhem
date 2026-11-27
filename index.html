@@ -68,6 +68,12 @@ body:has(#menuScreen:not([hidden])) .brand,body:has(#customizeScreen:not([hidden
 .menu-overlay{grid-template-rows:1fr auto}.menu-overlay .fine{font-family:inherit;letter-spacing:.14em;margin-top:18px}
 @media(max-width:820px){.menu-layout{grid-template-columns:1fr;gap:20px;max-width:420px}.hero{text-align:center}.hero .eyebrow{justify-content:center}.hero .intro{margin:0 auto;font-size:15px}.hero .logo{font-size:56px;margin:10px 0}}
 @media(max-height:700px) and (min-width:821px){.hero .logo{font-size:72px}.menu-card{padding:18px}}
+.admin{position:fixed;left:14px;top:96px;z-index:30;display:none;font-family:inherit;max-width:230px}body.admin-on.in-match .admin{display:block}
+.admin-toggle{background:#0c1a29e6;border:1px solid #f27bff80;color:#f6c8ff;border-radius:10px;padding:7px 11px;font-family:inherit;font-weight:700;font-size:11px;line-height:1;letter-spacing:.12em;cursor:pointer}
+.admin-body{margin-top:8px;background:#0b1626f0;border:1px solid #2b4a63;border-radius:12px;padding:10px;display:grid;gap:7px;box-shadow:0 10px 30px #0008}
+.admin-events{display:grid;grid-template-columns:1fr 1fr;gap:6px}.admin-events button,.admin-end{background:#102236;border:1px solid color-mix(in srgb,var(--c,#7d93a8) 55%,transparent);color:var(--c,#d7e6f5);border-radius:8px;padding:7px 6px;font-family:inherit;font-weight:700;font-size:10px;line-height:1.15;letter-spacing:.04em;cursor:pointer}
+.admin-events button:active,.admin-end:active{transform:scale(.97)}.admin-end{--c:#ff9e8d}.admin-key{display:grid;gap:4px;font-size:10px;color:#8da6be}.admin-key input{background:#07111d;border:1px solid #2b4a63;border-radius:7px;color:#e8f4ff;padding:6px 7px;font:12px ui-monospace,monospace}
+.admin-status{font-size:11px;min-height:14px;color:#8da6be}@media(max-width:720px){.admin{top:200px;left:10px;max-width:200px}}
 </style></head><body>
 <canvas id="arena" aria-label="Orbbitz.io arena. Mouse or WASD to move. Hold left mouse or Space to fire scrap. Hold right mouse or E to pull in your shield and attract scrap. P pauses."></canvas>
 <header class="topbar"><div class="brand"><svg class="brand-logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><circle cx="20" cy="20" r="13" stroke="currentColor" stroke-opacity=".4"/><circle cx="20" cy="20" r="5" fill="currentColor"/><path d="m27 4 7 4-3 6-7-4zM3 25l7-3 3 7-7 3z" fill="#f5c886"/></svg><div><div class="wordmark">orbbitz<span>.io</span></div><div class="brand-sub">YOUR ARMOR IS YOUR AMMO</div></div></div><div class="tools"><button class="icon-btn" id="soundBtn" title="Turn sound on" aria-label="Turn sound on" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m11 5-5 4H3v6h3l5 4V5Z"/><path id="soundWaves" d="m16 9 6 6m0-6-6 6"/></svg></button><button class="icon-btn" id="helpBtn" title="How to play" aria-label="How to play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4m0 2v2"/></svg></button><button class="icon-btn" id="pauseBtn" title="Pause (P)" aria-label="Pause game" disabled><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3v14H7zm7 0h3v14h-3z"/></svg></button></div></header><div id="roomStrip" class="room-strip" hidden><div><strong id="connectionValue">Connecting</strong><span>ROOM <b id="roomCodeValue"></b></span></div><button id="copyRoomBtn" type="button">Copy link</button><input id="shareLink" readonly hidden aria-label="Share this room link"></div>
@@ -75,6 +81,7 @@ body:has(#menuScreen:not([hidden])) .brand,body:has(#customizeScreen:not([hidden
 <aside class="board" id="board" hidden><div class="panel-heading">SALVAGE LEADERS <span id="rivalsLabel">10 AI RIVALS</span></div><div id="leaders"></div></aside><div class="kill-feed" id="feed" hidden></div>
 <aside class="map" id="mapPanel" hidden><div class="panel-heading">THE SCRAPYARD <span>REPAIR WELLS +</span></div><canvas id="minimap" width="272" height="214" aria-label="Arena minimap with repair wells and pilots"></canvas><div class="map-foot"><span><i></i>Your core</span><span>+ Repair</span></div></aside>
 <div class="bottom-note" id="bottomNote" hidden><div class="best-note">PERSONAL BEST <strong id="bestValue">0</strong></div><div id="perfValue" style="font-size:11px;color:#8da6be;margin-bottom:8px" title="Frame rate and network round trip"></div><div class="hints"><kbd>WASD</kbd> or mouse to move<br>Hold click to fire · Right click to pull<br><kbd>P</kbd> Pause · <kbd>Space</kbd> Fire · <kbd>E</kbd> Magnet</div><div class="touch-hint">Drag anywhere to move.<br>Hold Fire for touch auto-aim.</div></div>
+<div class="admin" id="adminPanel"><button class="admin-toggle" id="adminToggle" type="button" aria-expanded="false" aria-controls="adminBody">ADMIN</button><div class="admin-body" id="adminBody" hidden><div class="admin-events" id="adminEvents"></div><button class="admin-end" id="adminEnd" type="button">END CURRENT EVENT</button><label class="admin-key" id="adminKeyRow" hidden>Admin key (online rooms)<input id="adminKey" type="password" autocomplete="off" spellcheck="false"></label><div class="admin-status" id="adminStatus" role="status"></div></div></div>
 <div class="status-line" id="statusLine" hidden>Collect scrap. Pick your moment.</div>
 <nav class="controls" id="controls" aria-label="Game controls" hidden><div class="core-line"><span class="health" id="healthBars" aria-label="Core health"><i class="full"></i><i class="full"></i><i class="full"></i><span id="hpValue" style="margin-left:4px">CORE 3/3</span></span><span class="ammo-caption"><b id="ammoValue">8</b> / <span id="ammoLimit">30</span> SCRAP</span></div><div class="buttons"><button class="action" id="fireBtn" title="Hold to fire (left mouse or Space)"><svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="18" r="7"/><path d="m15 13 7-7m-1-4 6 6M22 15h5M15 3v4"/><path d="m22 3 5 5-4 4-5-5z" fill="currentColor" stroke="none"/></svg><span><strong>Launch scrap</strong><small id="fireCaption">HOLD CLICK / SPACE</small></span></button><button class="action magnet" id="magnetBtn" title="Hold to attract loose scrap (right mouse or E)" aria-pressed="false"><svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 7v11a9 9 0 0 0 18 0V7h-6v11a3 3 0 0 1-6 0V7H6Z"/><path d="M6 12h6m6 0h6"/></svg><span><strong>Magnet pull</strong><small id="magnetCaption">RIGHT CLICK / E</small></span></button></div><div class="armor-dots" id="armorDots" aria-hidden="true"></div></nav>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -184,6 +191,7 @@ const EVENT=Object.freeze({first:20,gapMin:35,gapMax:45,warn:3,jackpotWarn:5,col
  items:Object.freeze({pads:8,refill:2.5,spacing:230}),
  hole:Object.freeze({pullFrom:300,pullTo:780,horizonFrom:20,horizonTo:62,shipPull:165,scrapPull:820,eatEvery:.2,spillMax:70,bonus:16,burstRadius:230,burstStrip:2}),
  ring:Object.freeze({radius:560,close:9,open:4,shedEvery:.45,coreEvery:2,grace:.3,shedSpeed:420}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
+const EVENT_WARN=kind=>kind==='jackpot'?EVENT.jackpotWarn:kind==='collapse'?EVENT.collapseWarn:kind==='hole'?EVENT.holeWarn:EVENT.warn;
 const CRATE_RADIUS=28;
 const CRATE_NORMALS=[[1,0],[0,1],[-1,0],[0,-1]];
 // preview: seconds a comet's route is shown before it launches. A comet head passing
@@ -691,28 +699,14 @@ class MagnetWorld{
    for(const comet of this.comets)this.updateComet(comet);
    this.comets=this.comets.filter(comet=>this.time<(comet.shotAt!=null?Math.min(comet.end,comet.shotAt+COMET.afterglow):comet.end));
   }
-  if(e&&this.time>=e.end){if(e.kind==='items')this.endItemRush();if(e.kind==='hole')this.holeBurst(e);if(e.kind==='jackpot')for(let side=0;side<4;side++){if(e.panels & (1<<side))this.spillCrate(e,side);}this.arenaEvent=null;this.nextEventAt=this.time+EVENT.gapMin+this.random()*(EVENT.gapMax-EVENT.gapMin);return;}
+  if(e&&this.time>=e.end){this.endEvent();return;}
   if(!e){
    if(this.nextEventAt==null)this.nextEventAt=EVENT.first;
    if(this.time<this.nextEventAt)return;
    const options=EVENTS.filter(k=>k!==this.lastEvent),kind=options[Math.floor(this.random()*options.length)];
-   const start=this.time+(kind==='jackpot'?EVENT.jackpotWarn:kind==='collapse'?EVENT.collapseWarn:kind==='hole'?EVENT.holeWarn:EVENT.warn),end=start+EVENT.length[kind];
+   const start=this.time+EVENT_WARN(kind),end=start+EVENT.length[kind];
    if(end>this.duration-2){this.nextEventAt=Infinity;return;}
-   const next={kind,start,end,x:0,y:0,drops:[],fired:false};
-   if(kind==='jackpot'){const p=this.freePoint(55);next.x=p.x;next.y=p.y;next.panels=15;}
-   if(kind==='comet')next.launched=0;
-   if(kind==='hole'){const p=this.freePoint(90);next.x=Math.round(limit(p.x,950,1850));next.y=Math.round(limit(p.y,750,1450));next.eaten=0;}
-   if(kind==='collapse'){next.x=Math.round(1000+this.random()*800);next.y=Math.round(850+this.random()*500);}
-   // Spots spread apart (the farthest of 30 tries if none is far enough from the pads and earlier spots).
-   if(kind==='items')for(let i=0;i<EVENT.items.pads;i++){let p=null,best=-1;
-    for(let k=0;k<30;k++){const q=this.freePoint(70),gap=Math.min(...[...PAD_SPOTS,...next.drops].map(o=>distance(o,q)));if(gap>best){p=q;best=gap;}if(gap>EVENT.items.spacing)break;}
-    next.drops.push({x:Math.round(limit(p.x,90,MM.width-90)),y:Math.round(limit(p.y,90,MM.height-90)),t:start});}
-   if(kind==='rain'){const alive=this.actors.filter(a=>a.alive);
-    for(let i=0;i<EVENT.rainDrops;i++){let p;
-     if(i%4===0&&alive.length){const a=alive[Math.floor(this.random()*alive.length)];p={x:limit(a.x+(this.random()-.5)*360,60,MM.width-60),y:limit(a.y+(this.random()-.5)*360,60,MM.height-60)};}
-     else p=this.freePoint();
-     next.drops.push({x:p.x,y:p.y,t:start+this.random()*EVENT.length.rain,landed:false});}}
-   this.arenaEvent=next;this.lastEvent=kind;return;
+   this.arenaEvent=this.makeEvent(kind);this.lastEvent=kind;return;
   }
   if(this.time<e.start)return;
   if(e.kind==='items'&&!e.fired)this.startItemRush(e);
@@ -728,6 +722,29 @@ class MagnetWorld{
   for(const d of e.drops){this.pads.push({x:d.x,y:d.y,kind:Math.floor(this.random()*POWERS.length),readyAt:e.start,temp:true});this.burst(d.x,d.y,EVENT_COLORS.items,14,150);}}
  endItemRush(){if(this.predictInteractions)return;this.pads=this.pads.filter(p=>!p.temp&&PAD_SPOTS.some(s=>s.x===p.x&&s.y===p.y));
   for(const pad of this.pads)if(pad.kind<0)pad.readyAt=Math.max(pad.readyAt,this.time+POWER.recharge*.5);}
+ // Builds an event announced now (shared by the automatic schedule and the admin controls).
+ makeEvent(kind){const start=this.time+EVENT_WARN(kind),end=start+EVENT.length[kind];
+  const next={kind,start,end,x:0,y:0,drops:[],fired:false};
+  if(kind==='jackpot'){const p=this.freePoint(55);next.x=p.x;next.y=p.y;next.panels=15;}
+  if(kind==='comet')next.launched=0;
+  if(kind==='hole'){const p=this.freePoint(90);next.x=Math.round(limit(p.x,950,1850));next.y=Math.round(limit(p.y,750,1450));next.eaten=0;}
+  if(kind==='collapse'){next.x=Math.round(1000+this.random()*800);next.y=Math.round(850+this.random()*500);}
+  // Spots spread apart (the farthest of 30 tries if none is far enough from the pads and earlier spots).
+  if(kind==='items')for(let i=0;i<EVENT.items.pads;i++){let p=null,best=-1;
+   for(let k=0;k<30;k++){const q=this.freePoint(70),gap=Math.min(...[...PAD_SPOTS,...next.drops].map(o=>distance(o,q)));if(gap>best){p=q;best=gap;}if(gap>EVENT.items.spacing)break;}
+   next.drops.push({x:Math.round(limit(p.x,90,MM.width-90)),y:Math.round(limit(p.y,90,MM.height-90)),t:start});}
+  if(kind==='rain'){const alive=this.actors.filter(a=>a.alive);
+   for(let i=0;i<EVENT.rainDrops;i++){let p;
+    if(i%4===0&&alive.length){const a=alive[Math.floor(this.random()*alive.length)];p={x:limit(a.x+(this.random()-.5)*360,60,MM.width-60),y:limit(a.y+(this.random()-.5)*360,60,MM.height-60)};}
+    else p=this.freePoint();
+    next.drops.push({x:p.x,y:p.y,t:start+this.random()*EVENT.length.rain,landed:false});}}
+  return next;}
+ // Finishes the current event as if its time ran out (an event that has not started yet just stops).
+ endEvent(){const e=this.arenaEvent;if(!e)return false;
+  if(this.time>=e.start){if(e.kind==='items')this.endItemRush();if(e.kind==='hole')this.holeBurst(e);if(e.kind==='jackpot')for(let side=0;side<4;side++){if(e.panels & (1<<side))this.spillCrate(e,side);}}
+  this.arenaEvent=null;this.nextEventAt=this.time+EVENT.gapMin+this.random()*(EVENT.gapMax-EVENT.gapMin);return true;}
+ // Admin: announce a chosen event now (with its usual warning), ending any current one first.
+ forceEvent(kind){if(!EVENTS.includes(kind))return false;if(this.arenaEvent)this.endEvent();this.arenaEvent=this.makeEvent(kind);this.lastEvent=kind;return true;}
  ranking(){return this.actors.slice().sort((a,b)=>b.score-a.score||b.kills-a.kills||b.pieces.length-a.pieces.length);}
 }
 /* ENGINE_END */
@@ -1215,6 +1232,7 @@ function reconcileScrap(previous,next,now){
   socket.onmessage=event=>{
    if(online!==session||session.socket!==socket)return;
    const data=JSON.parse(event.data);
+   if(data.admin){adminReply(data.admin);return;}
    data.world=receiver.decode(data.world);
    if(!data.world)return;
    if(Number.isFinite(data.echo))session.rtt=performance.now()-data.echo;
@@ -1299,9 +1317,25 @@ function reconcileScrap(previous,next,now){
  if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
  for(const id of ['graphicsBtn','pauseGraphicsBtn'])$(id).onclick=nextGraphicsMode;showGraphicsMode();
  $('board').addEventListener('click',()=>$('board').classList.toggle('expanded'));
+ // Admin panel: turned on for this browser by opening the game with #admin (off with #noadmin). In practice it
+ // drives the local game; online it sends commands with the admin key saved on this device, and the room checks it.
+ let adminOn=false;try{if(location.hash==='#admin')localStorage.setItem('orbbitz-admin','1');if(location.hash==='#noadmin')localStorage.removeItem('orbbitz-admin');
+  adminOn=localStorage.getItem('orbbitz-admin')==='1';if(/^#(no)?admin$/.test(location.hash))history.replaceState(null,'',location.pathname+location.search);}catch{}
+ function adminKey(){try{return localStorage.getItem('orbbitz-admin-key')||'';}catch{return '';}}
+ function adminStatus(text,good){const el=$('adminStatus');el.textContent=text;el.style.color=good?'#7cf2cf':'#ff9e8d';}
+ function adminReply(r){if(r.ok)adminStatus(r.did==='end'?'Event ended.':EVENT_LABELS[r.kind]+(online?' started for the room.':' started.'),true);else adminStatus(r.error||'Refused.',false);}
+ function adminCommandSend(cmd){
+  if(online){const key=adminKey();if(!key){adminStatus('Enter your admin key first.',false);$('adminKey').focus();return;}
+   if(online.socket?.readyState!==WebSocket.OPEN){adminStatus('Not connected right now.',false);return;}online.socket.send(JSON.stringify({action:'admin',key,...cmd}));adminStatus('Sending…',true);return;}
+  if(cmd.do==='end')adminReply(game.endEvent()?{ok:true,did:'end'}:{ok:false,error:'No event is running.'});else{game.forceEvent(cmd.kind);adminReply({ok:true,did:'event',kind:cmd.kind});}}
+ function setupAdmin(){document.body.classList.toggle('admin-on',adminOn);if(!adminOn)return;
+  $('adminEvents').replaceChildren(...EVENTS.map(kind=>{const b=document.createElement('button');b.type='button';b.textContent=EVENT_LABELS[kind];b.style.setProperty('--c',EVENT_COLORS[kind]);b.onclick=()=>adminCommandSend({do:'event',kind});return b;}));
+  $('adminEnd').onclick=()=>adminCommandSend({do:'end'});$('adminToggle').onclick=()=>{const open=$('adminBody').hidden;$('adminBody').hidden=!open;$('adminToggle').setAttribute('aria-expanded',String(open));if(open)$('adminKeyRow').hidden=!online;};
+  $('adminKey').value=adminKey();$('adminKey').onchange=()=>{try{$('adminKey').value=$('adminKey').value.trim().toUpperCase();localStorage.setItem('orbbitz-admin-key',$('adminKey').value);}catch{}adminStatus('Key saved on this device.',true);};}
+ setupAdmin();
  function toast(text){$('toast').textContent=text;$('toast').classList.add('show');toastUntil=performance.now()+3000;}
  function clearInput(){keys.clear();fireSources.clear();magnetSources.clear();touch=null;pointer.active=false;game.human.fire=game.human.magnet=false;game.human.moveX=game.human.moveY=0;$('fireBtn').classList.remove('engaged');$('magnetBtn').classList.remove('engaged');$('magnetBtn').setAttribute('aria-pressed','false');}
- function show(next){state=next;if(next==='menu')$('menuBest').textContent=Math.floor(best).toLocaleString();for(const id of screens)$(id).hidden=true;const active={menu:'menuScreen',paused:'pauseScreen',help:'helpScreen',finished:'finishScreen',customize:'customizeScreen',shop:'shopScreen'}[next];if(active)$(active).hidden=false;const lobby=next==='menu'||next==='customize'||next==='shop';for(const id of panels)$(id).hidden=lobby;if(lobby)updateProgressUI();$('rebuildPanel').hidden=true;$('pauseBtn').disabled=!['playing','paused'].includes(next);$('pauseBtn').setAttribute('aria-label',next==='paused'?'Resume game':'Pause game');$('pauseBtn').title=next==='paused'?'Resume (P)':'Pause (P)';$('roomStrip').hidden=!online||['menu','customize','shop'].includes(next);$('pauseCopy').textContent=online?'Your controls are paused. The online arena keeps running, so rivals can still hit your core.':'Your core, armor, and round timer are waiting for you.';$('restartBtn').textContent=online?'Start a new room':'Start a fresh round';$('againBtn').textContent=online?'Leave to lobby':'One more round';document.body.classList.toggle('in-match',next==='playing'||next==='paused');if(next==='playing'||next==='paused')window.getSelection()?.removeAllRanges();clearInput();acc=0;if(next==='paused')$('resumeBtn').focus();if(next==='finished')$('againBtn').focus();if(next==='help')$('closeHelpBtn').focus();}
+ function show(next){$('adminKeyRow').hidden=!online;state=next;if(next==='menu')$('menuBest').textContent=Math.floor(best).toLocaleString();for(const id of screens)$(id).hidden=true;const active={menu:'menuScreen',paused:'pauseScreen',help:'helpScreen',finished:'finishScreen',customize:'customizeScreen',shop:'shopScreen'}[next];if(active)$(active).hidden=false;const lobby=next==='menu'||next==='customize'||next==='shop';for(const id of panels)$(id).hidden=lobby;if(lobby)updateProgressUI();$('rebuildPanel').hidden=true;$('pauseBtn').disabled=!['playing','paused'].includes(next);$('pauseBtn').setAttribute('aria-label',next==='paused'?'Resume game':'Pause game');$('pauseBtn').title=next==='paused'?'Resume (P)':'Pause (P)';$('roomStrip').hidden=!online||['menu','customize','shop'].includes(next);$('pauseCopy').textContent=online?'Your controls are paused. The online arena keeps running, so rivals can still hit your core.':'Your core, armor, and round timer are waiting for you.';$('restartBtn').textContent=online?'Start a new room':'Start a fresh round';$('againBtn').textContent=online?'Leave to lobby':'One more round';document.body.classList.toggle('in-match',next==='playing'||next==='paused');if(next==='playing'||next==='paused')window.getSelection()?.removeAllRanges();clearInput();acc=0;if(next==='paused')$('resumeBtn').focus();if(next==='finished')$('againBtn').focus();if(next==='help')$('closeHelpBtn').focus();}
  function start(){$('rivalsLabel').textContent='10 AI RIVALS';disconnectOnline();game=new MagnetWorld({name:$('playerName').value.trim()||'You',difficulty:$('difficulty').value});Object.assign(game.human,look);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};pointer={x:width/2,y:height/2-160,active:false};hudAt=0;show('playing');save();updateHUD();toast('Your armor is ammo. Hold click to fire; right click or E to reclaim.');play('start');document.activeElement?.blur();}
  function pause(){if(state==='playing'){show('paused');save();}else if(state==='paused'){show('playing');toast('Back in orbit.');}}
  function menu(){save();disconnectOnline();lobbyStatus.textContent='Play with others, or create a room and invite friends.';lobbyStatus.classList.remove('error');$('toast').classList.remove('show');toastUntil=0;preferredRoom='';onlineButton.textContent='Play online';history.replaceState(null,'',location.pathname);show('menu');$('playerName').focus();}
