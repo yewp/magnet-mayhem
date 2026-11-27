@@ -2221,17 +2221,20 @@ function reconcileScrap(previous,next,now){
  }
  // Hit feedback. Hits are detected by a ship's lastHurt changing and knockouts by new
  // kill-feed entries, so the same code works offline and with online snapshots.
- const GLITCH_MS=340,POP_MS=1100,HEAL_MS=1200,glitchAt=new Map(),lastHurtSeen=new Map(),hpSeen=new Map(),healAt=new Map(),popsSeen=new Set(),pops=[];
+ const GLITCH_MS=340,POP_MS=1100,HEAL_MS=1200,glitchAt=new Map(),lastHurtSeen=new Map(),hpSeen=new Map(),healAt=new Map(),popsSeen=new Set(),pops=[],koFxAt=new Map();
+ // Every knockout gets the burst once: when a ship is seen going from alive to down (black hole, Collapse ring, any
+ // cause), or from its kill-feed entry, whichever comes first.
+ function knockoutOnce(a,now){if(now-(koFxAt.get(a.id)??-1e9)<1500)return;koFxAt.set(a.id,now);knockoutFx(a,now);}
  let glitchBuf=null;
  function watchCombat(now){
   for(const a of game.actors){const seen=lastHurtSeen.get(a.id);lastHurtSeen.set(a.id,a.lastHurt);
    if(seen!=null&&a.lastHurt>seen&&game.time-a.lastHurt<.5)glitchAt.set(a.id,now);
-   const was=hpSeen.get(a.id);hpSeen.set(a.id,{hp:a.hp,alive:a.alive});if(was&&was.alive&&a.alive&&a.hp>was.hp)healAt.set(a.id,now);}
+   const was=hpSeen.get(a.id);hpSeen.set(a.id,{hp:a.hp,alive:a.alive});if(was&&was.alive&&a.alive&&a.hp>was.hp)healAt.set(a.id,now);if(was?.alive&&!a.alive)knockoutOnce(a,now);}
   for(const e of game.feed||[]){const key=e.time.toFixed(2)+'|'+e.killer+'|'+e.victim;if(popsSeen.has(key))continue;popsSeen.add(key);
    if(game.time-e.time>1.5)continue;
    const victim=game.actors.find(a=>a.name===e.victim&&!a.alive)||game.actors.find(a=>a.name===e.victim);if(!victim)continue;
    const yours=e.killer===game.human.name&&e.color===game.human.color;
-   pops.push({x:victim.x,y:victim.y-10,text:'+'+KNOCKOUT_REWARD,color:yours?'#ffd36b':e.color,big:yours,start:now});knockoutFx(victim,now);}
+   pops.push({x:victim.x,y:victim.y-10,text:'+'+KNOCKOUT_REWARD,color:yours?'#ffd36b':e.color,big:yours,start:now});knockoutOnce(victim,now);}
   if(popsSeen.size>200)popsSeen.clear();
   while(pops.length&&now-pops[0].start>POP_MS)pops.shift();
  }
