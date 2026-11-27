@@ -230,6 +230,19 @@ const EVENT=Object.freeze({first:20,gapMin:26,gapMax:34,warn:3,jackpotWarn:5,col
  hole:Object.freeze({pullFrom:300,pullTo:1000,horizonFrom:20,horizonTo:110,shipPull:165,scrapPull:820,eatEvery:.2,spillMax:70,bonus:16,burstRadius:280,burstStrip:2}),
  ring:Object.freeze({radius:560,close:9,open:4,shedEvery:.45,coreEvery:2,grace:.3,shedSpeed:420}),jackpot:Object.freeze({ring:150,unlock:5,decay:.25,steal:1.5,bonus:120,pieces:40}),repel:1100,blackoutAim:2.5});
 const EVENT_WARN=kind=>kind==='jackpot'?EVENT.jackpotWarn:kind==='collapse'?EVENT.collapseWarn:kind==='hole'?EVENT.holeWarn:EVENT.warn;
+// Bot play styles, spread over the bots: engage = how far they look for a fight, keep = favourite fighting range,
+// fire = farthest they shoot from,
+// reserve = armor kept back, aim = aim error multiplier, loot = how keen on scrap,
+// weak = how much they prefer hurt targets, third = jumps on ships that were just hit, shy = avoids fights it did not start.
+const BOT_STYLES=Object.freeze({
+ hunter:{engage:760,keep:300,fire:560,reserve:2,aim:1,loot:1,weak:1.5},
+ marksman:{engage:860,keep:540,fire:650,reserve:4,aim:.65,loot:1,weak:1},
+ brawler:{engage:600,keep:150,fire:330,reserve:2,aim:1.25,loot:.8,weak:1},
+ scavenger:{engage:560,keep:380,fire:460,reserve:5,aim:1.1,loot:1.8,weak:1,shy:true},
+ opportunist:{engage:720,keep:330,fire:560,reserve:3,aim:.9,loot:1.2,weak:2,third:true}});
+const BOT_STYLE_ORDER=['hunter','marksman','brawler','scavenger','opportunist'];
+const botStyle=a=>BOT_STYLES[BOT_STYLE_ORDER[(a.botIndex??a.id)%BOT_STYLE_ORDER.length]];
+const BOT_AIM=[.38,.17,.065];// aim error: easy, normal, hard
 const CRATE_RADIUS=28;
 // preview: seconds a comet's route is shown before it launches. A comet head passing
 // through a ship knocks up to hitStrip armor pieces loose (once per comet per ship).
@@ -276,7 +289,7 @@ class MagnetWorld{
   this.pads=PAD_SPOTS.map(p=>({...p,kind:-1,readyAt:POWER.first}));this.vortices=[];this.stardust=[];this.arenaEvent=null;this.nextEventAt=EVENT.first;this.lastEvent=null;
   this.covers=[{x:1010,y:880,r:43},{x:1790,y:1320,r:43},{x:680,y:1580,r:51},{x:2120,y:620,r:51},{x:1720,y:480,r:38},{x:1080,y:1720,r:38},{x:380,y:1050,r:45},{x:2420,y:1150,r:45}];
   this.human=this.actor(name,'#64eee0',true);this.actors=[this.human];this.spawn(this.human,true,0);
-  for(let i=0;i<MM.bots;i++){const a=this.actor(PILOTS[i],PALETTE[i],false);Object.assign(a,botLook(i));this.actors.push(a);this.spawn(a,true,i);}
+  for(let i=0;i<MM.bots;i++){const a=this.actor(PILOTS[i],PALETTE[i],false);Object.assign(a,botLook(i),{botIndex:i});this.actors.push(a);this.spawn(a,true,i);}
   for(let i=0;i<MM.ground;i++)this.ground.push(this.scrap());
   // A ring of easy salvage teaches collection on the first run.
   for(let i=0;i<22;i++){const a=i*.47,r=105+i*5;this.ground[i].x=1400+Math.cos(a)*r;this.ground[i].y=1100+Math.sin(a)*r;}
@@ -335,36 +348,60 @@ class MagnetWorld{
  bound(a){a.x=limit(a.x,MM.coreRadius+4,MM.width-MM.coreRadius-4);a.y=limit(a.y,MM.coreRadius+4,MM.height-MM.coreRadius-4);for(const c of this.covers){const dx=a.x-c.x,dy=a.y-c.y,d=hyp(dx,dy),r=c.r+MM.coreRadius+2;if(d<r){const len=d||1;a.x=c.x+(d?dx/len:1)*r;a.y=c.y+(d?dy/len:0)*r;}}}
  think(a,dt){
   a.think-=dt;if(a.think>0)return;a.think=.16+this.random()*.12;
-  let enemy=null,enemyDist=Infinity;for(const b of this.actors)if(b!==a&&b.alive&&b.shieldUntil<this.time){const d=distance(a,b);if(d<enemyDist){enemy=b;enemyDist=d;}}
+  const st=botStyle(a),skill=this.difficulty==='easy'?0:this.difficulty==='hard'?2:1,now=this.time;
+  // Who is near, who is a threat, and which bots already chose each player (so a player is never swarmed).
+  let nearest=null,nearestDist=Infinity;const chosen=new Map();
+  for(const b of this.actors){if(b===a||!b.alive)continue;if(!b.human&&b.targetId&&now<b.targetUntil)chosen.set(b.targetId,(chosen.get(b.targetId)||0)+1);
+   if(b.shieldUntil<now){const d=distance(a,b);if(d<nearestDist){nearest=b;nearestDist=d;}}}
+  // Target: the best-scoring ship in range. Closer, weaker and recently-hurt ships score higher (how much depends on
+  // the play style); the ship that just hit this bot scores much higher (revenge); the current target is sticky.
+  let enemy=null,enemyDist=Infinity,best=-Infinity;const revenge=now-(a.lastAttackedAt??-99)<4?a.lastAttacker:0;
+  for(const b of this.actors){if(b===a||!b.alive||b.shieldUntil>=now)continue;const d=distance(a,b);if(d>st.engage&&b.id!==revenge)continue;
+   let score=-d/220+(3-b.hp)*.5*st.weak+Math.max(0,8-b.pieces.length)*.05*st.weak;
+   if(b.id===revenge)score+=2.4;if(b.id===a.targetId&&now<a.targetUntil)score+=1.5;if(st.third&&now-(b.lastHurt??-99)<1.5)score+=1.3;
+   if(b.human&&b.id!==a.targetId&&(chosen.get(b.id)||0)>=2&&b.id!==revenge)score-=5;
+   if(score>best){best=score;enemy=b;enemyDist=d;}}
+  if(enemy){if(enemy.id!==a.targetId||now>=a.targetUntil){a.targetId=enemy.id;a.targetUntil=now+2.5+this.random()*1.5;}}else a.targetId=0;
   let dust=null,dustDist=450;for(const m of this.stardust||[]){const d=distance(a,m);if(d<dustDist){dust=m;dustDist=d;}}
-  const hotRing=this.arenaEvent?.kind==='collapse'&&this.time>=this.arenaEvent.start&&this.time<this.arenaEvent.end?this.arenaEvent:null,hotR=hotRing?this.collapseRadius(hotRing):0;
-  let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,this.time)||item.ignoreId===a.id&&this.time<item.ignoreUntil)continue;if(hotRing&&(item.x-hotRing.x)*(item.x-hotRing.x)+(item.y-hotRing.y)*(item.y-hotRing.y)>hotR*hotR)continue;const d=distance(a,item);if(d<lootDist){loot=item;lootDist=d;}}
-  let tx=a.x,ty=a.y;const reserve=this.difficulty==='easy'?5:3;
-  let pad=null,padDist=this.eventActive('items')?850:520;if(!holdsPower(a,this.time))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
-  a.magnet=Boolean(loot&&lootDist<270&&(enemyDist>260||a.pieces.length<3))&&!this.eventActive('polarity');a.fire=Boolean(enemy&&enemyDist<650&&a.pieces.length>reserve&&!a.magnet&&this.time>a.shieldUntil);
-  const jp=this.arenaEvent,jackpot=jp?.kind==='jackpot'&&!jp.cracked&&this.time>=jp.start-1&&a.hp>1&&distance(a,jp)<(EVENT.jackpot.ring+520)?jp:null;
-  if(a.hp===1&&this.time-a.lastHurt>1){const well=this.wells.reduce((best,w)=>distance(a,w)<distance(a,best)?w:best);tx=well.x;ty=well.y;a.fire=false;if(distance(a,well)<30){tx=a.x;ty=a.y;}}
-  else if(enemy&&enemyDist<270&&(a.pieces.length<5||a.hp===1)){tx=a.x+(a.x-enemy.x)*2;ty=a.y+(a.y-enemy.y)*2;a.magnet=false;}
+  const hotRing=this.arenaEvent?.kind==='collapse'&&now>=this.arenaEvent.start&&now<this.arenaEvent.end?this.arenaEvent:null,hotR=hotRing?this.collapseRadius(hotRing):0,gold=this.eventActive('rain');
+  let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,now)||item.ignoreId===a.id&&now<item.ignoreUntil)continue;if(hotRing&&(item.x-hotRing.x)*(item.x-hotRing.x)+(item.y-hotRing.y)*(item.y-hotRing.y)>hotR*hotR)continue;const d=distance(a,item)/(1+item.kind*.15);if(d<lootDist){loot=item;lootDist=d;}}
+  let tx=a.x,ty=a.y;const reserve=Math.max(st.reserve,this.difficulty==='easy'?5:0),phase=hasPower(a,'phase',now),leech=hasPower(a,'leech',now);
+  let pad=null,padDist=this.eventActive('items')?850:520;if(!holdsPower(a,now))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
+  a.magnet=Boolean(loot&&lootDist<270*st.loot*(gold?1.4:1)&&(nearestDist>260||a.pieces.length<3))&&!this.eventActive('polarity');
+  a.fire=Boolean(enemy&&enemyDist<st.fire&&a.pieces.length>reserve&&!a.magnet&&now>a.shieldUntil&&!phase);
+  const jp=this.arenaEvent,jackpot=jp?.kind==='jackpot'&&!jp.cracked&&now>=jp.start-1&&a.hp>1&&distance(a,jp)<(EVENT.jackpot.ring+520)?jp:null;
+  // Scavengers keep out of fights they did not start unless they are well armored.
+  const shy=st.shy&&enemy&&enemy.id!==revenge&&a.pieces.length<12;
+  if(a.hp===1&&now-a.lastHurt>1){const well=this.wells.reduce((best,w)=>distance(a,w)<distance(a,best)?w:best);tx=well.x;ty=well.y;a.fire=false;if(distance(a,well)<30){tx=a.x;ty=a.y;}}
+  else if(nearest&&nearestDist<270&&(a.pieces.length<5||a.hp===1||phase)){tx=a.x+(a.x-nearest.x)*2;ty=a.y+(a.y-nearest.y)*2;a.magnet=false;}
   else if(dust){tx=dust.x;ty=dust.y;}
   else if(jackpot){const spot=(a.id*2.4)%(Math.PI*2);tx=jackpot.x+Math.cos(spot)*55;ty=jackpot.y+Math.sin(spot)*55;}
   else if(pad){tx=pad.x;ty=pad.y;}
-  else if(enemy&&a.pieces.length>reserve+3&&enemyDist<670){const dx=enemy.x-a.x,dy=enemy.y-a.y,d=enemyDist||1,radial=enemyDist>340?.8:enemyDist<240?-.7:.05,spin=a.id%2?1:-1;tx=a.x+dx/d*radial*220-dy/d*spin*180;ty=a.y+dy/d*radial*220+dx/d*spin*180;}
+  else if(loot&&(shy||gold&&st.loot>1.1)&&lootDist<480){tx=loot.x;ty=loot.y;if(shy)a.fire=false;}
+  else if(enemy&&!shy&&(a.pieces.length>reserve+3||leech)&&enemyDist<st.engage){
+   // Fight at this style's favourite range, circling (each bot has its own direction).
+   const keep=leech?POWER.leechRange*.7:st.keep,dx=enemy.x-a.x,dy=enemy.y-a.y,d=enemyDist||1,radial=d>keep+90?.8:d<keep-90?-.7:.05,spin=a.id%2?1:-1;
+   tx=a.x+dx/d*radial*220-dy/d*spin*180;ty=a.y+dy/d*radial*220+dx/d*spin*180;}
   else if(loot){tx=loot.x;ty=loot.y;}
-  else if(enemy){tx=enemy.x;ty=enemy.y;}
-  const hole=this.arenaEvent?.kind==='hole'&&this.time>=this.arenaEvent.start-EVENT.holeWarn&&this.time<this.arenaEvent.end?this.arenaEvent:null;
-  if(hole){const H=EVENT.hole,h=this.holeHorizon(hole,this.time+1.5),danger=h+.3*(this.holePull(hole,this.time+1.5)-h)+40,hd=distance(a,hole);
+  else if(enemy&&!shy){tx=enemy.x;ty=enemy.y;}
+  const hole=this.arenaEvent?.kind==='hole'&&now>=this.arenaEvent.start-EVENT.holeWarn&&now<this.arenaEvent.end?this.arenaEvent:null;
+  if(hole){const H=EVENT.hole,h=this.holeHorizon(hole,now+1.5),danger=h+.3*(this.holePull(hole,now+1.5)-h)+40,hd=distance(a,hole);
    // Near the end, healthy bots wait just outside the burst for the payout; otherwise targets stay out of the strong pull.
    if(hd<danger){const len=hd||1;tx=a.x+(a.x-hole.x)/len*300;ty=a.y+(a.y-hole.y)/len*300;a.magnet=false;}
-   else if(this.time>hole.end-4&&a.hp>1&&hd<1100){const camp=Math.max(danger,H.burstRadius+50),len=hd||1;tx=hole.x+(a.x-hole.x)/len*camp;ty=hole.y+(a.y-hole.y)/len*camp;}
+   else if(now>hole.end-4&&a.hp>1&&hd<1100){const camp=Math.max(danger,H.burstRadius+50),len=hd||1;tx=hole.x+(a.x-hole.x)/len*camp;ty=hole.y+(a.y-hole.y)/len*camp;}
    else{let ox=tx-hole.x,oy=ty-hole.y,od=hyp(ox,oy);if(od<danger){if(od<1){ox=a.x-hole.x;oy=a.y-hole.y;od=hyp(ox,oy)||1;}tx=hole.x+ox/od*danger;ty=hole.y+oy/od*danger;}}}
-  const ring=this.arenaEvent?.kind==='collapse'&&this.time>=this.arenaEvent.start-EVENT.collapseWarn&&this.time<this.arenaEvent.end-EVENT.ring.open?this.arenaEvent:null;
-  if(ring){const safe=Math.max(80,this.collapseRadius(ring,this.time+3)-90),ox=tx-ring.x,oy=ty-ring.y,od=hyp(ox,oy);if(od>safe){tx=ring.x+ox/od*safe;ty=ring.y+oy/od*safe;}}
+  const ring=this.arenaEvent?.kind==='collapse'&&now>=this.arenaEvent.start-EVENT.collapseWarn&&now<this.arenaEvent.end-EVENT.ring.open?this.arenaEvent:null;
+  if(ring){const safe=Math.max(80,this.collapseRadius(ring,now+3)-90),ox=tx-ring.x,oy=ty-ring.y,od=hyp(ox,oy);if(od>safe){tx=ring.x+ox/od*safe;ty=ring.y+oy/od*safe;}}
   tx=limit(tx,70,MM.width-70);ty=limit(ty,70,MM.height-70);const dx=tx-a.x,dy=ty-a.y,len=hyp(dx,dy);a.moveX=len>5?dx/len:0;a.moveY=len>5?dy/len:0;
-  if(enemy){const lead=Math.min(.55,enemyDist/MM.shotSpeed),error=(this.random()-.5)*(this.difficulty==='easy'?.38:this.difficulty==='hard'?.065:.17)*(this.eventActive('blackout')?EVENT.blackoutAim:1);a.aim=Math.atan2(enemy.y+enemy.vy*lead-a.y,enemy.x+enemy.vx*lead-a.x)+error;}
+  // Aim like a person: lead the target, with an error that drifts rather than jitters. It is small against a ship
+  // flying steadily and grows when the target changes direction (juking works), with range, and in a Blackout.
+  if(enemy){const vx=enemy.vx||0,vy=enemy.vy||0,seen=a.aimSeen;const juke=seen&&seen.id===enemy.id?Math.min(1.2,hyp(vx-seen.vx,vy-seen.vy)/250):.6;a.aimSeen={id:enemy.id,vx,vy};
+   const lead=Math.min(.55,enemyDist/MM.shotSpeed),base=BOT_AIM[skill]*st.aim*(.35+2.4*juke)*(.8+.4*Math.min(1,enemyDist/650))*(this.eventActive('blackout')?EVENT.blackoutAim:1);
+   a.aimErr=(a.aimErr||0)*.5+(this.random()-.5)*base*1.6;a.aim=Math.atan2(enemy.y+vy*lead-a.y,enemy.x+vx*lead-a.x)+a.aimErr;}
  }
  move(a,dt){const speed=245/(1+a.pieces.length*.012)*(a.magnet?.56:1)*rushFactor(a,this.time)*(a.human?1:this.difficulty==='easy'?.88:1),len=hyp(a.moveX,a.moveY),scale=len>1?1/len:1,f=1-Math.exp(-dt*11);a.vx+=(a.moveX*scale*speed-a.vx)*f;a.vy+=(a.moveY*scale*speed-a.vy)*f;a.x+=a.vx*dt;a.y+=a.vy*dt;const hole=this.arenaEvent;if(hole&&hole.kind==='hole'&&this.time>=hole.start&&this.time<hole.end)this.holeDrift(a,hole,dt);this.bound(a);}
  hitCore(a,owner){
-  if(!a.alive||a.shieldUntil>this.time||a.hurtUntil>this.time)return false;a.hp--;a.hurtUntil=this.time+.6;a.lastHurt=this.time;a.flashUntil=this.time+.25;a.repair=0;
+  if(!a.alive||a.shieldUntil>this.time||a.hurtUntil>this.time)return false;if(owner){a.lastAttacker=owner;a.lastAttackedAt=this.time;}a.hp--;a.hurtUntil=this.time+.6;a.lastHurt=this.time;a.flashUntil=this.time+.25;a.repair=0;
   this.burst(a.x,a.y,a.color,20,180);this.label(a.x,a.y-25,'CORE HIT','#ff9e8d');
   for(let i=0;i<2&&a.pieces.length;i++){const p=a.pieces.pop(),ang=this.random()*Math.PI*2;this.drop(p.item,p.x,p.y,Math.cos(ang)*190,Math.sin(ang)*190,0,HOT_SCRAP_SECONDS,true);}
   if(a.human)this.event('hurt');else if(owner===this.human.id)this.event('hit');
@@ -415,7 +452,7 @@ class MagnetWorld{
 
     // Capped so two deflectors cannot bounce a shot back and forth forever.
     if(hit.kind==='armor'&&hasPower(hit.a,'deflector',this.time)&&s.bounces<3){this.deflect(s,hit.a);break;}
-    if(hit.kind==='armor'){const index=hit.a.pieces.indexOf(hit.p);if(index>=0){hit.a.pieces.splice(index,1);this.drop(hit.p.item,hit.p.x,hit.p.y,s.vx*.15+(this.random()-.5)*120,s.vy*.15+(this.random()-.5)*120,0,HOT_SCRAP_SECONDS,true);this.burst(s.x,s.y,'#ffcf85',10,130);if(s.owner===this.human.id)this.event('strip');}
+    if(hit.kind==='armor'){hit.a.lastAttacker=s.owner;hit.a.lastAttackedAt=this.time;const index=hit.a.pieces.indexOf(hit.p);if(index>=0){hit.a.pieces.splice(index,1);this.drop(hit.p.item,hit.p.x,hit.p.y,s.vx*.15+(this.random()-.5)*120,s.vy*.15+(this.random()-.5)*120,0,HOT_SCRAP_SECONDS,true);this.burst(s.x,s.y,'#ffcf85',10,130);if(s.owner===this.human.id)this.event('strip');}
      if(s.pierce){s.pierce=false;s.x=endX;s.y=endY;hit=nextHit;first=second;nextHit=null;continue;}
     }
     else if(hit.kind==='wreck'){
