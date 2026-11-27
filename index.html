@@ -1463,7 +1463,11 @@ function reconcileScrap(previous,next,now){
   ctx.restore();
  }
  // ---- Arena edge: an amber energy wall that shimmers where ships touch it ----
- const edgeHits=[],edgeTouchAt=new Map(),EDGE_TOUCH=MM.coreRadius+5.5,WALL_GLOW_LIFE=1.5,WALL_GLOW_SPREAD=230,SHOT_GLOW_LIFE=.9,SHOT_GLOW_SPREAD=330,shotLast=new Map(),shotSeen=new Set();
+ const edgeHits=[],edgeTouchAt=new Map(),EDGE_TOUCH=MM.coreRadius+5.5,WALL_GLOW_LIFE=1.5,WALL_GLOW_SPREAD=230,SHOT_GLOW_LIFE=.9,SHOT_GLOW_SPREAD=330,shotLast=new Map(),shotSeen=new Set(),coverFlash=new Map(),COVER_FLASH_MS=650;
+ // Where a vanished shot's path reaches a cover (its 4 px-padded circle, as in the engine) within 0.12 s, or null.
+ function coverHit(r){for(const c of game.covers){const dx=r.x-c.x,dy=r.y-c.y,R=c.r+4,a=r.vx*r.vx+r.vy*r.vy,b=2*(dx*r.vx+dy*r.vy),cc=dx*dx+dy*dy-R*R;let t;
+  if(cc<=0)t=0;else{const disc=b*b-4*a*cc;if(disc<0||!a)continue;t=(-b-Math.sqrt(disc))/(2*a);}
+  if(t>-.02&&t<.12){const x=r.x+r.vx*Math.max(0,t),y=r.y+r.vy*Math.max(0,t);return {c,x,y,ang:Math.atan2(y-c.y,x-c.x)};}}return null;}
  function watchWalls(now){
   for(const a of game.actors){if(!a.alive)continue;let side=null,x=a.x,y=a.y;
    if(a.x<=EDGE_TOUCH){side='left';x=2;}else if(a.x>=MM.width-EDGE_TOUCH){side='right';x=MM.width-2;}
@@ -1474,6 +1478,8 @@ function reconcileScrap(previous,next,now){
   // reached the wall within 0.12 s is taken as a wall hit at that point. Seen from the outside, so it works online.
   shotSeen.clear();for(const sh of game.shots){const id=sh.item.id;shotSeen.add(id);let r=shotLast.get(id);if(!r){r={};shotLast.set(id,r);}r.x=sh.x;r.y=sh.y;r.vx=sh.vx;r.vy=sh.vy;r.color=sh.item.color;}
   for(const [id,r] of shotLast){if(shotSeen.has(id))continue;shotLast.delete(id);
+   const ch=coverHit(r);if(ch){if(visible(ch.c.x,ch.c.y,300)){coverFlash.set(ch.c,{at:now,x:ch.x,y:ch.y});const nx=Math.cos(ch.ang),ny=Math.sin(ch.ang);
+    for(let i=0;i<5;i++){const along=(Math.random()-.5)*2,sp=110+Math.random()*150;sparks.push({x:ch.x,y:ch.y,vx:(nx*.8-ny*along)*sp,vy:(ny*.8+nx*along)*sp,life:.28,max:.28});}}continue;}
    const W=MM.width,H=MM.height,tx=r.vx<0?(5-r.x)/r.vx:r.vx>0?(W-5-r.x)/r.vx:Infinity,ty=r.vy<0?(5-r.y)/r.vy:r.vy>0?(H-5-r.y)/r.vy:Infinity,t=Math.min(tx,ty);
    if(!(t>-.02&&t<.12)||edgeHits.length>=60)continue;let side,x=r.x+r.vx*t,y=r.y+r.vy*t;
    if(tx<=ty){side=r.vx<0?'left':'right';x=side==='left'?2:W-2;y=limit(y,2,H-2);}else{side=r.vy<0?'top':'bottom';y=side==='top'?2:H-2;x=limit(x,2,W-2);}
@@ -1530,6 +1536,7 @@ function reconcileScrap(previous,next,now){
   arenaEdge(performance.now());
  }
  function wellsAndCover(){
+  const now=performance.now();
   for(const w of game.wells){if(!visible(w.x,w.y,100))continue;const pulse=.5+Math.sin(game.time*2)*.15;ctx.save();
    // Breathing glow (brighter while someone repairs) and arcs turning slowly around the ring.
    const repairing=game.actors.some(a=>a.alive&&a.repair>0&&hyp(a.x-w.x,a.y-w.y)<w.r),t=performance.now()/1000;
@@ -1538,7 +1545,13 @@ function reconcileScrap(previous,next,now){
    ctx.lineWidth=3;ctx.globalAlpha=repairing?.75:.45;for(let k=0;k<2;k++){const a0=t*.55+k*Math.PI;ctx.beginPath();ctx.arc(w.x,w.y,w.r+4,a0,a0+.9);ctx.stroke();}
    ctx.lineWidth=1.5;ctx.globalAlpha=.3;for(let k=0;k<3;k++){const a0=-t*.8+k*Math.PI*2/3;ctx.beginPath();ctx.arc(w.x,w.y,w.r-11,a0,a0+.55);ctx.stroke();}
    ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.fillStyle='#3dbea00c';ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(99,222,190,${pulse})`;ctx.lineWidth=1.5;ctx.setLineDash([7,8]);ctx.beginPath();ctx.arc(w.x,w.y,w.r,game.time*.12,Math.PI*2+game.time*.12);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#4fb89c45';ctx.lineWidth=1;ctx.beginPath();ctx.arc(w.x,w.y,w.r-11,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#7ce8c4a0';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(w.x-9,w.y);ctx.lineTo(w.x+9,w.y);ctx.moveTo(w.x,w.y-9);ctx.lineTo(w.x,w.y+9);ctx.stroke();ctx.fillStyle='#75c9b08c';ctx.font='600 9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';if(hyp(game.human.x-w.x,game.human.y-w.y)>w.r+30)ctx.fillText('REPAIR WELL',w.x,w.y+w.r+17);ctx.restore();}
-  for(const c of game.covers){if(!visible(c.x,c.y,c.r+10))continue;ctx.save();ctx.shadowColor='#0006';ctx.shadowBlur=8;polygon(c.x,c.y+3,c.r,6,Math.PI/6);ctx.fillStyle='#07111d';ctx.fill();ctx.shadowBlur=0;polygon(c.x,c.y,c.r,6,Math.PI/6);ctx.fillStyle='#152b3c';ctx.strokeStyle='#3a5365';ctx.lineWidth=2;ctx.fill();ctx.stroke();polygon(c.x,c.y,c.r*.72,6,Math.PI/6);ctx.fillStyle='#0b1c2b';ctx.strokeStyle='#294355';ctx.lineWidth=1;ctx.fill();ctx.stroke();ctx.translate(c.x,c.y);ctx.rotate(c.x*.01);ctx.strokeStyle='#b68e5260';ctx.lineWidth=3;for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(-12,i*8-4);ctx.lineTo(12,i*8+4);ctx.stroke();}ctx.fillStyle='#66899c';for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;ctx.fillRect(Math.cos(a)*c.r*.87-1.5,Math.sin(a)*c.r*.87-1.5,3,3);}ctx.restore();}
+  for(const c of game.covers){if(!visible(c.x,c.y,c.r+10))continue;ctx.save();ctx.shadowColor='#0006';ctx.shadowBlur=8;polygon(c.x,c.y+3,c.r,6,Math.PI/6);ctx.fillStyle='#07111d';ctx.fill();ctx.shadowBlur=0;polygon(c.x,c.y,c.r,6,Math.PI/6);ctx.fillStyle='#152b3c';ctx.strokeStyle='#3a5365';ctx.lineWidth=2;ctx.fill();ctx.stroke();polygon(c.x,c.y,c.r*.72,6,Math.PI/6);ctx.fillStyle='#0b1c2b';ctx.strokeStyle='#294355';ctx.lineWidth=1;ctx.fill();ctx.stroke();ctx.fillStyle='#66899c';for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;ctx.fillRect(c.x+Math.cos(a)*c.r*.87-1.5,c.y+Math.sin(a)*c.r*.87-1.5,3,3);}
+   // Amber center light: breathes slowly; flashes (and lights the inner hex and the impact point) when shot.
+   const fl=coverFlash.get(c),f=fl?Math.max(0,1-(now-fl.at)/COVER_FLASH_MS):0;if(fl&&!f)coverFlash.delete(c);const p=.55+.15*Math.sin(now/1000*1.6+c.x);
+   ctx.fillStyle='#07131e';ctx.beginPath();ctx.arc(c.x,c.y,6.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#3a5365';ctx.lineWidth=1.2;ctx.stroke();
+   ctx.globalCompositeOperation='lighter';const gr=14+f*(c.r*.75-14);ctx.globalAlpha=Math.min(1,.5*p+f*.9);ctx.drawImage(softSprite('rgba(255,190,100,1)'),c.x-gr,c.y-gr,gr*2,gr*2);
+   if(f){ctx.globalAlpha=f*.85;ctx.strokeStyle='#ffd68c';ctx.lineWidth=2;polygon(c.x,c.y,c.r*.72,6,Math.PI/6);ctx.stroke();ctx.globalAlpha=f;ctx.drawImage(softSprite('rgba(255,214,140,1)'),fl.x-24,fl.y-24,48,48);}
+   ctx.globalAlpha=1;ctx.fillStyle=f?`rgba(255,${200+Math.round(36*f)},${120+Math.round(70*f)},1)`:`rgba(255,200,120,${.75+.25*p})`;ctx.beginPath();ctx.arc(c.x,c.y,3+.8*f,0,Math.PI*2);ctx.fill();ctx.restore();}
  }
  function pads(){
   for(const pad of game.pads||[]){if(!visible(pad.x,pad.y,80))continue;const kind=POWERS[pad.kind],color=kind?POWER_COLORS[kind]:'#5d7487';ctx.save();
