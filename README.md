@@ -1,14 +1,48 @@
-# Magnet Mayhem
+# Orbbitz.io
 
-A browser arena where orbiting salvage is both your armor and your ammunition.
+(Formerly Magnet Mayhem.) Menus use frosted glass over the live arena with the Fredoka font, loaded from Google Fonts; the in-game HUD keeps its own look.
 
-**Play:** https://yewp.github.io/magnet-mayhem/
+Levels and cosmetics: each finished round (online or practice) earns its score + 100 XP; going from level L to L+1 takes 300 + 100*(L-1) XP (level 25 is about 50 rounds). Progress and your chosen look are saved in the browser (no account). Orbit skins change your armor piece shapes, keeping steel, copper and gold colors: Plain (start), Bolts (3), Cogs (8, spin faster the faster you fly), Hex plates (14), Crystals (20). Core styles change the center of your ship: Dot (start), Ring (5), Star (11), Eye (17), Reactor (25). Pick them in Customize on the menu. Online, your look is sent when you join and shown to everyone; bots use a spread of looks. Shop (free for now): the Mochi, Shuriken, Paper charms, Heartbeat (hearts that beat faster as you lose health and crack on your last hit) and Flower pins orbit skins; the Spirit flame, Atom, Gyroscope, Pulsar, Turbine, Hex lock, Binary, Reticle, Vortex and Plasma core styles, plus reactive cores that respond to your ship (Compass follows aim, Aperture opens with speed, Vitals shows health, Gauge fills with scrap, Magnet pulls sparks while pulling, Recoil kicks on each shot, Pulse beats faster when hurt, Drift streaks with movement, Lock-on snaps to aim when firing); and tails that follow your ship in your pilot color: Cat tail, Fox tail, Three-tailed fox, Dragon tail, Ribbon streamers, Comet trail, Fish fin, Scorpion tail, Peacock fan (opens when you slow down), Kite with bows, Bubble trail, Jellyfish tentacles, Leafy vine, Constellation, Spiked club, Devil tail, Paper lanterns, Chain links, Rainbow streamer, Feather boa, Cherry blossoms, Snowflakes, Music notes, Pixel trail, Robot claw, Paper cranes, Fireflies, Ghost wisps, Aurora veil, Ink brush, Party bunting, Balloon, Gold coins, Tiger tail, Double helix, Neon tube, Pearl necklace, Pom-pom spring, Booster flame, Butterflies, Hearts, Dandelion seeds, Bamboo stalk, Candy cane, Koi fish, Water wake, Smoke rings, Mini galaxy, Star wand, Ducklings, Toy train, Lava lamp, Bone tail, Little ghost, Bat swarm, Anchor rope, Ringed planet, Thorny rose, Gummy worm and UFO (the koi, butterflies, galaxy, ducklings, train, ghost, bats, planet and UFO follow the path you flew). Owned tails are saved in the browser and can be switched in Customize; about half the bots wear one.
 
-- Quick play online, or create a room and share its six-character code.
-- Up to eight players per room; bots fill the rest of the eleven-pilot arena.
-- Power-up pads: Overcharge, Rapid rail and Scrap pulse.
-- Offline practice against bots.
+A full-page browser arena where orbiting salvage is both armor and ammunition.
 
-Controls: mouse or WASD to move, click/Space to launch scrap, right click/E to pull scrap, P/Escape to pause.
+- Public quick play, or create an unlisted room and share its six-character code or URL.
+- Up to eight human players per room; bots fill the eleven-pilot arena.
+- Three-minute rounds, automatic rematches, temporary reconnect sessions, and offline practice.
+- Three ability pads (first spawn 20 s into a round, 25 s recharge, shown on the minimap); a pilot holds one timed ability at a time and bots detour to ready pads within 520 px. Rapid rail (8 s, double fire rate), Leech (6 s, drains one armor piece every 0.5 s from the nearest rival within 230 px), Deflector (6 s, shots that hit your armor bounce back at the shooter), Seeker rounds (8 s, shots curve toward enemy cores), Phase (4 s, shots pass through you but you cannot fire), Scatter shot (8 s, three pieces per shot), and Scrap vortex (instant: a 6 s swirl at the pad pulls loose scrap within 280 px to its center).
+- Arena events, announced with a sound and a countdown banner: Scrap rain (marked landing spots), Jackpot drop (a crate whose panels release loot), Blackout (darkness around your ship; rivals show as outlines and vanish from the minimap), Reverse polarity (magnets push scrap away), and the Comet shower (8 star-headed comets cross the arena; each route is previewed 1.2 s ahead with an off-screen arrow, heads knock up to 2 armor pieces off ships they pass through, and the wall burst is rich in rare scrap). Comets drop nothing in flight. When one hits the wall it throws stardust back into the arena (6 motes, 3 for small comets) along with its scrap; shoot a comet head down and it shatters into twice as much stardust (12, or 6) but no scrap burst. Stardust motes do not take an armor slot; absorbing one gives 15 points and a speed rush (+65% speed and an orbit spinning twice as fast, both easing in and out) that adds 2 s per mote up to 6 s. Magnets pull stardust in. One surprise solo comet per round; the shower is one of the random events.
+- Mouse or WASD to move; click/Space to launch armor; right click/E to pull scrap; P/Escape to pause controls.
 
-This repository holds only the built game page.
+## Implementation
+
+`game/engine.js` contains shared physics and combat; `game/motion.js` contains the shared movement step, client prediction, reconciliation, and snapshot playback. `game/server.js` holds the authoritative room logic: clients send bounded input, never health, inventory, positions, or scores.
+
+Online play runs in `arena-worker.js`, a separate Cloudflare Worker (`wrangler.arena.json`) where each room is a Durable Object. A room keeps its state in memory, simulates at 60 Hz, and sends every connected player a snapshot over a WebSocket 20 times per second. The browser finds the arena through the `arena-origin` meta tag in `game/shell.html` and sends input every 50 ms, carrying only movement commands it has not sent on that socket yet. Local movement uses fixed 60 Hz commands, completed-step acknowledgments, and replay of unacknowledged inputs; the replay uses the scrap count each command was predicted with. Contact with other ships is not predicted (their positions are a snapshot old, and predicting it measured worse). As a safety net the arena skips the oldest queued commands beyond about 0.5 s of backlog. Other actors and projectiles use a short, adaptive snapshot history for smooth playback. Snapshots use the wire 3 format in `game/wire.js` when the client asks for it: numbers are rounded to rendering precision (your own ship stays exact), and names, colors, the map, the kill feed and orbiting scrap are only sent when they change, with a full update every 40 messages (2 s). Clients that ask for change-only updates (`delta: 1`, which this page does) also skip loose scrap that hasn't changed and ship values that haven't changed between full updates. That makes each message about 55–60% shorter before compression. The arena's WebSockets already use permessage-deflate, so the saving on the wire is smaller, around 5–10%. Measured after compression, a player receives roughly 11–22 KB/s depending on screen size. Those updates are numbered, so a client that misses one waits for the next full update. The lobby reply and older clients use wire 2. The bottom-left HUD shows frame rate, round trip, update rate, the server's queued commands, and any skipped commands. This is a small-room multiplayer prototype.
+
+The older HTTP polling endpoint (`/api/online` in `worker/index.ts`, backed by D1) is still served and used by `npm test`, but the browser client no longer falls back to it.
+
+The browser client is assembled from `game/shell.html`, `game/ui.js`, and `game/network.js` during `prebuild`. `worker/index.ts` serves the assembled game and handles the same-origin `/api/online` and `/api/health` endpoints, retaining the Sites/Vinext integration.
+
+A room supports eight humans and releases disconnected seats after twenty-five seconds; an arena room is discarded once it has no players. Inputs expire after 650 ms without a heartbeat. Room links contain only the code; per-pilot bearer tokens stay in session storage and are stored hashed by the server. Rounds restart ten seconds after the results appear. Online pause stops only the local controls; the shared match continues.
+
+## Installable app
+The page can be installed (Add to Home Screen, or as an Android app made with PWABuilder that shows the live site).
+`game/manifest.webmanifest`, `game/sw.js` (an offline copy: network first, cached copy without a connection, so
+Practice offline works offline) and `game/icons/` (the ship-in-orbit icon; `icon.svg` is the source, the PNGs are
+exported from it) are copied next to `index.html` on the site with every deploy.
+
+## Performance and graphics
+- **Graphics setting** (menu and pause screen): *Auto* (default) adapts drawing sharpness to the device; *Sharp* always draws at full resolution (up to 1.5x); *Smooth* stays at 1x or below. Stored in `orbbitz-graphics`; the fps readout shows the current sharpness.
+- **Auto**: starts at 1x on a new device, steps up 0.25 after 4 smooth seconds, down 0.25 after a slow second (seconds slowed by long page work do not count). A graphics stall (a frame over 90 ms while the game code was quick) or a step up that drops frames is a strike: one blocks that level for a minute, two cap sharpness below it. Level and cap are stored per screen and graphics chip in `orbbitz-sharpness`, and a cap is retried after a week. On the Iris Xe laptop anything above 1x froze the screen for up to 0.8 s in busy moments.
+- Per-frame cost was cut by caching glows (hot scrap, Bone tail, Fireflies, ship hulls, shots) as images, drawing armor and scrap with one transform each, batching sparks, and removing throwaway allocations in scrap and shot physics (`hyp` instead of `Math.hypot`, a reach check before testing armor pieces).
+
+## Checks and build
+
+- `npm test`: multiplayer integration checks and deterministic movement regression tests against SQLite, using the generated migration and actual request handler. Covers shared state, firing, concurrent writes, bounded inputs, token validation, room capacity, quick play, reconnection, disconnect cleanup, round transitions, and leaving. Movement tests cover 80 ms and 240 ms round trips, jitter, dropped/reordered snapshots, stopping, direction changes, magnet movement speed, walls, respawns, and rate-limited command processing.
+- `game/shots.test.mjs` (part of `npm test`): seeded fights with every power, piercing shots, a jackpot crate, comets and shields must come out identical with and without the armor reach shortcut.
+- `npm run build`: assembles the game client and builds the Worker.
+- Database schema: `db/schema.ts`; immutable generated migrations: `drizzle/`.
+
+Earlier browser checks covered two clients joining a room, reload/reconnect, and online pause, but often used background tabs. Frame-rate work since then was measured in foreground Chrome on an Intel Iris Xe laptop (1920x1200 at 150%), playing like a person with a performance trace; see "Performance and graphics".
+
+Networking reference: https://www.gabrielgambetta.com/client-side-prediction-server-reconciliation.html and the following Entity Interpolation chapter. No third-party game code is included.
