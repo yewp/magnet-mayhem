@@ -103,7 +103,7 @@ const METAL=['#9dbbd5','#c98d7a','#ffde85'];
 // their colors); core styles change the center of your ship. Each one unlocks at a level.
 // Entries marked shop come from the shop (free for now) instead of a level.
 const SKINS=Object.freeze([{name:'Plain',level:1},{name:'Gears',level:8},{name:'Bolts',level:3},{name:'Crystals',level:20},{name:'Hex plates',level:14},
- {name:'Mochi',shop:true},{name:'Shuriken',shop:true},{name:'Paper charms',shop:true},{name:'Hearts',shop:true},{name:'Flower pins',shop:true}]);
+ {name:'Mochi',shop:true},{name:'Shuriken',shop:true},{name:'Paper charms',shop:true},{name:'Hearts',shop:true},{name:'Flower pins',shop:true},{name:'Planets',shop:true}]);
 // Tails come from the shop (free for now) and follow your ship in your pilot color.
 const TAILS=Object.freeze([{name:'None'},{name:'Cat tail'},{name:'Fox tail'},{name:'Three-tailed fox'},{name:'Dragon tail'},{name:'Ribbon streamers'},{name:'Comet trail'},{name:'Fish fin'},{name:'Scorpion tail'},{name:'Peacock fan'},{name:'Kite with bows'},{name:'Bubble trail'},{name:'Jellyfish tentacles'},{name:'Leafy vine'},{name:'Constellation'},{name:'Spiked club'},{name:'Devil tail'},{name:'Paper lanterns'},{name:'Chain links'},{name:'Rainbow streamer'},{name:'Feather boa'},{name:'Cherry blossoms'},{name:'Snowflakes'},{name:'Music notes'},{name:'Pixel trail'},{name:'Robot claw'},{name:'Paper cranes'},{name:'Fireflies'},{name:'Ghost wisps'},{name:'Aurora veil'},{name:'Ink brush'},{name:'Party bunting'},{name:'Balloon'},{name:'Gold coins'},{name:'Tiger tail'},{name:'Double helix'},{name:'Neon tube'},{name:'Pearl necklace'},{name:'Pom-pom spring'},{name:'Booster flame'},{name:'Butterflies'},{name:'Hearts'},{name:'Dandelion seeds'},{name:'Bamboo stalk'},{name:'Candy cane'},{name:'Koi fish'},{name:'Water wake'},{name:'Smoke rings'},{name:'Mini galaxy'},{name:'Star wand'},{name:'Ducklings'},{name:'Toy train'},{name:'Lava lamp'},{name:'Bone tail'},{name:'Little ghost'},{name:'Bat swarm'},{name:'Anchor rope'},{name:'Ringed planet'},{name:'Thorny rose'},{name:'Gummy worm'},{name:'UFO'}]);
 const CORES=Object.freeze([{name:'Dot',level:1},{name:'Ring',level:5},{name:'Star',level:11},{name:'Eye',level:17},{name:'Reactor',level:25},{name:'Spirit flame',shop:true},{name:'Atom',shop:true},{name:'Gyroscope',shop:true},{name:'Pulsar',shop:true},{name:'Turbine',shop:true},{name:'Hex lock',shop:true},{name:'Binary',shop:true},{name:'Reticle',shop:true},{name:'Vortex',shop:true},{name:'Plasma',shop:true},{name:'Compass',shop:true},{name:'Aperture',shop:true},{name:'Vitals',shop:true},{name:'Gauge',shop:true},{name:'Magnet',shop:true},{name:'Recoil',shop:true},{name:'Pulse',shop:true},{name:'Drift',shop:true},{name:'Lock-on',shop:true}]);
@@ -1642,8 +1642,9 @@ function reconcileScrap(previous,next,now){
  }
  // ---- Cosmetics: orbit skins (piece shapes) and core styles, plus levels ----
  function hexPath(c,x,y,r,rot=0){c.beginPath();for(let i=0;i<6;i++){const a=rot+i*Math.PI/3;c.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r);}c.closePath();}
- function skinShape(c,skin,metal,color){
+ function skinShape(c,skin,metal,color,kind=0){
   c.fillStyle=metal;c.strokeStyle='#09131f';c.lineWidth=1;
+  if(skin===10){planetPiece(c,metal,color,kind);return;}
   if(skin===1){for(let i=0;i<8;i++){c.save();c.rotate(i*Math.PI/4);c.fillRect(-1.7,-8.3,3.4,3.4);c.restore();}c.beginPath();c.arc(0,0,6,0,Math.PI*2);c.fill();c.shadowBlur=0;c.stroke();c.fillStyle='#09131f';c.beginPath();c.arc(0,0,2,0,Math.PI*2);c.fill();c.strokeStyle=color;c.lineWidth=1.2;c.beginPath();c.arc(0,0,3.8,0,Math.PI*2);c.stroke();}
   else if(skin===2){c.fillRect(0,-2.4,8.5,4.8);hexPath(c,-3,0,5.2);c.fill();c.shadowBlur=0;c.stroke();c.strokeRect(0,-2.4,8.5,4.8);c.strokeStyle='#09131f99';for(const x of [2.8,5,7.2]){c.beginPath();c.moveTo(x,-2.4);c.lineTo(x-.8,2.4);c.stroke();}c.fillStyle=color;c.beginPath();c.arc(-3,0,1.7,0,Math.PI*2);c.fill();}
   else if(skin===3){c.beginPath();c.moveTo(0,-8.5);c.lineTo(4.6,-1.5);c.lineTo(0,8.5);c.lineTo(-4.6,-1.5);c.closePath();c.fill();c.shadowBlur=0;c.stroke();c.strokeStyle='#ffffff70';c.beginPath();c.moveTo(0,-8.5);c.lineTo(0,8.5);c.moveTo(-4.6,-1.5);c.lineTo(4.6,-1.5);c.stroke();c.fillStyle=color;c.beginPath();c.moveTo(0,8.5);c.lineTo(1.8,5.5);c.lineTo(-1.8,5.5);c.closePath();c.fill();}
@@ -1657,6 +1658,18 @@ function reconcileScrap(previous,next,now){
   else if(skin===4){hexPath(c,0,0,6.8,Math.PI/6);c.fill();c.shadowBlur=0;c.stroke();c.strokeStyle='#ffffff55';hexPath(c,0,0,3.9,Math.PI/6);c.stroke();c.fillStyle=color;c.beginPath();c.arc(0,0,1.6,0,Math.PI*2);c.fill();}
   else{c.fillRect(-6.5,-4.5,13,9);c.shadowBlur=0;c.strokeRect(-6.5,-4.5,13,9);c.fillStyle='#ffffff4d';c.fillRect(-5.5,-3.5,10,1.3);c.fillStyle=color;c.fillRect(-2.5,2.5,5,2);}
  }
+ // Planets skin: the metal picks the planet - steel a cratered moon, copper a banded gas giant, gold a ringed planet.
+ function planetPiece(c,metal,color,kind){
+  const r=kind===2?5.2:kind===1?6.4:5.8,ring=(front)=>{c.save();c.rotate(-.42);c.beginPath();c.ellipse(0,0,10,3,0,front?0:Math.PI,front?Math.PI:Math.PI*2);c.strokeStyle='#fff0c4';c.lineWidth=1.8;c.stroke();c.strokeStyle=color;c.globalAlpha=.75;c.lineWidth=.7;c.beginPath();c.ellipse(0,0,11.2,3.5,0,front?0:Math.PI,front?Math.PI:Math.PI*2);c.stroke();c.restore();};
+  if(kind===2){c.shadowBlur=0;ring(false);}
+  c.beginPath();c.arc(0,0,r,0,Math.PI*2);c.fill();c.shadowBlur=0;
+  c.save();c.beginPath();c.arc(0,0,r,0,Math.PI*2);c.clip();
+  if(kind===1){c.fillStyle='#7a3f2a66';for(const [y,h] of [[-3.6,1.3],[-.6,1.8],[2.6,1.2]])c.fillRect(-r,y,r*2,h);c.fillStyle='#fff3e055';c.fillRect(-r,1.3,r*2,.7);c.fillStyle='#7a3f2a99';c.beginPath();c.ellipse(2.2,.3,1.4,.8,0,0,Math.PI*2);c.fill();}
+  else if(kind===0){c.fillStyle='#4f677c88';for(const [x,y,cr] of [[-2,-1.4,1.5],[2.2,1.6,1.1],[1.4,-2.8,.8],[-1.2,2.8,.7]]){c.beginPath();c.arc(x,y,cr,0,Math.PI*2);c.fill();}c.fillStyle='#ffffff40';for(const [x,y,cr] of [[-2.3,-1.7,1.5],[2,1.3,1.1]]){c.beginPath();c.arc(x,y,cr,Math.PI,Math.PI*1.5);c.lineTo(x,y);c.fill();}}
+  else{c.fillStyle='#b8861f55';c.fillRect(-r,-1.2,r*2,1.1);c.fillRect(-r,1.8,r*2,.8);}
+  const g=c.createRadialGradient(-r*.45,-r*.45,r*.2,0,0,r*1.05);g.addColorStop(0,'rgba(255,255,255,.38)');g.addColorStop(.45,'rgba(255,255,255,0)');g.addColorStop(1,'rgba(6,14,24,.55)');c.fillStyle=g;c.fillRect(-r,-r,r*2,r*2);c.restore();
+  c.strokeStyle=color;c.globalAlpha=.85;c.lineWidth=.9;c.beginPath();c.arc(0,0,r+.6,0,Math.PI*2);c.stroke();c.globalAlpha=1;
+  if(kind===2)ring(true);}
  function coreStyle(c,x,y,style,fill,aim,now,live=null){
   c.save();c.translate(x,y);c.fillStyle=fill;c.strokeStyle=fill;
   if(style===1){c.lineWidth=3;c.beginPath();c.arc(0,0,6,0,Math.PI*2);c.stroke();c.beginPath();c.arc(0,0,1.8,0,Math.PI*2);c.fill();}
@@ -2037,7 +2050,7 @@ function reconcileScrap(previous,next,now){
  function orbitSprite(color,kind,focus,skin=0){
   const key=color+':'+kind+':'+focus+':'+skin;if(spriteCache.has(key))return spriteCache.get(key);
   const sprite=document.createElement('canvas');sprite.width=42;sprite.height=38;const c=sprite.getContext('2d');c.translate(21,19);
-  c.shadowColor=color+'55';c.shadowBlur=focus?7:3;skinShape(c,skin,METAL[kind],color);if(kind===2){c.shadowBlur=0;c.fillStyle='#ffffffd8';c.fillRect(3,-5,2.2,2.2);}
+  c.shadowColor=color+'55';c.shadowBlur=focus?7:3;skinShape(c,skin,METAL[kind],color,kind);if(kind===2&&skin!==10){c.shadowBlur=0;c.fillStyle='#ffffffd8';c.fillRect(3,-5,2.2,2.2);}
   spriteCache.set(key,sprite);return sprite;
  }
  // Hit feedback. Hits are detected by a ship's lastHurt changing and knockouts by new
