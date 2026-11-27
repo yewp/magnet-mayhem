@@ -95,8 +95,8 @@ body:has(#roomStrip:not([hidden])) .admin{top:186px}@media(max-width:720px){body
 /* Match view: only what you need while playing. */
 /* On a computer (mouse and keyboard) the Launch and Magnet buttons are hidden; touch shows them. */
 body:not(.touchy) .controls .buttons{display:none}
-.key-row{white-space:nowrap;display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:#8fa9c1;letter-spacing:.04em;opacity:.8;transition:opacity .8s}
-.key-row span{display:inline-flex;align-items:center;gap:5px;transition:opacity .5s}.key-row span.done{opacity:.28}.key-row i{font-style:normal;opacity:.4}
+.key-row{white-space:nowrap;display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:#8fa9c1;letter-spacing:.04em;opacity:.8}
+.key-row span{display:inline-flex;align-items:center;gap:5px}.key-row i{font-style:normal;opacity:.4}
 .key-row kbd{font-family:inherit;white-space:nowrap;font-size:10px;background:#0f1e2e99;border:1px solid #a0dcff2e;border-radius:6px;padding:2px 6px;color:#c9dbea}
 body.touchy .key-row{display:none}body:not(.touchy) .controls .core-line{margin-bottom:0}.ammo-caption.dry{color:var(--red)}
 body.in-match .brand,body.in-match #helpBtn{display:none}body.in-match .tools{margin-left:auto}
@@ -201,38 +201,38 @@ const POWER_COLORS={rapid:'#ff6b4a',leech:'#9cf04a',deflector:'#5fd4ff',seeker:'
 const POWER=Object.freeze({first:20,recharge:25,radius:34,
  duration:Object.freeze({rapid:8,leech:6,deflector:6,seeker:8,phase:4,scatter:8,vortex:0}),
  leechRange:230,leechHold:1.4,leechEvery:.5,leechFlight:1.5,leechSpeed:720,seekRange:460,seekCone:1.2,seekTurn:2.6,scatterSpread:.2,vortexLife:6,vortexRadius:280});
-// Arena events: the first is announced 20 s in, then one every 35-45 s (never the
+// Arena events: the first is announced 20 s in, then one every 26-34 s after the last ends (never the
 // same kind twice in a row), each announced a few seconds before it starts.
-//  rain      scrap falls at marked spots over 6 s, some of it where players are
+//  rain      scrap falls at marked spots over 9 s, some of it where players are
 //  jackpot   four panels release loot on impact; remaining loot spills at expiry
-//  blackout  8 s of darkness (drawing only); bots aim worse while it lasts
-//  polarity  16 s where magnets push loose scrap away and nothing is pulled in;
+//  blackout  12 s of darkness (drawing only); bots aim worse while it lasts
+//  polarity  22 s where magnets push loose scrap away and nothing is pulled in;
 //            scrap is still collected by flying right into it
-//  collapse  30 s where a safe ring closes in on a spot near the middle (over 9 s), holds, then opens
+//  collapse  40 s where a safe ring closes in on a spot near the middle (over 9 s), holds, then opens
 //            again (last 4 s); ships outside it shed an armor piece every 0.45 s, or take a core hit
 //            every 2 s once they have none left. Shed pieces fly toward the ring and are free for rivals.
 //            Ships outside the ring cannot collect scrap at all (no magnet pull, pickup or Leech), and loose
 //            scrap outside it is hot: nobody can pull or collect it until the ring passes it or the event ends.
-//  hole      18 s black hole near the middle that grows, pulls ships (inside their movement step, so
+//  hole      25 s black hole near the middle that grows, pulls ships (inside their movement step, so
 //            online prediction matches) and loose scrap, and eats scrap and armor that reach its
 //            horizon; a ship pulled inside the dark core is swallowed (knocked out). When it ends it bursts: what it ate
 //            (up to 70) plus 16 rich pieces fly out, and ships right next to it lose 2 pieces.
-//  items     14 s Item Rush: 8 extra power-up pads appear at spots marked 3 s ahead, every pad is loaded,
+//  items     20 s Item Rush: 8 extra power-up pads appear at spots marked 3 s ahead, every pad is loaded,
 //            and a taken pad reloads after 2.5 s. When it ends the extra pads vanish.
 const EVENTS=['rain','jackpot','blackout','polarity','comet','collapse','hole','items'];
 const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT',polarity:'REVERSE POLARITY',comet:'COMET SHOWER',collapse:'COLLAPSE',hole:'BLACK HOLE',items:'ITEM RUSH'};
 const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c',comet:'#eef3ff',collapse:'#ff8a3d',hole:'#b48cff',items:'#f27bff'};
-const EVENT=Object.freeze({first:20,gapMin:35,gapMax:45,warn:3,jackpotWarn:5,collapseWarn:5,holeWarn:5,
- length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:13.2,collapse:30,hole:18,items:14}),
+const EVENT=Object.freeze({first:20,gapMin:26,gapMax:34,warn:3,jackpotWarn:5,collapseWarn:5,holeWarn:5,
+ length:Object.freeze({rain:9,jackpot:20,blackout:12,polarity:22,comet:17.2,collapse:40,hole:25,items:20}),
  items:Object.freeze({pads:8,refill:2.5,spacing:230}),
  hole:Object.freeze({pullFrom:300,pullTo:780,horizonFrom:20,horizonTo:62,shipPull:165,scrapPull:820,eatEvery:.2,spillMax:70,bonus:16,burstRadius:230,burstStrip:2}),
- ring:Object.freeze({radius:560,close:9,open:4,shedEvery:.45,coreEvery:2,grace:.3,shedSpeed:420}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
+ ring:Object.freeze({radius:560,close:9,open:4,shedEvery:.45,coreEvery:2,grace:.3,shedSpeed:420}),rainDrops:39,jackpotPieces:35,repel:1100,blackoutAim:2.5});
 const EVENT_WARN=kind=>kind==='jackpot'?EVENT.jackpotWarn:kind==='collapse'?EVENT.collapseWarn:kind==='hole'?EVENT.holeWarn:EVENT.warn;
 const CRATE_RADIUS=28;
 const CRATE_NORMALS=[[1,0],[0,1],[-1,0],[0,-1]];
 // preview: seconds a comet's route is shown before it launches. A comet head passing
 // through a ship knocks up to hitStrip armor pieces loose (once per comet per ship).
-const COMET={burst:24,smallBurst:6,wallDust:6,smallWallDust:3,shotDust:12,smallShotDust:6,shotRadius:24,showerCount:8,afterglow:1.2,preview:1.2,hitRadius:30,hitStrip:2};
+const COMET={burst:24,smallBurst:6,wallDust:6,smallWallDust:3,shotDust:12,smallShotDust:6,shotRadius:24,showerCount:12,afterglow:1.2,preview:1.2,hitRadius:30,hitStrip:2};
 // Stardust: glowing motes a comet throws off when it hits the wall or is shot down. Absorbing one gives
 // points and a speed rush (+boost, eased in and out over ramp seconds); each mote adds
 // rush seconds, up to rushMax. Motes never take an armor slot.
@@ -1368,14 +1368,9 @@ function reconcileScrap(previous,next,now){
   $('adminEnd').onclick=()=>adminCommandSend({do:'end'});$('adminToggle').onclick=()=>{const open=$('adminBody').hidden;$('adminBody').hidden=!open;$('adminToggle').setAttribute('aria-expanded',String(open));if(open)$('adminKeyRow').hidden=!online;};
   $('adminKey').value=adminKey();$('adminKey').onchange=()=>{try{$('adminKey').value=$('adminKey').value.trim().toUpperCase();localStorage.setItem('orbbitz-admin-key',$('adminKey').value);}catch{}adminStatus('Key saved on this device.',true);};}
  setupAdmin();
- // Controls you have used (fire, pull, move, pause), remembered in this browser; the key row dims each one but stays.
- const learnedControls=new Set((()=>{try{return JSON.parse(localStorage.getItem('orbbitz-controls-used')||'[]');}catch{return [];}})());
- function showLearned(){const row=$('keyRow');for(const el of row.querySelectorAll('[data-k]'))el.classList.toggle('done',learnedControls.has(el.dataset.k));}
- function learnControl(k){if(learnedControls.has(k))return;learnedControls.add(k);try{localStorage.setItem('orbbitz-controls-used',JSON.stringify([...learnedControls]));}catch{}showLearned();}
- showLearned();
  function toast(text){$('toast').textContent=text;$('toast').classList.add('show');toastUntil=performance.now()+3000;}
  function clearInput(){keys.clear();fireSources.clear();magnetSources.clear();touch=null;pointer.active=false;game.human.fire=game.human.magnet=false;game.human.moveX=game.human.moveY=0;$('fireBtn').classList.remove('engaged');$('magnetBtn').classList.remove('engaged');$('magnetBtn').setAttribute('aria-pressed','false');}
- function show(next){$('adminKeyRow').hidden=!online;if(next==='paused')learnControl('pause');state=next;if(next==='menu')$('menuBest').textContent=Math.floor(best).toLocaleString();for(const id of screens)$(id).hidden=true;const active={menu:'menuScreen',paused:'pauseScreen',help:'helpScreen',finished:'finishScreen',customize:'customizeScreen',shop:'shopScreen'}[next];if(active)$(active).hidden=false;const lobby=next==='menu'||next==='customize'||next==='shop';for(const id of panels)$(id).hidden=lobby;if(lobby)updateProgressUI();$('rebuildPanel').hidden=true;$('pauseBtn').disabled=!['playing','paused'].includes(next);$('pauseBtn').setAttribute('aria-label',next==='paused'?'Resume game':'Pause game');$('pauseBtn').title=next==='paused'?'Resume (P)':'Pause (P)';$('roomStrip').hidden=!online||['menu','customize','shop'].includes(next);$('pauseCopy').textContent=online?'Your controls are paused. The online arena keeps running, so rivals can still hit your core.':'Your core, armor, and round timer are waiting for you.';$('restartBtn').textContent=online?'Start a new room':'Start a fresh round';$('againBtn').textContent=online?'Leave to lobby':'One more round';document.body.classList.toggle('in-match',next==='playing'||next==='paused');if(next==='playing'||next==='paused')window.getSelection()?.removeAllRanges();clearInput();acc=0;if(next==='paused')$('resumeBtn').focus();if(next==='finished')$('againBtn').focus();if(next==='help')$('closeHelpBtn').focus();}
+ function show(next){$('adminKeyRow').hidden=!online;state=next;if(next==='menu')$('menuBest').textContent=Math.floor(best).toLocaleString();for(const id of screens)$(id).hidden=true;const active={menu:'menuScreen',paused:'pauseScreen',help:'helpScreen',finished:'finishScreen',customize:'customizeScreen',shop:'shopScreen'}[next];if(active)$(active).hidden=false;const lobby=next==='menu'||next==='customize'||next==='shop';for(const id of panels)$(id).hidden=lobby;if(lobby)updateProgressUI();$('rebuildPanel').hidden=true;$('pauseBtn').disabled=!['playing','paused'].includes(next);$('pauseBtn').setAttribute('aria-label',next==='paused'?'Resume game':'Pause game');$('pauseBtn').title=next==='paused'?'Resume (P)':'Pause (P)';$('roomStrip').hidden=!online||['menu','customize','shop'].includes(next);$('pauseCopy').textContent=online?'Your controls are paused. The online arena keeps running, so rivals can still hit your core.':'Your core, armor, and round timer are waiting for you.';$('restartBtn').textContent=online?'Start a new room':'Start a fresh round';$('againBtn').textContent=online?'Leave to lobby':'One more round';document.body.classList.toggle('in-match',next==='playing'||next==='paused');if(next==='playing'||next==='paused')window.getSelection()?.removeAllRanges();clearInput();acc=0;if(next==='paused')$('resumeBtn').focus();if(next==='finished')$('againBtn').focus();if(next==='help')$('closeHelpBtn').focus();}
  function start(){$('rivalsLabel').textContent='10 AI RIVALS';disconnectOnline();game=new MagnetWorld({name:$('playerName').value.trim()||'You',difficulty:$('difficulty').value});Object.assign(game.human,look);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};pointer={x:width/2,y:height/2-160,active:false};hudAt=0;show('playing');save();updateHUD();toast('Your armor is ammo. Hold click to fire; right click or E to reclaim.');play('start');document.activeElement?.blur();}
  function pause(){if(state==='playing'){show('paused');save();}else if(state==='paused'){show('playing');toast('Back in orbit.');}}
  function menu(){save();disconnectOnline();lobbyStatus.textContent='Play with others, or create a room and invite friends.';lobbyStatus.classList.remove('error');$('toast').classList.remove('show');toastUntil=0;preferredRoom='';onlineButton.textContent='Play online';history.replaceState(null,'',location.pathname);show('menu');$('playerName').focus();}
@@ -1404,7 +1399,7 @@ function reconcileScrap(previous,next,now){
   const wx=cam.x+(pointer.x-width/2)/cam.zoom,wy=cam.y+(pointer.y-height/2)/cam.zoom;
   if(touch){const d=hyp(touch.dx,touch.dy),strength=limit((d-6)/36,0,1);a.moveX=d?touch.dx/d*strength:0;a.moveY=d?touch.dy/d*strength:0;if(d>8)a.aim=Math.atan2(touch.dy,touch.dx);}
   else{if(kx||ky){const d=hyp(kx,ky);a.moveX=kx/d;a.moveY=ky/d;}else if(pointer.active){const dx=wx-a.x,dy=wy-a.y,d=hyp(dx,dy),strength=limit((d-15)/120,0,1);a.moveX=d?dx/d*strength:0;a.moveY=d?dy/d*strength:0;}else a.moveX=a.moveY=0;a.aim=Math.atan2(wy-a.y,wx-a.x);}
-  a.fire=fireSources.size>0;a.magnet=magnetSources.size>0;if(a.fire)learnControl('fire');if(a.magnet)learnControl('pull');if(a.moveX||a.moveY)learnControl('move');
+  a.fire=fireSources.size>0;a.magnet=magnetSources.size>0;
   if(touchMode&&a.fire){let target=null,d=750;for(const b of game.actors){if(!b.alive||b.id===a.id||b.shieldUntil>game.time)continue;const range=distance(a,b);if(range<d){d=range;target=b;}}if(target)a.aim=Math.atan2(target.y+target.vy*d/MM.shotSpeed-a.y,target.x+target.vx*d/MM.shotSpeed-a.x);}
  }
  function updateCamera(dt){const a=game.human;let crowd=0;
