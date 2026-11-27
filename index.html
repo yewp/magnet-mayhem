@@ -179,7 +179,7 @@ const EVENT_LABELS={rain:'SCRAP RAIN',jackpot:'JACKPOT DROP',blackout:'BLACKOUT'
 const EVENT_COLORS={rain:'#8fd3ff',jackpot:'#ffd34d',blackout:'#9aa7ff',polarity:'#ff5c5c',comet:'#eef3ff',collapse:'#ff8a3d',hole:'#b48cff'};
 const EVENT=Object.freeze({first:20,gapMin:35,gapMax:45,warn:3,jackpotWarn:5,collapseWarn:5,holeWarn:5,
  length:Object.freeze({rain:6,jackpot:14,blackout:8,polarity:16,comet:13.2,collapse:30,hole:18}),
- hole:Object.freeze({pullFrom:300,pullTo:780,horizonFrom:20,horizonTo:62,shipPull:165,scrapPull:820,eatEvery:.2,coreEvery:1.5,spillMax:70,bonus:16,burstRadius:230,burstStrip:2}),
+ hole:Object.freeze({pullFrom:300,pullTo:780,horizonFrom:20,horizonTo:62,shipPull:165,scrapPull:820,eatEvery:.2,spillMax:70,bonus:16,burstRadius:230,burstStrip:2}),
  ring:Object.freeze({radius:560,close:9,open:4,shedEvery:.45,coreEvery:2,grace:.3,shedSpeed:420}),rainDrops:26,jackpotPieces:35,repel:1100,blackoutAim:2.5});
 const CRATE_RADIUS=28;
 const CRATE_NORMALS=[[1,0],[0,1],[-1,0],[0,-1]];
@@ -322,7 +322,7 @@ class MagnetWorld{
   if(a.human)this.event('hurt');else if(owner===this.human.id)this.event('hit');
   if(a.hp<=0)this.knockout(a,owner);return true;
  }
- knockout(a,owner){
+ knockout(a,owner,cause){
   if(!a.alive)return;a.alive=false;a.wreckMod=0;a.deaths++;a.score=Math.floor(a.score*.8);a.fire=a.magnet=false;a.respawnAt=this.time+2.8;
   for(const p of a.pieces){const ang=Math.atan2(p.y-a.y,p.x-a.x),speed=110+this.random()*130;this.drop(p.item,p.x,p.y,Math.cos(ang)*speed,Math.sin(ang)*speed,0,0);}a.pieces=[];
   const killer=this.actors.find(b=>b.id===owner);if(killer&&killer!==a){killer.kills++;killer.score+=KNOCKOUT_REWARD;
@@ -330,7 +330,7 @@ class MagnetWorld{
     killer.hp=Math.min(3,killer.hp+1);
    }
    this.feed.unshift({killer:killer.name,victim:a.name,color:killer.color,time:this.time});this.feed=this.feed.slice(0,4);if(killer.human)this.event('kill',{name:a.name});}
-  this.burst(a.x,a.y,a.color,35,260);if(a.human)this.event('death',{name:killer?.name||'a rival'});
+  this.burst(a.x,a.y,a.color,35,260);if(a.human)this.event('death',{name:killer?.name||cause||'a rival'});
  }
  updateShots(dt){
   // How far each pilot's armor reaches from its center (now and last step). A shot farther than that
@@ -651,10 +651,13 @@ class MagnetWorld{
  holeDrift(a,e,dt){const dx=e.x-a.x,dy=e.y-a.y,dd=dx*dx+dy*dy,R=this.holePull(e);if(dd>=R*R||dd<1)return;const d=Math.sqrt(dd),h=this.holeHorizon(e),k=limit(1-(d-h)/(R-h),0,1),step=Math.min(d,EVENT.hole.shipPull*k*k*dt);
   a.x+=(dx-dy*.35)/d*step;a.y+=(dy+dx*.35)/d*step;}
  updateHole(){const e=this.arenaEvent;if(!e||e.kind!=='hole'||this.time<e.start||this.time>=e.end)return;const h=this.holeHorizon(e),H=EVENT.hole;
-  for(const a of this.actors){if(!a.alive||a.shieldUntil>this.time)continue;const d=distance(a,e);if(d>h+110||this.time<(a.holeAt||0))continue;
-   let index=-1;if(d<h)index=a.pieces.length-1;else for(let i=0;i<a.pieces.length;i++){const p=a.pieces[i],px=p.x-e.x,py=p.y-e.y;if(px*px+py*py<h*h){index=i;break;}}
-   if(index>=0){const p=a.pieces[index];a.pieces.splice(index,1);e.eaten=(e.eaten||0)+1;this.burst(p.x,p.y,EVENT_COLORS.hole,5,70);a.holeAt=this.time+H.eatEvery;if(a.human)this.event('holeEat');}
-   else if(d<h&&!a.pieces.length){this.hitCore(a,0);a.holeAt=this.time+H.coreEvery;}}}
+  for(const a of this.actors){if(!a.alive||a.shieldUntil>this.time)continue;const d=distance(a,e);if(d<h){this.holeSwallow(a,e);continue;}if(d>h+110||this.time<(a.holeAt||0))continue;
+   let index=-1;for(let i=0;i<a.pieces.length;i++){const p=a.pieces[i],px=p.x-e.x,py=p.y-e.y;if(px*px+py*py<h*h){index=i;break;}}
+   if(index>=0){const p=a.pieces[index];a.pieces.splice(index,1);e.eaten=(e.eaten||0)+1;this.burst(p.x,p.y,EVENT_COLORS.hole,5,70);a.holeAt=this.time+H.eatEvery;if(a.human)this.event('holeEat');}}}
+ // A ship pulled into the dark core is destroyed whatever its health; the hole keeps its armor (more for the burst).
+ // Online, clients only show it: the room decides, as with every knockout.
+ holeSwallow(a,e){this.burst(a.x,a.y,EVENT_COLORS.hole,24,160);if(this.predictInteractions)return;
+  e.eaten=(e.eaten||0)+a.pieces.length;a.pieces=[];a.hp=0;this.label(a.x,a.y-25,'SWALLOWED','#d4bcff');this.knockout(a,0,'The black hole');}
  holeBurst(e){const H=EVENT.hole,n=Math.min(e.eaten||0,H.spillMax)+H.bonus;
   for(let i=0;i<n;i++){const ang=this.random()*Math.PI*2,speed=260+this.random()*520,r=this.random(),kind=i<H.bonus?(r<.35?2:r<.7?1:0):(r>.94?2:r>.72?1:0),item=this.scrap(e.x,e.y,kind);
    this.drop(item,e.x+Math.cos(ang)*20,e.y+Math.sin(ang)*20,Math.cos(ang)*speed,Math.sin(ang)*speed,0,0);item.pickupAt=this.time+.3;}
@@ -1351,7 +1354,7 @@ function reconcileScrap(previous,next,now){
  }
  function finish(){const rank=game.ranking().indexOf(game.human)+1;awardXp();best=Math.max(best,game.human.score);save();$('finishTitle').textContent=rank===1?'You ruled the orbit.':'Round over.';$('finishCopy').textContent=rank===1?'A full orbit, a steady aim, and a scrapyard full of spare parts.':`${game.ranking()[0].name} took the top spot. There is always another round.`;$('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
  let ringToastFor=-1,holeToastFor=-1;
- function events(){for(const e of game.events){if(e.type==='holeEat'){play('strip');const at=game.arenaEvent?.start??0;if(holeToastFor!==at){holeToastFor=at;toast('The black hole is eating your armor. Pull away!');}}if(e.type==='holeBurst')play('strip');if(e.type==='shot')play('shot');if(e.type==='ring'){play('strip');const at=game.arenaEvent?.start??0;if(ringToastFor!==at){ringToastFor=at;toast('Outside the ring! You can\'t collect scrap and your armor is breaking off. Get inside.');}}if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}if(e.type==='cometShot')toast('Comet shattered! Grab the stardust for a speed rush.');}game.events.length=0;}
+ function events(){for(const e of game.events){if(e.type==='holeEat'){play('strip');const at=game.arenaEvent?.start??0;if(holeToastFor!==at){holeToastFor=at;toast('The black hole is eating your armor. Pull away before it swallows you!');}}if(e.type==='holeBurst')play('strip');if(e.type==='shot')play('shot');if(e.type==='ring'){play('strip');const at=game.arenaEvent?.start??0;if(ringToastFor!==at){ringToastFor=at;toast('Outside the ring! You can\'t collect scrap and your armor is breaking off. Get inside.');}}if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}if(e.type==='cometShot')toast('Comet shattered! Grab the stardust for a speed rush.');}game.events.length=0;}
  function visible(x,y,r=50){return Math.abs(x-cam.x)<width/(2*cam.zoom)+r&&Math.abs(y-cam.y)<height/(2*cam.zoom)+r;}
  function polygon(x,y,r,sides,angle=0){ctx.beginPath();for(let i=0;i<sides;i++){const a=angle+i/sides*Math.PI*2,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;if(i)ctx.lineTo(px,py);else ctx.moveTo(px,py);}ctx.closePath();}
  // ---- Arena depth and combat effects (drawing only; nothing here changes the game) ----
