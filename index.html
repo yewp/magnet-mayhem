@@ -103,7 +103,8 @@ const METAL=['#9dbbd5','#c98d7a','#ffde85'];
 // their colors); core styles change the center of your ship. Each one unlocks at a level.
 // Entries marked shop come from the shop (free for now) instead of a level.
 const SKINS=Object.freeze([{name:'Plain',level:1},{name:'Gears',level:8},{name:'Bolts',level:3},{name:'Crystals',level:20},{name:'Hex plates',level:14},
- {name:'Mochi',shop:true},{name:'Shuriken',shop:true},{name:'Paper charms',shop:true},{name:'Hearts',shop:true},{name:'Flower pins',shop:true},{name:'Planets',shop:true}]);
+ {name:'Mochi',shop:true},{name:'Shuriken',shop:true},{name:'Paper charms',shop:true},{name:'Hearts',shop:true},{name:'Flower pins',shop:true},{name:'Planets',shop:true},
+ {name:'Space junk',shop:true},{name:'Asteroids',shop:true},{name:'Moon phases',shop:true},{name:'Koi',shop:true},{name:'Candy',shop:true},{name:'Slimes',shop:true},{name:'Coins',shop:true},{name:'Dice',shop:true},{name:'Pumpkins',shop:true},{name:'Watching eyes',shop:true},{name:'Lanterns',shop:true}]);
 // Tails come from the shop (free for now) and follow your ship in your pilot color.
 const TAILS=Object.freeze([{name:'None'},{name:'Cat tail'},{name:'Fox tail'},{name:'Three-tailed fox'},{name:'Dragon tail'},{name:'Ribbon streamers'},{name:'Comet trail'},{name:'Fish fin'},{name:'Scorpion tail'},{name:'Peacock fan'},{name:'Kite with bows'},{name:'Bubble trail'},{name:'Jellyfish tentacles'},{name:'Leafy vine'},{name:'Constellation'},{name:'Spiked club'},{name:'Devil tail'},{name:'Paper lanterns'},{name:'Chain links'},{name:'Rainbow streamer'},{name:'Feather boa'},{name:'Cherry blossoms'},{name:'Snowflakes'},{name:'Music notes'},{name:'Pixel trail'},{name:'Robot claw'},{name:'Paper cranes'},{name:'Fireflies'},{name:'Ghost wisps'},{name:'Aurora veil'},{name:'Ink brush'},{name:'Party bunting'},{name:'Balloon'},{name:'Gold coins'},{name:'Tiger tail'},{name:'Double helix'},{name:'Neon tube'},{name:'Pearl necklace'},{name:'Pom-pom spring'},{name:'Booster flame'},{name:'Butterflies'},{name:'Hearts'},{name:'Dandelion seeds'},{name:'Bamboo stalk'},{name:'Candy cane'},{name:'Koi fish'},{name:'Water wake'},{name:'Smoke rings'},{name:'Mini galaxy'},{name:'Star wand'},{name:'Ducklings'},{name:'Toy train'},{name:'Lava lamp'},{name:'Bone tail'},{name:'Little ghost'},{name:'Bat swarm'},{name:'Anchor rope'},{name:'Ringed planet'},{name:'Thorny rose'},{name:'Gummy worm'},{name:'UFO'}]);
 const CORES=Object.freeze([{name:'Dot',level:1},{name:'Ring',level:5},{name:'Star',level:11},{name:'Eye',level:17},{name:'Reactor',level:25},{name:'Spirit flame',shop:true},{name:'Atom',shop:true},{name:'Gyroscope',shop:true},{name:'Pulsar',shop:true},{name:'Turbine',shop:true},{name:'Hex lock',shop:true},{name:'Binary',shop:true},{name:'Reticle',shop:true},{name:'Vortex',shop:true},{name:'Plasma',shop:true},{name:'Compass',shop:true},{name:'Aperture',shop:true},{name:'Vitals',shop:true},{name:'Gauge',shop:true},{name:'Magnet',shop:true},{name:'Recoil',shop:true},{name:'Pulse',shop:true},{name:'Drift',shop:true},{name:'Lock-on',shop:true}]);
@@ -1642,9 +1643,10 @@ function reconcileScrap(previous,next,now){
  }
  // ---- Cosmetics: orbit skins (piece shapes) and core styles, plus levels ----
  function hexPath(c,x,y,r,rot=0){c.beginPath();for(let i=0;i<6;i++){const a=rot+i*Math.PI/3;c.lineTo(x+Math.cos(a)*r,y+Math.sin(a)*r);}c.closePath();}
- function skinShape(c,skin,metal,color,kind=0){
+ function skinShape(c,skin,metal,color,kind=0,variant=0){
   c.fillStyle=metal;c.strokeStyle='#09131f';c.lineWidth=1;
   if(skin===10){planetPiece(c,metal,color,kind);return;}
+  if(SKIN_DRAW[skin]){SKIN_DRAW[skin](c,kind,metal,color,variant);return;}
   if(skin===1){for(let i=0;i<8;i++){c.save();c.rotate(i*Math.PI/4);c.fillRect(-1.7,-8.3,3.4,3.4);c.restore();}c.beginPath();c.arc(0,0,6,0,Math.PI*2);c.fill();c.shadowBlur=0;c.stroke();c.fillStyle='#09131f';c.beginPath();c.arc(0,0,2,0,Math.PI*2);c.fill();c.strokeStyle=color;c.lineWidth=1.2;c.beginPath();c.arc(0,0,3.8,0,Math.PI*2);c.stroke();}
   else if(skin===2){c.fillRect(0,-2.4,8.5,4.8);hexPath(c,-3,0,5.2);c.fill();c.shadowBlur=0;c.stroke();c.strokeRect(0,-2.4,8.5,4.8);c.strokeStyle='#09131f99';for(const x of [2.8,5,7.2]){c.beginPath();c.moveTo(x,-2.4);c.lineTo(x-.8,2.4);c.stroke();}c.fillStyle=color;c.beginPath();c.arc(-3,0,1.7,0,Math.PI*2);c.fill();}
   else if(skin===3){c.beginPath();c.moveTo(0,-8.5);c.lineTo(4.6,-1.5);c.lineTo(0,8.5);c.lineTo(-4.6,-1.5);c.closePath();c.fill();c.shadowBlur=0;c.stroke();c.strokeStyle='#ffffff70';c.beginPath();c.moveTo(0,-8.5);c.lineTo(0,8.5);c.moveTo(-4.6,-1.5);c.lineTo(4.6,-1.5);c.stroke();c.fillStyle=color;c.beginPath();c.moveTo(0,8.5);c.lineTo(1.8,5.5);c.lineTo(-1.8,5.5);c.closePath();c.fill();}
@@ -1658,6 +1660,55 @@ function reconcileScrap(previous,next,now){
   else if(skin===4){hexPath(c,0,0,6.8,Math.PI/6);c.fill();c.shadowBlur=0;c.stroke();c.strokeStyle='#ffffff55';hexPath(c,0,0,3.9,Math.PI/6);c.stroke();c.fillStyle=color;c.beginPath();c.arc(0,0,1.6,0,Math.PI*2);c.fill();}
   else{c.fillRect(-6.5,-4.5,13,9);c.shadowBlur=0;c.strokeRect(-6.5,-4.5,13,9);c.fillStyle='#ffffff4d';c.fillRect(-5.5,-3.5,10,1.3);c.fillStyle=color;c.fillRect(-2.5,2.5,5,2);}
  }
+ // Shop skins 11-21: the metal picks the version (steel / copper / gold). Drawn once into a cached sprite.
+ const SKIN_DARK='#09131f';
+ function skinShade(c,r,x=0,y=0){const g=c.createRadialGradient(x-r*.45,y-r*.45,r*.15,x,y,r*1.05);g.addColorStop(0,'rgba(255,255,255,.4)');g.addColorStop(.45,'rgba(255,255,255,0)');g.addColorStop(1,'rgba(6,14,24,.5)');c.fillStyle=g;}
+ function skinPoly(c,pts){c.beginPath();pts.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath();}
+ const SKIN_FONT='-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',ASTEROID_R=[6.4,5.2,6.8,5.6,6.2,4.9,6.6,5.4,6];
+ const SKIN_DRAW={
+  11:(c,k,m,col)=>{c.scale(1.3,1.3);if(k===0){c.fillStyle='#355a85';for(const sd of [-1,1])c.fillRect(sd*3.2-(sd<0?6:0),-2.4,6,4.8);c.strokeStyle='#9cc4ee';c.lineWidth=.5;for(const sd of [-1,1])for(const x of [2,4]){c.beginPath();c.moveTo(sd*(3.2+x),-2.4);c.lineTo(sd*(3.2+x),2.4);c.stroke();}c.fillStyle=m;c.fillRect(-3,-3,6,6);skinShade(c,4);c.fillRect(-3,-3,6,6);c.strokeStyle=m;c.lineWidth=.8;c.beginPath();c.moveTo(0,-3);c.lineTo(0,-6.5);c.stroke();c.fillStyle=col;c.beginPath();c.arc(0,-6.8,1,0,7);c.fill();}
+   else if(k===1){c.fillStyle=m;c.beginPath();c.arc(0,-.5,6.2,Math.PI*.05,Math.PI*.95);c.closePath();c.fill();skinShade(c,6);c.fill();c.strokeStyle=SKIN_DARK;c.lineWidth=.7;c.stroke();c.strokeStyle=m;c.lineWidth=.9;c.beginPath();c.moveTo(0,-.2);c.lineTo(0,-5.5);c.stroke();c.fillStyle=col;c.beginPath();c.arc(0,-5.8,1.1,0,7);c.fill();c.fillStyle=SKIN_DARK;c.fillRect(-1.5,5,3,1.6);}
+   else{c.fillStyle=m;c.beginPath();c.moveTo(0,-7.5);c.quadraticCurveTo(5.5,-1,4.2,5.5);c.lineTo(-4.2,5.5);c.quadraticCurveTo(-5.5,-1,0,-7.5);c.fill();skinShade(c,7);c.fill();c.fillStyle='#b9772e';c.fillRect(-4.6,5.2,9.2,1.6);c.fillStyle=col;c.shadowColor=col;c.shadowBlur=4;c.beginPath();c.arc(0,-.5,2,0,7);c.fill();c.shadowBlur=0;c.fillStyle='#ffffffaa';c.beginPath();c.arc(-.6,-1.1,.7,0,7);c.fill();}},
+  12:(c,k,m,col)=>{const f=k===2?.9:1,pts=ASTEROID_R.map((r,i)=>{const a=i/ASTEROID_R.length*Math.PI*2;return [Math.cos(a)*r*f,Math.sin(a)*r*f];});skinPoly(c,pts);c.fillStyle=m;c.fill();skinShade(c,6.5);c.fill();
+   c.fillStyle='rgba(9,19,31,.35)';for(const [x,y,r] of [[-2,-1.5,1.3],[2.3,1.6,1],[1,-3,.7]]){c.beginPath();c.arc(x,y,r,0,7);c.fill();}
+   if(k===2){c.fillStyle='#fffbe8';for(const [x,y] of [[-1.5,2],[2.5,-1.8],[0,0]]){skinPoly(c,[[x,y-1.4],[x+.7,y],[x,y+1.4],[x-.7,y]]);c.fill();}}
+   c.strokeStyle=col;c.globalAlpha=.6;c.lineWidth=.7;skinPoly(c,ASTEROID_R.map((r,i)=>{const a=i/ASTEROID_R.length*Math.PI*2;return [Math.cos(a)*(r*f+.6),Math.sin(a)*(r*f+.6)];}));c.stroke();c.globalAlpha=1;},
+  13:(c,k,m,col)=>{c.fillStyle=m;c.beginPath();c.arc(0,0,6,0,7);c.fill();c.fillStyle='rgba(9,19,31,.25)';for(const [x,y,r] of [[-1.8,-1.5,1.1],[2,1.8,.8]]){c.beginPath();c.arc(x,y,r,0,7);c.fill();}
+   c.fillStyle='rgba(7,17,29,.88)';if(k===0){c.beginPath();c.arc(2.2,0,5.4,0,7);c.fill();}else if(k===1){c.beginPath();c.arc(0,0,6.05,-Math.PI/2,Math.PI/2);c.fill();}
+   if(k===2){c.shadowColor=m;c.shadowBlur=6;c.strokeStyle=m;c.lineWidth=.6;c.beginPath();c.arc(0,0,6.2,0,7);c.stroke();c.shadowBlur=0;}c.strokeStyle=col;c.globalAlpha=.7;c.lineWidth=.7;c.beginPath();c.arc(0,0,6.8,0,7);c.stroke();c.globalAlpha=1;},
+  14:(c,k,m,col)=>{const L=k===0?5.2:k===1?6.4:7.2;c.fillStyle=m;skinPoly(c,[[-L+.5,0],[-L-3.2,-2.8],[-L-2.4,0],[-L-3.2,2.8]]);c.fill();c.beginPath();c.ellipse(0,0,L,L*.45,0,0,7);c.fill();skinShade(c,L);c.beginPath();c.ellipse(0,0,L,L*.45,0,0,7);c.fill();
+   c.fillStyle=m;c.beginPath();c.ellipse(-.6,-L*.45,1.8,1,-.5,0,7);c.fill();if(k===2){c.fillStyle='#e8603c';for(const [x,y,r] of [[-1.5,-.6,1.4],[1.6,.8,1.1],[3.4,-.7,.8]]){c.beginPath();c.arc(x,y,r,0,7);c.fill();}}
+   if(k===1){c.fillStyle='#fff1e899';c.fillRect(-1.5,-L*.45+.6,.7,L*.9-1.2);}c.fillStyle=SKIN_DARK;c.beginPath();c.arc(L*.62,-.6,.75,0,7);c.fill();c.strokeStyle=col;c.globalAlpha=.7;c.lineWidth=.6;c.beginPath();c.ellipse(0,0,L+.5,L*.45+.5,0,0,7);c.stroke();c.globalAlpha=1;},
+  15:(c,k,m,col)=>{if(k===0){c.fillStyle='#f4f8fb';c.beginPath();c.arc(0,0,5.6,0,7);c.fill();c.fillStyle=m;for(let i=0;i<4;i++){const a=i*Math.PI/2;c.beginPath();c.moveTo(0,0);c.quadraticCurveTo(Math.cos(a-.9)*4,Math.sin(a-.9)*4,Math.cos(a)*5.6,Math.sin(a)*5.6);c.arc(0,0,5.6,a,a+.75);c.quadraticCurveTo(Math.cos(a-.25)*3,Math.sin(a-.25)*3,0,0);c.fill();}skinShade(c,5.6);c.beginPath();c.arc(0,0,5.6,0,7);c.fill();}
+   else if(k===1){c.fillStyle=m;c.beginPath();c.roundRect(-5,-4,10,8,2.4);c.fill();skinShade(c,6);c.fill();c.fillStyle='#ffffff66';c.fillRect(-3.4,-2.6,4,1);}
+   else{c.fillStyle=col;for(const sd of [-1,1]){skinPoly(c,[[sd*4.5,0],[sd*8.5,-3.2],[sd*8,0],[sd*8.5,3.2]]);c.fill();}c.fillStyle=m;c.beginPath();c.ellipse(0,0,5,3.8,0,0,7);c.fill();c.fillStyle='#d99b2a88';for(const x of [-2,0,2])c.fillRect(x-.5,-3.6,1,7.2);skinShade(c,5);c.beginPath();c.ellipse(0,0,5,3.8,0,0,7);c.fill();}
+   if(k<2){c.strokeStyle=col;c.globalAlpha=.7;c.lineWidth=.7;c.beginPath();if(k===0)c.arc(0,0,6.2,0,7);else c.roundRect(-5.6,-4.6,11.2,9.2,2.8);c.stroke();c.globalAlpha=1;}},
+  16:(c,k,m,col)=>{c.scale(1.3,1.3);const w=k===2?6.4:k===1?5.8:5.2;c.fillStyle=m;c.beginPath();c.moveTo(-w,4);c.bezierCurveTo(-w,-4.5,w,-4.5,w,4);c.quadraticCurveTo(0,5.2,-w,4);c.fill();skinShade(c,w,0,1);c.fill();
+   c.fillStyle=SKIN_DARK;for(const x of [-1.8,1.8]){c.beginPath();c.ellipse(x,.8,.75,1.05,0,0,7);c.fill();}c.fillStyle='#ffffffcc';c.beginPath();c.ellipse(-w*.45,-1.6,1.1,.6,-.5,0,7);c.fill();c.fillStyle=col;c.globalAlpha=.7;for(const x of [-3.3,3.3]){c.beginPath();c.ellipse(x,2.2,.9,.5,0,0,7);c.fill();}c.globalAlpha=1;
+   if(k===2){c.fillStyle='#fff3b0';skinPoly(c,[[-2.6,-3.6],[-2.6,-6],[-1.3,-4.8],[0,-6.6],[1.3,-4.8],[2.6,-6],[2.6,-3.6]]);c.fill();}},
+  17:(c,k,m,col)=>{c.fillStyle='#00000040';c.beginPath();c.ellipse(.6,.8,6,6,0,0,7);c.fill();c.fillStyle=m;c.beginPath();c.arc(0,0,6,0,7);c.fill();skinShade(c,6);c.fill();c.strokeStyle='rgba(9,19,31,.45)';c.lineWidth=.7;c.beginPath();c.arc(0,0,4.6,0,7);c.stroke();
+   c.fillStyle='rgba(9,19,31,.5)';c.font='800 6px '+SKIN_FONT;c.textAlign='center';c.textBaseline='middle';if(k===2){skinPoly(c,Array.from({length:10},(_,i)=>{const a=-Math.PI/2+i*Math.PI/5,r=i%2?1.4:3.2;return [Math.cos(a)*r,Math.sin(a)*r];}));c.fill();}else c.fillText(k===0?'5':'1',0,.4);
+   c.strokeStyle=col;c.globalAlpha=.7;c.lineWidth=.7;c.beginPath();c.arc(0,0,6.6,0,7);c.stroke();c.globalAlpha=1;},
+  18:(c,k,m,col)=>{c.fillStyle=m;if(k===0){c.beginPath();c.roundRect(-5,-5,10,10,2);c.fill();skinShade(c,6);c.fill();c.fillStyle=SKIN_DARK;for(const [x,y] of [[-2.4,-2.4],[0,0],[2.4,2.4]]){c.beginPath();c.arc(x,y,1,0,7);c.fill();}}
+   else if(k===1){skinPoly(c,[[0,-7],[5.5,0],[0,7],[-5.5,0]]);c.fill();skinShade(c,6);c.fill();c.strokeStyle='rgba(9,19,31,.45)';c.lineWidth=.6;c.beginPath();c.moveTo(-5.5,0);c.lineTo(5.5,0);c.stroke();c.fillStyle=SKIN_DARK;c.font='800 4.5px '+SKIN_FONT;c.textAlign='center';c.textBaseline='middle';c.fillText('8',0,-2.4);}
+   else{const h=Array.from({length:6},(_,i)=>{const a=-Math.PI/2+i*Math.PI/3;return [Math.cos(a)*6.8,Math.sin(a)*6.8];});skinPoly(c,h);c.fill();skinShade(c,7);c.fill();c.strokeStyle='rgba(9,19,31,.4)';c.lineWidth=.55;skinPoly(c,[[0,-3.6],[3.2,2],[-3.2,2]]);c.stroke();c.fillStyle=SKIN_DARK;c.font='800 3.4px '+SKIN_FONT;c.textAlign='center';c.textBaseline='middle';c.fillText('20',0,.3);}
+   c.strokeStyle=col;c.globalAlpha=.6;c.lineWidth=.6;if(k===0){c.beginPath();c.roundRect(-5.6,-5.6,11.2,11.2,2.4);c.stroke();}c.globalAlpha=1;},
+  19:(c,k,m,col)=>{const sc=1.3*(k===0?.8:k===1?.92:1.05);c.scale(sc,sc);c.fillStyle=m;for(const [x,rx] of [[-3,3.2],[3,3.2],[0,3.6]]){c.beginPath();c.ellipse(x,.6,rx,5,0,0,7);c.fill();}skinShade(c,6.5,0,.6);c.beginPath();c.ellipse(0,.6,6.3,5,0,0,7);c.fill();
+   c.strokeStyle='rgba(9,19,31,.3)';c.lineWidth=.6;for(const x of [-1.6,1.6]){c.beginPath();c.ellipse(x,.6,1.6,4.8,0,0,7);c.stroke();}c.fillStyle='#4f8a3c';c.fillRect(-.7,-6,1.4,2.4);
+   if(k===2){c.fillStyle='#2a1406';skinPoly(c,[[-3,-.6],[-1.6,-2],[-.6,-.6]]);c.fill();skinPoly(c,[[3,-.6],[1.6,-2],[.6,-.6]]);c.fill();c.beginPath();c.moveTo(-3,1.8);c.lineTo(-1.5,2.8);c.lineTo(0,1.8);c.lineTo(1.5,2.8);c.lineTo(3,1.8);c.lineTo(1.6,4);c.lineTo(-1.6,4);c.closePath();c.fill();}
+   c.fillStyle=col;c.beginPath();c.arc(1.6,-5.4,.9,0,7);c.fill();},
+  // Watching eyes: the white of the eye here; the iris and pupil are a second sprite placed toward the ship's aim
+  // every frame (variant 1 = in a match, with no iris; otherwise a resting iris for previews).
+  20:(c,k,m,col,variant)=>{const r=EYE_R[k];c.fillStyle='#f3f6f8';c.beginPath();c.arc(0,0,r,0,7);c.fill();c.shadowBlur=0;
+   c.strokeStyle='#ff5a5a55';c.lineWidth=.4;for(const a of [2.4,3.4,3.9]){c.beginPath();c.moveTo(Math.cos(a)*r,Math.sin(a)*r);c.lineTo(Math.cos(a)*r*.7,Math.sin(a)*r*.7);c.stroke();}
+   if(variant!==1)drawIris(c,k,0,-r*.32);skinShade(c,r);c.beginPath();c.arc(0,0,r,0,7);c.fill();c.strokeStyle=col;c.lineWidth=1;c.beginPath();c.arc(0,0,r+.4,0,7);c.stroke();},
+  // Lanterns: variant 1 = lit (the ship's magnet is on).
+  21:(c,k,m,col,variant)=>{if(variant===1){const g=c.createRadialGradient(0,0,1,0,0,11);g.addColorStop(0,'rgba(255,214,120,.55)');g.addColorStop(1,'rgba(255,214,120,0)');c.fillStyle=g;c.beginPath();c.arc(0,0,11,0,7);c.fill();}
+   c.fillStyle=m;c.beginPath();c.ellipse(0,0,5,6,0,0,7);c.fill();c.shadowBlur=0;if(variant===1){c.fillStyle='rgba(255,236,170,.6)';c.beginPath();c.ellipse(0,0,4,5,0,0,7);c.fill();}skinShade(c,6);c.beginPath();c.ellipse(0,0,5,6,0,0,7);c.fill();
+   c.strokeStyle='rgba(9,19,31,.35)';c.lineWidth=.5;for(const y of [-3,0,3]){const w=Math.sqrt(1-(y/6)**2)*5;c.beginPath();c.moveTo(-w,y);c.lineTo(w,y);c.stroke();}c.fillStyle=SKIN_DARK;c.fillRect(-2.6,-6.8,5.2,1.6);c.fillRect(-2.6,5.2,5.2,1.6);c.fillStyle=col;c.fillRect(-.5,6.8,1,2.4);}};
+ const EYE_R=[5.4,5.8,6.2];
+ function drawIris(c,k,x,y){const r=EYE_R[k];c.fillStyle=METAL[k];c.beginPath();c.arc(x,y,r*.55,0,7);c.fill();c.fillStyle=SKIN_DARK;c.beginPath();c.arc(x,y,r*.26,0,7);c.fill();c.fillStyle='#ffffffdd';c.beginPath();c.arc(x-r*.18,y-r*.2,r*.1,0,7);c.fill();}
+ function irisSprite(k){const key='iris:'+k;let sp=spriteCache.get(key);if(sp)return sp;sp=document.createElement('canvas');sp.width=sp.height=12;const c=sp.getContext('2d');c.translate(6,6);drawIris(c,k,0,0);spriteCache.set(key,sp);return sp;}
  // Planets skin: the metal picks the planet - steel a cratered moon, copper a banded gas giant, gold a ringed planet.
  function planetPiece(c,metal,color,kind){
   const r=kind===2?5.2:kind===1?6.4:5.8,ring=(front)=>{c.save();c.rotate(-.42);c.beginPath();c.ellipse(0,0,10,3,0,front?0:Math.PI,front?Math.PI:Math.PI*2);c.strokeStyle='#fff0c4';c.lineWidth=1.8;c.stroke();c.strokeStyle=color;c.globalAlpha=.75;c.lineWidth=.7;c.beginPath();c.ellipse(0,0,11.2,3.5,0,front?0:Math.PI,front?Math.PI:Math.PI*2);c.stroke();c.restore();};
@@ -2047,10 +2098,10 @@ function reconcileScrap(previous,next,now){
   $('xpFill').style.width=(Math.max(0,Math.min(1,(xp-from)/(to-from)))*100).toFixed(1)+'%';
   const unlocked=[...SKINS.map(s=>[s,'orbit skin']),...CORES.map(s=>[s,'core style'])].filter(([s])=>s.level>before&&s.level<=after);
   $('xpUnlock').hidden=!unlocked.length;$('xpUnlock').textContent=unlocked.length?'Unlocked: '+unlocked.map(([s,w])=>s.name+' '+w).join(', ')+'. Equip it in Customize.':'';}
- function orbitSprite(color,kind,focus,skin=0){
-  const key=color+':'+kind+':'+focus+':'+skin;if(spriteCache.has(key))return spriteCache.get(key);
+ function orbitSprite(color,kind,focus,skin=0,variant=0){
+  const key=color+':'+kind+':'+focus+':'+skin+':'+variant;if(spriteCache.has(key))return spriteCache.get(key);
   const sprite=document.createElement('canvas');sprite.width=42;sprite.height=38;const c=sprite.getContext('2d');c.translate(21,19);
-  c.shadowColor=color+'55';c.shadowBlur=focus?7:3;skinShape(c,skin,METAL[kind],color,kind);if(kind===2&&skin!==10){c.shadowBlur=0;c.fillStyle='#ffffffd8';c.fillRect(3,-5,2.2,2.2);}
+  c.shadowColor=color+'55';c.shadowBlur=focus?7:3;skinShape(c,skin,METAL[kind],color,kind,variant);if(kind===2&&skin<10){c.shadowBlur=0;c.fillStyle='#ffffffd8';c.fillRect(3,-5,2.2,2.2);}
   spriteCache.set(key,sprite);return sprite;
  }
  // Hit feedback. Hits are detected by a ship's lastHurt changing and knockouts by new
@@ -2121,8 +2172,10 @@ function reconcileScrap(previous,next,now){
    for(const p of a.pieces){const blend=scrapBlend(p,now);spots.push(p.x+(p.blendX||0)*blend,p.y+(p.blendY||0)*blend);}
    ctx.strokeStyle=a.color+'15';ctx.lineWidth=.6;ctx.beginPath();for(let k=0;k<spots.length;k+=2){ctx.moveTo(a.x,a.y);ctx.lineTo(spots[k],spots[k+1]);}ctx.stroke();
    {const m=ctx.getTransform();
-    for(let k=0;k<a.pieces.length;k++){const p=a.pieces[k],x=spots[2*k],y=spots[2*k+1],c=Math.cos(p.angle+Math.PI/2),sn=Math.sin(p.angle+Math.PI/2);
-     ctx.setTransform(m.a*c+m.c*sn,m.b*c+m.d*sn,m.c*c-m.a*sn,m.d*c-m.b*sn,m.a*x+m.c*y+m.e,m.b*x+m.d*y+m.f);ctx.drawImage(orbitSprite(a.color,p.item.kind,isYou,a.skin||0),-21,-19);}
+    const skin=a.skin||0,variant=skin===20||skin===21&&a.magnet?1:0,aim=a.aim||0;
+    for(let k=0;k<a.pieces.length;k++){const p=a.pieces[k],x=spots[2*k],y=spots[2*k+1],c=Math.cos(p.angle+Math.PI/2),sn=Math.sin(p.angle+Math.PI/2),flip=skin===14&&orbitSlot(p.slot).spin<0?-1:1;
+     ctx.setTransform(flip*(m.a*c+m.c*sn),flip*(m.b*c+m.d*sn),m.c*c-m.a*sn,m.d*c-m.b*sn,m.a*x+m.c*y+m.e,m.b*x+m.d*y+m.f);ctx.drawImage(orbitSprite(a.color,p.item.kind,isYou,skin,variant),-21,-19);
+     if(skin===20){const look=aim-p.angle-Math.PI/2,r=EYE_R[p.item.kind]*.32;ctx.drawImage(irisSprite(p.item.kind),Math.cos(look)*r-6,Math.sin(look)*r-6);}}
     ctx.setTransform(m);}
    if(a.shieldUntil>game.time){ctx.strokeStyle=a.color+'9a';ctx.lineWidth=1.4;ctx.setLineDash([4,5]);ctx.beginPath();ctx.arc(a.x,a.y,outer+13,game.time,Math.PI*2+game.time);ctx.stroke();ctx.setLineDash([]);}
    const speed=hyp(a.vx,a.vy);if(speed>15){const angle=Math.atan2(a.vy,a.vx);ctx.strokeStyle=a.color+'70';ctx.lineWidth=3;for(const offset of [-.3,.3]){const x=a.x-Math.cos(angle+offset)*19,y=a.y-Math.sin(angle+offset)*19;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-Math.cos(angle)*(7+speed*.04),y-Math.sin(angle)*(7+speed*.04));ctx.stroke();}}
