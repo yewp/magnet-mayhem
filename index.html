@@ -115,7 +115,7 @@ body.in-match .brand,body.in-match #helpBtn{display:none}body.in-match .tools{ma
 </style></head><body>
 <canvas id="arena" aria-label="Orbbitz.io arena. Mouse or WASD to move. Hold left mouse or Space to fire scrap. Hold right mouse or E to pull in your shield and attract scrap. P pauses."></canvas>
 <header class="topbar"><div class="brand"><svg class="brand-logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><circle cx="20" cy="20" r="13" stroke="currentColor" stroke-opacity=".4"/><circle cx="20" cy="20" r="5" fill="currentColor"/><path d="m27 4 7 4-3 6-7-4zM3 25l7-3 3 7-7 3z" fill="#f5c886"/></svg><div><div class="wordmark">orbbitz<span>.io</span></div><div class="brand-sub">YOUR ARMOR IS YOUR AMMO</div></div></div><div class="tools"><button class="icon-btn" id="soundBtn" title="Turn sound on" aria-label="Turn sound on" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m11 5-5 4H3v6h3l5 4V5Z"/><path id="soundWaves" d="m16 9 6 6m0-6-6 6"/></svg></button><button class="icon-btn" id="helpBtn" title="How to play" aria-label="How to play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4m0 2v2"/></svg></button><button class="icon-btn" id="pauseBtn" title="Pause (P)" aria-label="Pause game" disabled><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3v14H7zm7 0h3v14h-3z"/></svg></button></div></header><div id="roomStrip" class="room-strip" hidden><div><strong id="connectionValue">Connecting</strong><span>ROOM <b id="roomCodeValue"></b></span></div><button id="copyRoomBtn" type="button">Copy link</button><input id="shareLink" readonly hidden aria-label="Share this room link"></div>
-<section class="hud" id="hud" hidden><div class="score-stat"><div class="stat-label">SCORE</div><div class="stat-value" id="scoreValue">0</div></div><div class="divider"></div><div class="clock-stat" id="clockStat"><div class="stat-label">ROUND</div><div class="stat-value" id="timeValue">3:00</div></div><div class="divider team-part" hidden></div><div class="team-stat team-part" hidden><div class="stat-label">FLAGS</div><div class="stat-value"><span class="t-blue" id="teamBlue">0</span><small> – </small><span class="t-red" id="teamRed">0</span></div></div></section>
+<section class="hud" id="hud" hidden><div class="score-stat"><div class="stat-label">SCORE</div><div class="stat-value" id="scoreValue">0</div></div><div class="divider"></div><div class="clock-stat" id="clockStat"><div class="stat-label">ROUND</div><div class="stat-value" id="timeValue">3:00</div></div><div class="divider team-part" hidden></div><div class="team-stat team-part" hidden><div class="stat-label" id="teamStatLabel">FLAGS</div><div class="stat-value"><span class="t-blue" id="teamBlue">0</span><small> – </small><span class="t-red" id="teamRed">0</span></div></div></section>
 <aside class="board" id="board" hidden><div class="panel-heading">SALVAGE LEADERS <span id="rivalsLabel">10 AI RIVALS</span></div><div id="leaders"></div></aside><div class="kill-feed" id="feed" hidden></div>
 <aside class="map" id="mapPanel" hidden><canvas id="minimap" width="272" height="214" aria-label="Arena minimap with repair wells and pilots"></canvas></aside>
 <div class="bottom-note" id="bottomNote" hidden><div id="perfValue" style="font-size:11px;color:#8da6be;margin-bottom:8px" title="Frame rate and network round trip"></div><div class="touch-hint">Drag anywhere to move.<br>Hold Fire for touch auto-aim.</div></div>
@@ -126,7 +126,7 @@ body.in-match .brand,body.in-match #helpBtn{display:none}body.in-match .tools{ma
 <div class="overlay menu-overlay" id="menuScreen"><main class="menu-layout">
 <section class="hero"><div class="eyebrow">ORBIT · STEAL · SURVIVE</div><h1 class="logo">orbbitz<span>.io</span></h1><p class="intro">Your armor is your ammo. Pull scrap into orbit, fire it, and steal theirs.</p></section>
 <form id="startForm" class="glass menu-card"><div class="level-row"><div class="level-badge">LV <b id="levelValue">1</b></div><div class="level-bar" aria-hidden="true"><i id="levelFill"></i></div><button type="button" class="text-btn" id="customizeBtn">Customize</button><button type="button" class="text-btn" id="shopBtn">Shop</button></div><div class="level-next" id="levelNext"></div><div class="form-row"><div class="field"><label for="playerName">Pilot name</label><input id="playerName" value="You" maxlength="16" autocomplete="off" spellcheck="false"></div><div class="field"><label for="difficulty">AI difficulty</label><select id="difficulty"><option value="easy">Relaxed</option><option value="normal" selected>Standard</option><option value="hard">Relentless</option></select></div></div>
-<div class="field mode-field"><label for="gameMode">Mode</label><select id="gameMode"><option value="ffa" selected>Free-for-all</option><option value="ctf">Capture the flag · 5 v 5</option></select><p class="mode-note" id="modeNote" hidden>Practice and private rooms. Play online stays free-for-all.</p></div>
+<div class="field mode-field"><label for="gameMode">Mode</label><select id="gameMode"><option value="ffa" selected>Free-for-all</option><option value="ctf">Capture the flag · 5 v 5</option><option value="teams">Team battle · 5 v 5</option></select><p class="mode-note" id="modeNote" hidden>Practice and private rooms. Play online stays free-for-all.</p></div>
 <button class="primary" id="onlinePlayBtn" type="submit">Play online</button><button class="secondary" type="button" id="offlineBtn">Practice offline</button><button class="secondary" type="button" id="roomToggle" aria-expanded="false" aria-controls="roomSheet">Private room</button>
 <div class="room-sheet" id="roomSheet" hidden><button class="secondary" type="button" id="createRoomBtn">Create a room</button><div class="join-row"><label class="sr-only" for="roomCode">Room code</label><input id="roomCode" placeholder="ROOM CODE" maxlength="6" autocomplete="off" spellcheck="false"><button class="secondary" id="joinRoomBtn" type="button">Join</button></div></div>
 <p id="lobbyStatus" class="lobby-status" role="status" aria-live="polite">Play with others, or create a room and invite friends.</p>
@@ -253,6 +253,9 @@ const BOT_AIM=[.38,.17,.065];// aim error: easy, normal, hard
 const CTF=Object.freeze({bases:Object.freeze([Object.freeze({x:250,y:1100}),Object.freeze({x:2550,y:1100})]),baseR:125,grab:44,toWin:3,returnAfter:15,duration:240,
  capturePoints:150,returnPoints:25,names:Object.freeze(['BLUE','RED']),colors:Object.freeze(['#5fb8ff','#ff6b6b']),
  palettes:Object.freeze([Object.freeze(['#64eee0','#5fb8ff','#7aa8ff','#4fd8ff','#a8c8ff']),Object.freeze(['#ff6b6b','#ff8a5c','#ff5c8a','#ffa86b','#ff7aa8'])]),noEvents:Object.freeze(['collapse'])});
+// Team battle: the same two teams without flags; every knockout of an enemy scores for your team. First to toWin or
+// most when the 4 minutes end.
+const TEAMS=Object.freeze({toWin:12,duration:240});
 // Team bot roles, by bot number: attackers go for the enemy flag, defenders guard home, roamers do either.
 const CTF_ROLES=['attack','defend','attack','roam','roam'];
 const CRATE_RADIUS=28;
@@ -295,17 +298,18 @@ const ORBIT_SLOTS=Array.from({length:38},(_,slot)=>Object.freeze(makeOrbitSlot(s
 function orbitSlot(slot){return ORBIT_SLOTS[slot]||makeOrbitSlot(slot);}
 class MagnetWorld{
  constructor({name='You',difficulty='normal',random=Math.random,duration=MM.duration,mode='ffa'}={}){
-  this.mode=mode==='ctf'?'ctf':'ffa';const ctf=this.mode==='ctf';
-  this.random=random;this.difficulty=difficulty;this.duration=ctf&&duration===MM.duration?CTF.duration:duration;this.time=0;this.nextId=1;this.finished=false;this.ground=[];this.shots=[];this.effects=[];this.labels=[];this.events=[];this.feed=[];
+  this.mode=['ctf','teams'].includes(mode)?mode:'ffa';const ctf=this.mode==='ctf',teams=this.mode!=='ffa';
+  this.random=random;this.difficulty=difficulty;this.duration=teams&&duration===MM.duration?(ctf?CTF.duration:TEAMS.duration):duration;this.time=0;this.nextId=1;this.finished=false;this.ground=[];this.shots=[];this.effects=[];this.labels=[];this.events=[];this.feed=[];
   this.wrecks=newWrecks();
   this.wells=[{x:1400,y:1100,r:65},{x:500,y:500,r:65},{x:2300,y:1700,r:65}];
   this.pads=PAD_SPOTS.map(p=>({...p,kind:-1,readyAt:POWER.first}));this.vortices=[];this.stardust=[];this.arenaEvent=null;this.nextEventAt=EVENT.first;this.lastEvent=null;
   this.covers=[{x:1010,y:880,r:43},{x:1790,y:1320,r:43},{x:680,y:1580,r:51},{x:2120,y:620,r:51},{x:1720,y:480,r:38},{x:1080,y:1720,r:38},{x:380,y:1050,r:45},{x:2420,y:1150,r:45}];
   if(ctf){this.flags=CTF.bases.map((b,team)=>({team,x:b.x,y:b.y,state:0,carrier:0,droppedAt:0}));this.captures=[0,0];this.winner=-1;}
-  this.human=this.actor(name,'#64eee0',true);this.human.homeColor='#64eee0';if(ctf)this.human.team=0;this.actors=[this.human];this.spawn(this.human,true,0);
-  // Capture the flag: 9 bots, 4 on your team and 5 on the other (5 against 5), in team colors.
-  for(let i=0;i<(ctf?9:MM.bots);i++){const team=ctf?(i<4?0:1):undefined,color=ctf?CTF.palettes[team][team?i-4:i+1]:PALETTE[i],a=this.actor(PILOTS[i],color,false);
-   Object.assign(a,botLook(i),{botIndex:i,homeColor:color},ctf?{team}:{});this.actors.push(a);this.spawn(a,true,i);}
+  if(this.mode==='teams'){this.teamScore=[0,0];this.winner=-1;}
+  this.human=this.actor(name,'#64eee0',true);this.human.homeColor='#64eee0';if(teams)this.human.team=0;this.actors=[this.human];this.spawn(this.human,true,0);
+  // Team modes: 9 bots, 4 on your team and 5 on the other (5 against 5), in team colors.
+  for(let i=0;i<(teams?9:MM.bots);i++){const team=teams?(i<4?0:1):undefined,color=teams?CTF.palettes[team][team?i-4:i+1]:PALETTE[i],a=this.actor(PILOTS[i],color,false);
+   Object.assign(a,botLook(i),{botIndex:i,homeColor:color},teams?{team}:{});this.actors.push(a);this.spawn(a,true,i);}
   for(let i=0;i<MM.ground;i++)this.ground.push(this.scrap());
   // A ring of easy salvage teaches collection on the first run.
   for(let i=0;i<22;i++){const a=i*.47,r=105+i*5;this.ground[i].x=1400+Math.cos(a)*r;this.ground[i].y=1100+Math.sin(a)*r;}
@@ -317,11 +321,13 @@ class MagnetWorld{
  basePoint(team){const b=CTF.bases[team]||CTF.bases[0];let p={x:b.x,y:b.y};for(let i=0;i<40;i++){const ang=this.random()*Math.PI*2,r=70+this.random()*230;
   const q={x:limit(b.x+Math.cos(ang)*r,90,MM.width-90),y:limit(b.y+Math.sin(ang)*r,90,MM.height-90)};if(this.covers.every(c=>distance(c,q)>c.r+30)){p=q;break;}}return p;}
  // Team of the ship with this id in capture the flag (undefined otherwise): used to switch off friendly fire.
- teamOf(id){return this.mode==='ctf'?this.actors.find(b=>b.id===id)?.team:undefined;}
+ teamOf(id){return this.teamPlay()?this.actors.find(b=>b.id===id)?.team:undefined;}
+ // Capture the flag and team battle: two teams, no friendly fire, team spawns.
+ teamPlay(){return this.mode==='ctf'||this.mode==='teams';}
  safeSpawn(actor){let best=this.freePoint(),bestScore=-1;for(let i=0;i<45;i++){const p=this.freePoint();let d=Infinity;for(const a of this.actors)if(a!==actor&&a.alive)d=Math.min(d,distance(a,p));const hole=this.arenaEvent?.kind==='hole'?this.arenaEvent:null;if(hole)d=Math.min(d,distance(hole,p)-this.holePull(hole,this.time+3)*.6);if(d>bestScore){best=p;bestScore=d;}if(d>550)break;}return best;}
  spawn(a,initial=false,index=0){
   a.wreckMod=0;a.spawnSeq=(a.spawnSeq||0)+1;
-  let p;if(this.mode==='ctf')p=this.basePoint(a.team);else if(initial&&a.human)p={x:1400,y:1100};else if(initial){const angle=index/MM.bots*Math.PI*2,r=740+this.random()*180;p={x:limit(1400+Math.cos(angle)*r,120,MM.width-120),y:limit(1100+Math.sin(angle)*r,120,MM.height-120)};}else p=this.ringPoint(3)||this.safeSpawn(a);
+  let p;if(this.teamPlay())p=this.basePoint(a.team);else if(initial&&a.human)p={x:1400,y:1100};else if(initial){const angle=index/MM.bots*Math.PI*2,r=740+this.random()*180;p={x:limit(1400+Math.cos(angle)*r,120,MM.width-120),y:limit(1100+Math.sin(angle)*r,120,MM.height-120)};}else p=this.ringPoint(3)||this.safeSpawn(a);
   a.x=a.prevX=p.x;a.y=a.prevY=p.y;a.vx=a.vy=0;a.hp=3;a.alive=true;a.pieces=[];a.fire=a.magnet=false;a.shieldTightness=0;a.orbitDelay=0;a.moveX=a.moveY=0;a.shieldUntil=this.time+(a.human?3.5:2);a.hurtUntil=0;a.repair=0;a.powerUntil=0;a.leechAt=0;a.leechId=0;a.rushStart=a.rushUntil=0;a.nextShot=this.time+(a.human?0:.3);a.think=0;a.carrying=false;
   const count=initial?(a.human?8:[6,9,12,15,18,20,7,11,14,22][index]):6;
   for(let i=0;i<count;i++){const item=this.scrap(a.x,a.y);item.origin=a.id;a.seen.add(item.id);this.attach(a,item,false);}
@@ -372,7 +378,8 @@ class MagnetWorld{
   const st=botStyle(a),skill=this.difficulty==='easy'?0:this.difficulty==='hard'?2:1,now=this.time;
   // Who is near, who is a threat, and which bots already chose each player (so a player is never swarmed).
   let nearest=null,nearestDist=Infinity;const chosen=new Map();
-  const ctf=this.mode==='ctf',ally=b=>ctf&&b.team===a.team;
+  const ctf=this.mode==='ctf',teamPlay=this.teamPlay(),ally=b=>teamPlay&&b.team===a.team;
+  const backing=new Map();if(this.mode==='teams')for(const b of this.actors)if(b!==a&&b.alive&&!b.human&&b.team===a.team&&b.targetId&&now<b.targetUntil)backing.set(b.targetId,(backing.get(b.targetId)||0)+1);
   for(const b of this.actors){if(b===a||!b.alive)continue;if(!b.human&&b.targetId&&now<b.targetUntil)chosen.set(b.targetId,(chosen.get(b.targetId)||0)+1);if(ally(b))continue;
    if(b.shieldUntil<now){const d=distance(a,b);if(d<nearestDist){nearest=b;nearestDist=d;}}}
   // Target: the best-scoring ship in range. Closer, weaker and recently-hurt ships score higher (how much depends on
@@ -380,7 +387,7 @@ class MagnetWorld{
   let enemy=null,enemyDist=Infinity,best=-Infinity;const revenge=now-(a.lastAttackedAt??-99)<4?a.lastAttacker:0;
   for(const b of this.actors){if(b===a||!b.alive||b.shieldUntil>=now||ally(b))continue;const d=distance(a,b);if(d>st.engage&&b.id!==revenge&&!(ctf&&b.carrying&&d<1100))continue;
    let score=-d/220+(3-b.hp)*.5*st.weak+Math.max(0,8-b.pieces.length)*.05*st.weak;
-   if(b.id===revenge)score+=2.4;if(ctf&&b.carrying)score+=3.5;if(ctf&&distance(b,CTF.bases[a.team])<450)score+=1;if(b.id===a.targetId&&now<a.targetUntil)score+=1.5;if(st.third&&now-(b.lastHurt??-99)<1.5)score+=1.3;
+   if(b.id===revenge)score+=2.4;if(backing.has(b.id))score+=Math.min(2,backing.get(b.id))*.45;if(ctf&&b.carrying)score+=3.5;if(ctf&&distance(b,CTF.bases[a.team])<450)score+=1;if(b.id===a.targetId&&now<a.targetUntil)score+=1.5;if(st.third&&now-(b.lastHurt??-99)<1.5)score+=1.3;
    if(b.human&&b.id!==a.targetId&&(chosen.get(b.id)||0)>=2&&b.id!==revenge)score-=5;
    if(score>best){best=score;enemy=b;enemyDist=d;}}
   if(enemy){if(enemy.id!==a.targetId||now>=a.targetUntil){a.targetId=enemy.id;a.targetUntil=now+2.5+this.random()*1.5;}}else a.targetId=0;
@@ -429,6 +436,8 @@ class MagnetWorld{
    tx=a.x+dx/d*radial*220-dy/d*spin*180;ty=a.y+dy/d*radial*220+dx/d*spin*180;}
   else if(loot){tx=loot.x;ty=loot.y;}
   else if(enemy&&!shy){tx=enemy.x;ty=enemy.y;}
+  // Team battle: with nothing else to do, head for the nearest enemy anywhere instead of drifting.
+  else if(this.mode==='teams'&&!shy){let far=null,fd=Infinity;for(const b of this.actors)if(b.alive&&!ally(b)&&b!==a){const d=distance(a,b);if(d<fd){fd=d;far=b;}}if(far){tx=far.x;ty=far.y;}}
   const hole=this.arenaEvent?.kind==='hole'&&now>=this.arenaEvent.start-EVENT.holeWarn&&now<this.arenaEvent.end?this.arenaEvent:null;
   if(hole){const H=EVENT.hole,h=this.holeHorizon(hole,now+1.5),danger=h+.3*(this.holePull(hole,now+1.5)-h)+40,hd=distance(a,hole);
    // Near the end, healthy bots wait just outside the burst for the payout; otherwise targets stay out of the strong pull.
@@ -455,7 +464,10 @@ class MagnetWorld{
  knockout(a,owner,cause){
   if(!a.alive)return;a.alive=false;a.wreckMod=0;a.deaths++;a.score=Math.floor(a.score*.8);a.fire=a.magnet=false;a.respawnAt=this.time+2.8;
   for(const p of a.pieces){const ang=Math.atan2(p.y-a.y,p.x-a.x),speed=110+this.random()*130;this.drop(p.item,p.x,p.y,Math.cos(ang)*speed,Math.sin(ang)*speed,0,0);}a.pieces=[];
-  const killer=this.actors.find(b=>b.id===owner);if(killer&&killer!==a){killer.kills++;killer.score+=KNOCKOUT_REWARD;
+  const killer=this.actors.find(b=>b.id===owner);
+  // Team battle: a knockout by an enemy ship scores for its team (event deaths score nothing).
+  if(this.mode==='teams'&&killer&&killer.team!==a.team&&!this.finished&&!this.predictInteractions){this.teamScore[killer.team]++;if(this.teamScore[killer.team]>=TEAMS.toWin){this.winner=killer.team;this.finished=true;this.event('finished');}}
+  if(killer&&killer!==a){killer.kills++;killer.score+=KNOCKOUT_REWARD;
    if(killer.alive && killer.hp<3){
     killer.hp=Math.min(3,killer.hp+1);
    }
@@ -566,7 +578,7 @@ class MagnetWorld{
   }
   for(const p of this.effects){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=Math.exp(-dt*3);p.vy*=Math.exp(-dt*3);p.life-=dt;}this.effects=this.effects.filter(p=>p.life>0);
   for(const p of this.labels){p.y-=dt*22;p.life-=dt;}this.labels=this.labels.filter(p=>p.life>0);
-  if(this.time>=this.duration&&!this.finished){this.time=this.duration;this.finished=true;if(this.mode==='ctf')this.winner=this.captures[0]>this.captures[1]?0:this.captures[1]>this.captures[0]?1:-1;this.event('finished');}
+  if(this.time>=this.duration&&!this.finished){this.time=this.duration;this.finished=true;if(this.teamPlay()){const s=this.mode==='ctf'?this.captures:this.teamScore;this.winner=s[0]>s[1]?0:s[1]>s[0]?1:-1;}this.event('finished');}
  }
  // Capture the flag. Online, only the room changes flag state; clients just keep a carried flag on its carrier.
  updateFlags(){if(this.mode!=='ctf'||this.finished)return;
@@ -629,7 +641,7 @@ class MagnetWorld{
  // The rival a leeching pilot is latched onto. The latch holds while they stay within hold
  // range (and still have armor); otherwise it grabs the nearest rival within leech range.
  leechTarget(a){
-  const open=b=>b&&b!==a&&b.alive&&b.pieces.length&&!(this.mode==='ctf'&&b.team===a.team)&&!(b.shieldUntil>this.time)&&!hasPower(b,'phase',this.time);
+  const open=b=>b&&b!==a&&b.alive&&b.pieces.length&&!(this.teamPlay()&&b.team===a.team)&&!(b.shieldUntil>this.time)&&!hasPower(b,'phase',this.time);
   const held=a.leechId?this.actors.find(b=>b.id===a.leechId):null;
   if(open(held)&&distance(a,held)<=POWER.leechRange*POWER.leechHold)return held;
   let target=null,best=POWER.leechRange;
@@ -894,6 +906,9 @@ const unwireComets=list=>(list||[]).map(([start,end,x,y,toX,toY,small=0,shotAt=n
 // [state (0 home, 1 carried, 2 dropped), x, y, carrier id, dropped at]. Absent in free-for-all.
 const wireCtf=w=>w.mode==='ctf'?[w.captures[0],w.captures[1],w.winner,...w.flags.map(f=>[f.state,Math.round(f.x),Math.round(f.y),f.carrier,r2(f.droppedAt)])]:undefined;
 const unwireCtf=c=>c?{mode:'ctf',captures:[c[0],c[1]],winner:c[2],flags:[c[3],c[4]].map(([state,x,y,carrier,droppedAt],team)=>({team,state,x,y,carrier,droppedAt}))}:{mode:'ffa'};
+// Team battle: [blue knockouts, red knockouts, winner]. Absent otherwise.
+const wireTeams=w=>w.mode==='teams'?[w.teamScore[0],w.teamScore[1],w.winner]:undefined;
+const unwireMode=(cf,tb)=>tb?{mode:'teams',teamScore:[tb[0],tb[1]],winner:tb[2]}:unwireCtf(cf);
 const wireEvent=w=>{const e=w.arenaEvent;return e?[e.kind,r2(e.start),r2(e.end),Math.round(e.x),Math.round(e.y),(e.drops||[]).map(d=>[Math.round(d.x),Math.round(d.y),r2(d.t)]),e.panels??0,e.toX??0,e.toY??0,e.launched!=null?1:0,e.eaten??0,Math.round((e.progress||0)*1000)/1000,e.owner||0,e.contested?1:0,e.cracked?1:0]:0;};
 const unwireEvent=e=>e?{kind:e[0],start:e[1],end:e[2],x:e[3],y:e[4],drops:(e[5]||[]).map(([x,y,t])=>({x,y,t})),panels:e[6]??0,toX:e[7]??0,toY:e[8]??0,fired:false,shower:!!e[9],eaten:e[10]??0,progress:e[11]??0,owner:e[12]??0,contested:e[13]??0,cracked:!!e[14]}:null;
 const wireRound=n=>Math.round((Number(n)||0)*10)/10;
@@ -905,14 +920,14 @@ function wireVisibility(w,selfId,view){
 }
 function encodeWireWorld(w,selfId,view){
  const visible=wireVisibility(w,selfId,view);
- return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),wr:wireWrecks(w),cm:wireComets(w),ev:wireEvent(w),cf:wireCtf(w),
+ return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),wr:wireWrecks(w),cm:wireComets(w),ev:wireEvent(w),cf:wireCtf(w),tb:wireTeams(w),
   a:w.actors.map(a=>[WIRE_ACTOR_FIELDS.map(k=>a[k]??0),a.pieces.map(p=>[p.slot,p.item.id,p.item.kind])]),
   sd:wireDust(w,visible),g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.origin?[Number(Boolean(p.hot)),p.repelUntil>w.time?r2(p.repelUntil):0,p.origin]:p.repelUntil>w.time?[Number(Boolean(p.hot)),r2(p.repelUntil)]:p.hot?[1]:[])]),
   s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.pierce?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil||0),1]:s.deflectTrailUntil>w.time?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil)]:s.seek?[1]:[])])};
 }
 function decodeWireWorld(w){
  if(w?.wire!==2)return w;
- return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(w.wr),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),...unwireCtf(w.cf),effects:[],labels:[],
+ return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(w.wr),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),...unwireMode(w.cf,w.tb),effects:[],labels:[],
   actors:w.a.map(([values,pieces])=>{const a=Object.fromEntries(WIRE_ACTOR_FIELDS.map((k,i)=>[k,values[i]]));a.pieces=pieces.map(([slot,id,kind])=>({slot,item:{id,kind,color:WIRE_METALS[kind]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0}));return a;}),
   stardust:unwireDust(w.sd),ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
   shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
@@ -941,7 +956,7 @@ class WireSender{
  encode(w,selfId,view){
   const key=this.ticks++%WIRE3_KEYFRAME_TICKS===0,visible=wireVisibility(w,selfId,view),t=w.time,delta=this.delta;
   if(key){this.pieces.clear();this.values.clear();this.ground.clear();}
-  const out={wire:3,time:w.time,finished:w.finished,pads:wirePads(w),vx:wireVortices(w),cm:wireComets(w),ev:wireEvent(w),cf:wireCtf(w)};
+  const out={wire:3,time:w.time,finished:w.finished,pads:wirePads(w),vx:wireVortices(w),cm:wireComets(w),ev:wireEvent(w),cf:wireCtf(w),tb:wireTeams(w)};
   if(delta)out.n=this.ticks;
   const wrecks=wireWrecks(w),wreckText=JSON.stringify(wrecks);
   if(key||this.wreckText!==wreckText){out.wr=wrecks;this.wreckText=wreckText;}
@@ -1004,7 +1019,7 @@ class WireReceiver{
    a.pieces=[];for(let i=0;i<pieces.length;i+=3)a.pieces.push({slot:pieces[i],item:{id:pieces[i+1],kind:pieces[i+2],color:WIRE_METALS[pieces[i+2]]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0});
    actors.push(a);
   }
-  return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(this.wrecks),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),...unwireCtf(w.cf),effects:[],labels:[],actors,
+  return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(this.wrecks),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),...unwireMode(w.cf,w.tb),effects:[],labels:[],actors,
    stardust:unwireDust(w.sd),ground:this.groundList(w).map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0,leechTo=0,leechUntil=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil,leechTo,leechUntil})),
    shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
  }
@@ -1210,7 +1225,7 @@ function reconcileScrap(previous,next,now){
  let online=null,joining=false,preferredRoom=new URLSearchParams(location.search).get('room')?.trim().toUpperCase()||'';
  const lobbyStatus=$('lobbyStatus'),joinInput=$('roomCode'),onlineButton=$('onlinePlayBtn');
  if(/^[A-HJ-NP-Z2-9]{6}$/.test(preferredRoom)){joinInput.value=preferredRoom;onlineButton.textContent=`Join room ${preferredRoom}`;lobbyStatus.textContent='Your room is ready. Choose a pilot name and join.';}else preferredRoom='';
- $('createRoomBtn').onclick=()=>connectOnline('create');$('joinRoomBtn').onclick=()=>connectOnline('join',joinInput.value);$('offlineBtn').onclick=()=>{start();toast('Offline practice. All rivals are AI.');};
+ $('createRoomBtn').onclick=()=>connectOnline('create');$('joinRoomBtn').onclick=()=>connectOnline('join',joinInput.value);$('offlineBtn').onclick=()=>{start();if(game.mode==='ffa')toast('Offline practice. All rivals are AI.');};
  joinInput.addEventListener('input',()=>{joinInput.value=joinInput.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g,'');});
  joinInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();connectOnline('join',joinInput.value);}});
  $('copyRoomBtn').onclick=async()=>{if(!online)return;const link=new URL(location.pathname,location.origin);link.searchParams.set('room',online.code);try{await navigator.clipboard.writeText(link.href);toast('Room link copied. Send it to a friend.');}catch{const field=$('shareLink');field.hidden=false;field.value=link.href;field.focus();field.select();toast('Copy the selected room link to invite a friend.');}};
@@ -1226,7 +1241,7 @@ function reconcileScrap(previous,next,now){
    const session={code:data.code,token:data.token,seq:Math.max(resume?.seq||0,data.ack||0),shot:Math.max(resume?.shot||0,data.shotAck||0),round:0,version:0,lastSnapshot:performance.now(),timer:null,sentMove:0,sentPrediction:null,failures:0,prediction:null,playback:new SnapshotPlayback()};online=session;
    try{sessionStorage.setItem('magnet-online-session',JSON.stringify({code:session.code,token:session.token,seq:session.seq,shot:session.shot}));}catch{}
    preferredRoom='';onlineButton.textContent='Play online';joinInput.value=data.code;const url=new URL(location.href);url.searchParams.set('room',data.code);history.replaceState(null,'',url.pathname+url.search);
-   applySnapshot(data,true);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};hudAt=0;show('playing');save();updateHUD();updateRoomStrip();toast(`Online in room ${data.code}. Invite friends with Copy link.`);if(data.world.finished)finish();openArenaSocket(session);
+   applySnapshot(data,true);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};hudAt=0;show('playing');save();updateHUD();updateRoomStrip();{const n=CTF.names[game.human.team],side=n[0]+n.slice(1).toLowerCase();toast(game.mode==='ctf'?`Room ${data.code}: you are ${side}. Bring the enemy flag to your base. First to ${CTF.toWin}.`:game.mode==='teams'?`Room ${data.code}: you are ${side}. First team to ${TEAMS.toWin} knockouts wins.`:`Online in room ${data.code}. Invite friends with Copy link.`);}if(data.world.finished)finish();openArenaSocket(session);
   }catch(error){lobbyStatus.classList.add('error');lobbyStatus.textContent=error.name==='TimeoutError'?'Connection timed out. Please try again.':error.message;show('menu');}
   finally{lobbyBusy(false);}
  }
@@ -1402,7 +1417,7 @@ function reconcileScrap(previous,next,now){
   for(const p of game.labels){p.y-=dt*22;p.life-=dt;}game.labels=game.labels.filter(p=>p.life>0);
  }
 
- try{best=Number(localStorage.getItem('magnet-mayhem-best'))||0;storedBest=best;xp=Math.max(0,Number(localStorage.getItem('orbbitz-xp'))||0);try{look=cleanLook(JSON.parse(localStorage.getItem('orbbitz-look')||'{}'));owned=new Set([0,...(JSON.parse(localStorage.getItem('orbbitz-owned')||'[]')).filter(i=>Number.isInteger(i)&&i>0&&i<TAILS.length)]);try{const o=JSON.parse(localStorage.getItem('orbbitz-owned-looks')||'{}');for(const [kind,list] of [['skin',SKINS],['core',CORES]])ownedLooks[kind]=new Set((Array.isArray(o[kind])?o[kind]:[]).filter(i=>Number.isInteger(i)&&list[i]?.shop));}catch{}}catch{look={skin:0,core:0,tail:0};}if(!owned.has(look.tail))look.tail=0;const lv=levelFromXp(xp);if(!lookAllowed('skin',look.skin,lv))look.skin=0;if(!lookAllowed('core',look.core,lv))look.core=0;$('menuBest').textContent=Math.floor(best).toLocaleString();const name=localStorage.getItem('magnet-mayhem-pilot');if(name)$('playerName').value=name.slice(0,16);const difficulty=localStorage.getItem('magnet-mayhem-difficulty');if(['easy','normal','hard'].includes(difficulty))$('difficulty').value=difficulty;const mode=localStorage.getItem('orbbitz-mode');if(['ffa','ctf'].includes(mode))$('gameMode').value=mode;}catch{}
+ try{best=Number(localStorage.getItem('magnet-mayhem-best'))||0;storedBest=best;xp=Math.max(0,Number(localStorage.getItem('orbbitz-xp'))||0);try{look=cleanLook(JSON.parse(localStorage.getItem('orbbitz-look')||'{}'));owned=new Set([0,...(JSON.parse(localStorage.getItem('orbbitz-owned')||'[]')).filter(i=>Number.isInteger(i)&&i>0&&i<TAILS.length)]);try{const o=JSON.parse(localStorage.getItem('orbbitz-owned-looks')||'{}');for(const [kind,list] of [['skin',SKINS],['core',CORES]])ownedLooks[kind]=new Set((Array.isArray(o[kind])?o[kind]:[]).filter(i=>Number.isInteger(i)&&list[i]?.shop));}catch{}}catch{look={skin:0,core:0,tail:0};}if(!owned.has(look.tail))look.tail=0;const lv=levelFromXp(xp);if(!lookAllowed('skin',look.skin,lv))look.skin=0;if(!lookAllowed('core',look.core,lv))look.core=0;$('menuBest').textContent=Math.floor(best).toLocaleString();const name=localStorage.getItem('magnet-mayhem-pilot');if(name)$('playerName').value=name.slice(0,16);const difficulty=localStorage.getItem('magnet-mayhem-difficulty');if(['easy','normal','hard'].includes(difficulty))$('difficulty').value=difficulty;const mode=localStorage.getItem('orbbitz-mode');if(['ffa','ctf','teams'].includes(mode))$('gameMode').value=mode;}catch{}
  function save(){try{localStorage.setItem('magnet-mayhem-best',String(Math.floor(best)));localStorage.setItem('magnet-mayhem-pilot',$('playerName').value.trim()||'You');localStorage.setItem('magnet-mayhem-difficulty',$('difficulty').value);localStorage.setItem('orbbitz-mode',$('gameMode').value);xp=Math.max(xp,Number(localStorage.getItem('orbbitz-xp'))||0);localStorage.setItem('orbbitz-xp',String(xp));localStorage.setItem('orbbitz-look',JSON.stringify(look));localStorage.setItem('orbbitz-owned',JSON.stringify([...owned]));localStorage.setItem('orbbitz-owned-looks',JSON.stringify({skin:[...ownedLooks.skin],core:[...ownedLooks.core]}));storedBest=best;}catch{}}
  // ---- Drawing sharpness: canvas pixels per screen point, adapted to the device (online and offline) ----
  // Measured on an Iris Xe laptop: above 1x its graphics chip falls behind in busy moments and the screen
@@ -1461,11 +1476,11 @@ function reconcileScrap(previous,next,now){
   $('adminEnd').onclick=()=>adminCommandSend({do:'end'});$('adminToggle').onclick=()=>{const open=$('adminBody').hidden;$('adminBody').hidden=!open;$('adminToggle').setAttribute('aria-expanded',String(open));if(open)$('adminKeyRow').hidden=!online;};
   $('adminKey').value=adminKey();$('adminKey').onchange=()=>{try{$('adminKey').value=$('adminKey').value.trim().toUpperCase();localStorage.setItem('orbbitz-admin-key',$('adminKey').value);}catch{}adminStatus('Key saved on this device.',true);};}
  setupAdmin();
- $('gameMode').addEventListener('change',()=>{$('modeNote').hidden=$('gameMode').value!=='ctf';save();});$('modeNote').hidden=$('gameMode').value!=='ctf';
+ $('gameMode').addEventListener('change',()=>{$('modeNote').hidden=$('gameMode').value==='ffa';save();});$('modeNote').hidden=$('gameMode').value==='ffa';
  function toast(text){$('toast').textContent=text;$('toast').classList.add('show');toastUntil=performance.now()+3000;}
  function clearInput(){keys.clear();fireSources.clear();magnetSources.clear();touch=null;pointer.active=false;game.human.fire=game.human.magnet=false;game.human.moveX=game.human.moveY=0;$('fireBtn').classList.remove('engaged');$('magnetBtn').classList.remove('engaged');$('magnetBtn').setAttribute('aria-pressed','false');}
  function show(next){$('adminKeyRow').hidden=!online;state=next;if(next==='menu')$('menuBest').textContent=Math.floor(best).toLocaleString();for(const id of screens)$(id).hidden=true;const active={menu:'menuScreen',paused:'pauseScreen',help:'helpScreen',finished:'finishScreen',customize:'customizeScreen',shop:'shopScreen'}[next];if(active)$(active).hidden=false;const lobby=next==='menu'||next==='customize'||next==='shop';for(const id of panels)$(id).hidden=lobby;if(lobby)updateProgressUI();$('rebuildPanel').hidden=true;$('pauseBtn').disabled=!['playing','paused'].includes(next);$('pauseBtn').setAttribute('aria-label',next==='paused'?'Resume game':'Pause game');$('pauseBtn').title=next==='paused'?'Resume (P)':'Pause (P)';$('roomStrip').hidden=!online||['menu','customize','shop'].includes(next);$('pauseCopy').textContent=online?'Your controls are paused. The online arena keeps running, so rivals can still hit your core.':'Your core, armor, and round timer are waiting for you.';$('restartBtn').textContent=online?'Start a new room':'Start a fresh round';$('againBtn').textContent=online?'Leave to lobby':'One more round';document.body.classList.toggle('in-match',next==='playing'||next==='paused');if(next==='playing'||next==='paused')window.getSelection()?.removeAllRanges();clearInput();acc=0;if(next==='paused')$('resumeBtn').focus();if(next==='finished')$('againBtn').focus();if(next==='help')$('closeHelpBtn').focus();}
- function start(){const mode=$('gameMode').value;$('rivalsLabel').textContent=mode==='ctf'?'BLUE 5 v 5 RED':'10 AI RIVALS';disconnectOnline();game=new MagnetWorld({name:$('playerName').value.trim()||'You',difficulty:$('difficulty').value,mode});ctfSeen=null;Object.assign(game.human,look);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};pointer={x:width/2,y:height/2-160,active:false};hudAt=0;show('playing');save();updateHUD();toast(mode==='ctf'?'Capture the flag: take the red flag and bring it to your blue base. First to 3.':'Your armor is ammo. Hold click to fire; right click or E to reclaim.');play('start');document.activeElement?.blur();}
+ function start(){const mode=$('gameMode').value;$('rivalsLabel').textContent=mode==='ffa'?'10 AI RIVALS':'BLUE 5 v 5 RED';disconnectOnline();game=new MagnetWorld({name:$('playerName').value.trim()||'You',difficulty:$('difficulty').value,mode});ctfSeen=null;Object.assign(game.human,look);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};pointer={x:width/2,y:height/2-160,active:false};hudAt=0;show('playing');save();updateHUD();toast(mode==='ctf'?'Capture the flag: take the red flag and bring it to your blue base. First to 3.':mode==='teams'?`Team battle: you are Blue. First team to ${TEAMS.toWin} knockouts wins.`:'Your armor is ammo. Hold click to fire; right click or E to reclaim.');play('start');document.activeElement?.blur();}
  function pause(){if(state==='playing'){show('paused');save();}else if(state==='paused'){show('playing');toast('Back in orbit.');}}
  function menu(){save();disconnectOnline();lobbyStatus.textContent='Play with others, or create a room and invite friends.';lobbyStatus.classList.remove('error');$('toast').classList.remove('show');toastUntil=0;preferredRoom='';onlineButton.textContent='Play online';history.replaceState(null,'',location.pathname);show('menu');$('playerName').focus();}
  $('startForm').addEventListener('submit',e=>{e.preventDefault();connectOnline(preferredRoom?'join':'quick',preferredRoom);});$('againBtn').onclick=()=>online?menu():start();$('restartBtn').onclick=()=>online?connectOnline('create'):start();$('resumeBtn').onclick=pause;$('pauseBtn').onclick=pause;$('returnMenuBtn').onclick=menu;$('finishMenuBtn').onclick=menu;
@@ -1514,7 +1529,7 @@ function reconcileScrap(previous,next,now){
   $('fireBtn').style.setProperty('--fill',(count/capacity*100)+'%');
   const touchy=touchMode||coarsePointer;document.body.classList.toggle('touchy',touchy);document.querySelector('.ammo-caption').classList.toggle('dry',count===0);$('fireCaption').textContent=count?(touchy?'HOLD · AUTO-AIM':'HOLD CLICK / SPACE'):'OUT OF SCRAP · RECLAIM';$('magnetCaption').textContent=touchy?'HOLD TO PULL':'RIGHT CLICK / E';
  }
- function updateHUD(){const ctfOn=game.mode==='ctf';for(const el of document.querySelectorAll('.team-part'))el.hidden=!ctfOn;if(ctfOn){$('teamBlue').textContent=String(game.captures[0]);$('teamRed').textContent=String(game.captures[1]);}
+ function updateHUD(){const teamOn=game.mode==='ctf'||game.mode==='teams';for(const el of document.querySelectorAll('.team-part'))el.hidden=!teamOn;if(teamOn){const sc=game.mode==='ctf'?game.captures:game.teamScore;$('teamStatLabel').textContent=game.mode==='ctf'?'FLAGS':'KILLS · '+TEAMS.toWin;$('teamBlue').textContent=String(sc[0]);$('teamRed').textContent=String(sc[1]);}
   const a=game.human,ranking=game.ranking(),rank=ranking.indexOf(a)+1;$('bottomNote').classList.toggle('fresh',game.time<15);best=Math.max(best,a.score);$('scoreValue').textContent=fmt(a.score);$('timeValue').textContent=clock(Math.max(0,Math.ceil(game.duration-game.time)));$('clockStat').classList.toggle('urgent',game.duration-game.time<=30);$('hpValue').textContent=`CORE ${Math.max(0,a.hp)}/3`;
   Array.from($('healthBars').querySelectorAll('i')).forEach((el,i)=>{el.className=i<a.hp?(a.hp===1?'full hurt':'full'):'';});
   $('fireBtn').disabled=!a.alive;$('magnetBtn').disabled=!a.alive;$('fireBtn').classList.toggle('engaged',a.fire&&a.pieces.length>0);$('magnetBtn').classList.toggle('engaged',a.magnet);$('magnetBtn').setAttribute('aria-pressed',String(a.magnet));
@@ -1527,7 +1542,8 @@ function reconcileScrap(previous,next,now){
   $('rebuildPanel').hidden=a.alive||state!=='playing';if(!a.alive)$('rebuildTime').textContent=Math.max(0,a.respawnAt-game.time).toFixed(1);if(best>storedBest&&Math.floor(game.time)%5===0)save();
  }
  function finish(){const rank=game.ranking().indexOf(game.human)+1;awardXp();best=Math.max(best,game.human.score);save();$('finishTitle').textContent=rank===1?'You ruled the orbit.':'Round over.';$('finishCopy').textContent=rank===1?'A full orbit, a steady aim, and a scrapyard full of spare parts.':`${game.ranking()[0].name} took the top spot. There is always another round.`;
-  if(game.mode==='ctf'){const mine=game.human.team,won=game.winner===mine,score=`${CTF.names[0]} ${game.captures[0]} – ${game.captures[1]} ${CTF.names[1]}`;$('finishTitle').textContent=game.winner===-1?'A draw.':won?'Your team wins!':`${CTF.names[game.winner]} team wins.`;$('finishCopy').textContent=score+(won?'. Flags home, orbits full.':game.winner===-1?'. Nobody gave an inch.':'. Get their flag next time.');}$('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
+  if(game.mode==='ctf'){const mine=game.human.team,won=game.winner===mine,score=`${CTF.names[0]} ${game.captures[0]} – ${game.captures[1]} ${CTF.names[1]}`;$('finishTitle').textContent=game.winner===-1?'A draw.':won?'Your team wins!':`${CTF.names[game.winner]} team wins.`;$('finishCopy').textContent=score+(won?'. Flags home, orbits full.':game.winner===-1?'. Nobody gave an inch.':'. Get their flag next time.');}
+  if(game.mode==='teams'){const mine=game.human.team,won=game.winner===mine,score=`${CTF.names[0]} ${game.teamScore[0]} – ${game.teamScore[1]} ${CTF.names[1]}`;$('finishTitle').textContent=game.winner===-1?'A draw.':won?'Your team wins!':`${CTF.names[game.winner]} team wins.`;$('finishCopy').textContent=score+(won?' knockouts. Your squad held the orbit.':game.winner===-1?' knockouts. Dead even.':' knockouts. Regroup and run it back.');}$('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
  let ringToastFor=-1,holeToastFor=-1;
  function events(){for(const e of game.events){if(e.type==='jackpot'){toast('You cracked the jackpot! +'+e.bonus+' points.');play('kill');}if(e.type==='holeEat'){play('strip');const at=game.arenaEvent?.start??0;if(holeToastFor!==at){holeToastFor=at;toast('The black hole is eating your armor. Pull away before it swallows you!');}}if(e.type==='holeBurst')play('strip');if(e.type==='shot')play('shot');if(e.type==='ring'){play('strip');const at=game.arenaEvent?.start??0;if(ringToastFor!==at){ringToastFor=at;toast('Outside the ring! You can\'t collect scrap and your armor is breaking off. Get inside.');}}if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}if(e.type==='cometShot')toast('Comet shattered! Grab the stardust for a speed rush.');}game.events.length=0;}
  function visible(x,y,r=50){return Math.abs(x-cam.x)<width/(2*cam.zoom)+r&&Math.abs(y-cam.y)<height/(2*cam.zoom)+r;}
@@ -2502,6 +2518,7 @@ function reconcileScrap(previous,next,now){
   {const now=performance.now();for(const [id,p] of mapPings){const age=(now-p.at)/PING_LIFE;if(age>=1){mapPings.delete(id);continue;}if(dark)continue;const x=p.x*sx,y=p.y*sy;
    const rk=(now-p.ring)/PING_RING;if(rk<1){mc.strokeStyle='#ff4d4d';mc.globalAlpha=(1-rk)*.9;mc.lineWidth=1.5;mc.beginPath();mc.arc(x,y,3+rk*10,0,Math.PI*2);mc.stroke();}
    mc.globalAlpha=Math.min(1,(1-age)*1.6);mc.fillStyle='#ff4d4d';mc.beginPath();mc.arc(x,y,3.2,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
+  if(game.mode==='teams'){mc.globalAlpha=.9;for(const a of game.actors)if(a.alive&&a.id!==game.human.id&&a.team===game.human.team){mc.fillStyle=a.color;mc.beginPath();mc.arc(a.x*sx,a.y*sy,2.6,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
   if(game.mode==='ctf'){CTF.bases.forEach((b,team)=>{mc.strokeStyle=CTF.colors[team];mc.globalAlpha=.7;mc.lineWidth=1.5;mc.beginPath();mc.arc(b.x*sx,b.y*sy,CTF.baseR*sx,0,Math.PI*2);mc.stroke();});
    for(const f of game.flags){mc.globalAlpha=f.state===2?.6+.4*Math.sin(performance.now()/120):1;mc.fillStyle=CTF.colors[f.team];const x=f.x*sx,y=f.y*sy;mc.beginPath();mc.moveTo(x,y-7);mc.lineTo(x+7,y-4);mc.lineTo(x,y-1);mc.closePath();mc.fill();mc.fillRect(x-.7,y-7,1.4,8);}
    mc.globalAlpha=.9;for(const a of game.actors)if(a.alive&&a.id!==game.human.id&&a.team===game.human.team){mc.fillStyle=a.color;mc.beginPath();mc.arc(a.x*sx,a.y*sy,2.6,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
