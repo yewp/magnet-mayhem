@@ -281,6 +281,8 @@ const CROWN=Object.freeze({grab:40,step:6,rush:3,maxRate:3,toWin:100,duration:24
 // team carrying the most cash when the 4 minutes end wins.
 const INFLATION=Object.freeze({values:Object.freeze([10,20,30]),bounty:10000,every:30,step:.25,overtime:60,otRate:2,drop:.5,hvt:25000,piece:2500,maxPieces:14,duration:240});
 const overtimeRate=(w,time)=>time>=w.duration-INFLATION.overtime?INFLATION.otRate:1;
+// Cash amounts: $850, $1.2k, $12k, $1.25M.
+const moneyText=n=>n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=10000?'$'+Math.round(n/1000)+'k':n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+Math.round(n);
 const inflationRate=(w,time)=>(1+INFLATION.step*Math.floor(time/INFLATION.every))*overtimeRate(w,time);
 const crownRate=(c,time)=>Math.min(CROWN.maxRate,1+Math.floor(Math.max(0,time-c.since)/CROWN.step));
 // Team bot roles, by bot number: attackers go for the enemy flag, defenders guard home, roamers do either.
@@ -397,22 +399,24 @@ class MagnetWorld{
  burst(x,y,color,count=8,speed=110){if(this.headless)return;for(let i=0;i<count&&this.effects.length<280;i++){const angle=this.random()*Math.PI*2,s=speed*(.25+this.random());this.effects.push({x,y,vx:Math.cos(angle)*s,vy:Math.sin(angle)*s,color,life:.25+this.random()*.45,size:1.5+this.random()*3});}}
  label(x,y,text,color='#e8f8ff'){if(this.headless)return;if(this.labels.length<28)this.labels.push({x,y,text,color,life:.85});}
  updateOrbits(a,reset=false){for(const p of a.pieces){const s=orbitSlot(p.slot),angle=a.phase+(this.time-(a.orbitDelay||0))*1.28*s.spin+s.index/s.count*Math.PI*2;const radius=shieldRadius(a,s.radius);p.angle=angle;p.x=a.x+Math.cos(angle)*radius;p.y=a.y+Math.sin(angle)*radius;if(reset||p.prevX==null){p.prevX=p.x;p.prevY=p.y;}}}
- showSalvageTotal(value){
-  if(this.headless||value<=0)return;
+ // The running total over your ship: salvage, or in Inflation the dollars you collect (cash=true).
+ showSalvageTotal(value,cash=false){
+  if(this.headless||value<=0||(this.mode==='inflation')!==cash)return;
   const life=this.human.spawnSeq||0;
   let label=this.labels.find(p=>p.salvageTotal!==undefined);
   if(!label){label={x:this.human.x,y:this.human.y};this.labels.push(label);}
   const continuing=label.life>.5 && label.spawnSeq===life;
   label.salvageTotal=(continuing?label.salvageTotal:0)+value;
   label.spawnSeq=life;label.life=1.2;
-  label.text='+'+label.salvageTotal+' SALVAGE';
-  label.color='#ffda79';
+  label.text=cash?'+'+moneyText(label.salvageTotal):'+'+label.salvageTotal+' SALVAGE';
+  label.color=cash?'#5ef08a':'#ffda79';
  }
  attach(a,item,credit=true){
   if(!a.alive||!canCollectScrap(a,item,this.time))return false;
   const full=a.pieces.length>=armorCapacity(a);
   item.origin=item.origin||a.id;
-  if(!full){
+  // Inflation money notes pay out and are gone; they never join an orbit.
+  if(!full&&!(item.cash>0)){
    const used=new Set(a.pieces.map(p=>p.slot));let slot=0;while(used.has(slot))slot++;
    item.dead=false;a.pieces.push({item,slot,x:a.x,y:a.y,prevX:null,prevY:null,angle:0});this.updateOrbits(a);
   }
@@ -1018,14 +1022,14 @@ function encodeWireWorld(w,selfId,view){
  const visible=wireVisibility(w,selfId,view);
  return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),wr:wireWrecks(w),cm:wireComets(w),ev:wireEvent(w),cf:wireCtf(w),tb:wireTeams(w),dm:wireDom(w),cr:wireCrown(w),ic:wireInflation(w),
   a:w.actors.map(a=>[WIRE_ACTOR_FIELDS.map(k=>a[k]??0),a.pieces.map(p=>[p.slot,p.item.id,p.item.kind])]),
-  sd:wireDust(w,visible),g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.origin?[Number(Boolean(p.hot)),p.repelUntil>w.time?r2(p.repelUntil):0,p.origin]:p.repelUntil>w.time?[Number(Boolean(p.hot)),r2(p.repelUntil)]:p.hot?[1]:[])]),
+  sd:wireDust(w,visible),g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.cash>0?[Number(Boolean(p.hot)),p.repelUntil>w.time?r2(p.repelUntil):0,p.origin||0,p.cash]:p.origin?[Number(Boolean(p.hot)),p.repelUntil>w.time?r2(p.repelUntil):0,p.origin]:p.repelUntil>w.time?[Number(Boolean(p.hot)),r2(p.repelUntil)]:p.hot?[1]:[])]),
   s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.pierce?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil||0),1]:s.deflectTrailUntil>w.time?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil)]:s.seek?[1]:[])])};
 }
 function decodeWireWorld(w){
  if(w?.wire!==2)return w;
  return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(w.wr),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),...unwireMode(w.cf,w.tb,w.dm,w.cr,w.ic),effects:[],labels:[],
   actors:w.a.map(([values,pieces])=>{const a=Object.fromEntries(WIRE_ACTOR_FIELDS.map((k,i)=>[k,values[i]]));a.pieces=pieces.map(([slot,id,kind])=>({slot,item:{id,kind,color:WIRE_METALS[kind]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0}));return a;}),
-  stardust:unwireDust(w.sd),ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
+  stardust:unwireDust(w.sd),ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0,repelUntil=0,origin=0,cash=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil,...(cash?{cash}:{})})),
   shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
 }
 
@@ -1081,7 +1085,7 @@ class WireSender{
   out.sd=wireDust(w,visible);out.g=[];const seen=new Set();
   for(const p of w.ground){if(!visible(p))continue;
    const ignoring=p.ignoreUntil>t,entry=wireTrim([p.id,wireDigits(p.x,1),wireDigits(p.y,1),p.kind,wireDigits(p.expiresAt,1),
-    wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0,p.repelUntil>t?r2(p.repelUntil):0,p.origin||0,...(p.leechTo&&p.leechUntil>t?[p.leechTo,r2(p.leechUntil)]:[])]),text=entry.join(',');
+    wireDigits(p.vx,1),wireDigits(p.vy,1),p.pickupAt>t?wireDigits(p.pickupAt,2):0,ignoring?p.ignoreId:0,ignoring?wireDigits(p.ignoreUntil,2):0,p.hot?1:0,p.repelUntil>t?r2(p.repelUntil):0,p.origin||0,...(p.leechTo&&p.leechUntil>t?[p.leechTo,r2(p.leechUntil)]:p.cash>0?[0,0]:[]),...(p.cash>0?[p.cash]:[])]),text=entry.join(',');
    if(!delta){out.g.push(entry);continue;}
    seen.add(p.id);if(this.ground.get(p.id)===text)continue;
    this.ground.set(p.id,text);out.g.push(entry);}
@@ -1116,7 +1120,7 @@ class WireReceiver{
    actors.push(a);
   }
   return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(this.wrecks),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),...unwireMode(w.cf,w.tb,w.dm,w.cr,w.ic),effects:[],labels:[],actors,
-   stardust:unwireDust(w.sd),ground:this.groundList(w).map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0,leechTo=0,leechUntil=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil,leechTo,leechUntil})),
+   stardust:unwireDust(w.sd),ground:this.groundList(w).map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0,leechTo=0,leechUntil=0,cash=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil,leechTo,leechUntil,...(cash?{cash}:{})})),
    shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
  }
  // After any gap, ignore updates until the next keyframe rather than building on stale state.
@@ -1877,9 +1881,27 @@ function reconcileScrap(previous,next,now){
   const me=game.human;if(!me.alive||c.state===1&&c.holder===me.id)return;const dx=c.x-me.x,dy=c.y-me.y;if(hyp(dx,dy)<200)return;ctx.save();ctx.translate(me.x,me.y);ctx.rotate(Math.atan2(dy,dx));ctx.fillStyle=CROWN.color;ctx.globalAlpha=.9;ctx.beginPath();ctx.moveTo(92,0);ctx.lineTo(75,-9);ctx.lineTo(75,9);ctx.closePath();ctx.fill();ctx.restore();}
  // Inflation: cash amounts ($850, $1.2k, $12k, $1.25M) and a gold ring with the amount around each team's High Value
  // Target (the richest ship on the team, seen by both teams).
- const CASH_COLOR='#5ef08a',cashText=n=>n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=10000?'$'+Math.round(n/1000)+'k':n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+Math.round(n);
- function drawHvts(){if(game.mode!=='inflation')return;const t=performance.now()/1000;for(const a of game.hvts()){if(!visible(a.x,a.y,120))continue;
-  ctx.save();ctx.strokeStyle='#ffd34d';ctx.globalAlpha=.55+.25*Math.sin(t*6);ctx.lineWidth=2.5;ctx.setLineDash([6,6]);ctx.lineDashOffset=-t*20;ctx.beginPath();ctx.arc(a.x,a.y,40,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);if(a!==game.human){ctx.globalAlpha=.95;ctx.fillStyle='#ffd34d';ctx.font='700 13px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillText('HVT '+cashText(a.cash),a.x,a.y+60);}ctx.restore();}}
+ const CASH_COLOR='#5ef08a',cashText=moneyText;
+ // Money notes (Inflation): dropped cash as a green note with its amount, bobbing; it blinks in its last 5 s.
+ function drawMoney(){if(game.mode!=='inflation')return;const now=performance.now(),t=now/1000;for(const d of game.ground){if(!(d.cash>0))continue;const blend=scrapBlend(d,now),x=d.x+(d.blendX||0)*blend,y=d.y+(d.blendY||0)*blend;
+  if(!visible(x,y,40)||d.expiresAt-game.time<5&&Math.sin(t*16)<0)continue;
+  ctx.save();ctx.translate(x,y+Math.sin(t*3+d.id)*2);ctx.globalAlpha=game.time<d.pickupAt?.55:.3;ctx.drawImage(softSprite(CASH_COLOR),-28,-28,56,56);ctx.globalAlpha=game.time<d.pickupAt?.7:1;ctx.fillStyle='#174a2c';ctx.strokeStyle=CASH_COLOR;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(-13,-8,26,16,3);ctx.fill();ctx.stroke();
+  ctx.fillStyle=CASH_COLOR;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='700 12px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.fillText('$',0,1);ctx.textBaseline='alphabetic';ctx.font='700 11px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.fillText(cashText(d.cash),0,-13);ctx.restore();}}
+ // High Value Targets: your team's is marked with a shield and PROTECT, the enemy's with a "$" target and its cash, in
+ // the arena, on the minimap, and as arrows around your ship when they are not close.
+ const HVT_ALLY='#7ad7ff',HVT_ENEMY='#ffd34d';
+ function shieldGlyph(c,x,y,s){c.beginPath();c.moveTo(x,y-s);c.lineTo(x+s*.85,y-s*.62);c.lineTo(x+s*.78,y+s*.2);c.quadraticCurveTo(x+s*.55,y+s*.78,x,y+s);c.quadraticCurveTo(x-s*.55,y+s*.78,x-s*.78,y+s*.2);c.lineTo(x-s*.85,y-s*.62);c.closePath();}
+ function hvtBadge(c,x,y,s,ally){c.save();c.lineWidth=Math.max(1.2,s*.18);c.lineJoin='round';
+  if(ally){shieldGlyph(c,x,y,s);c.fillStyle='#0d2b3d';c.fill();c.strokeStyle=HVT_ALLY;c.stroke();shieldGlyph(c,x,y+s*.05,s*.5);c.fillStyle=HVT_ALLY;c.fill();}
+  else{c.beginPath();c.arc(x,y,s,0,Math.PI*2);c.fillStyle='#2b1a05';c.fill();c.strokeStyle=HVT_ENEMY;c.stroke();c.beginPath();for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){c.moveTo(x+dx*s*.75,y+dy*s*.75);c.lineTo(x+dx*s*1.4,y+dy*s*1.4);}c.stroke();c.fillStyle=HVT_ENEMY;c.font='700 '+Math.max(6,Math.round(s*1.3))+'px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText('$',x,y+s*.08);}c.restore();}
+ function drawHvts(){if(game.mode!=='inflation')return;const t=performance.now()/1000,me=game.human;for(const a of game.hvts()){if(!visible(a.x,a.y,120))continue;const ally=a.team===me.team,col=ally?HVT_ALLY:HVT_ENEMY;
+  ctx.save();ctx.strokeStyle=col;ctx.globalAlpha=.55+.25*Math.sin(t*6);ctx.lineWidth=2.5;ctx.setLineDash([6,6]);ctx.lineDashOffset=-t*20;ctx.beginPath();ctx.arc(a.x,a.y,40,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+  if(a===me)continue;const text=(ally?'PROTECT · ':'HVT · ')+cashText(a.cash);ctx.save();ctx.font='700 13px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';const w=ctx.measureText(text).width,x0=a.x-(w+22)/2;ctx.restore();hvtBadge(ctx,x0+8,a.y+60,8,ally);
+  ctx.save();ctx.globalAlpha=.95;ctx.fillStyle=col;ctx.font='700 13px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(text,x0+22,a.y+61);ctx.restore();}}
+ function drawHvtPointers(){if(game.mode!=='inflation')return;const me=game.human;if(!me.alive)return;
+  for(const a of game.hvts()){if(a===me)continue;const dx=a.x-me.x,dy=a.y-me.y;if(hyp(dx,dy)<300)continue;const ally=a.team===me.team,col=ally?HVT_ALLY:HVT_ENEMY,ang=Math.atan2(dy,dx),r=ally?100:120;
+   ctx.save();ctx.translate(me.x,me.y);ctx.rotate(ang);ctx.fillStyle=col;ctx.globalAlpha=.92;ctx.beginPath();ctx.moveTo(r+16,0);ctx.lineTo(r,-8);ctx.lineTo(r,8);ctx.closePath();ctx.fill();ctx.restore();
+   const bx=me.x+Math.cos(ang)*(r+34),by=me.y+Math.sin(ang)*(r+34);hvtBadge(ctx,bx,by,9,ally);ctx.save();ctx.fillStyle=col;ctx.globalAlpha=.95;ctx.font='700 11px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillText(ally?'PROTECT':cashText(a.cash),bx,by+22);ctx.restore();}}
  function modeNotice(a){
   if(game.mode==='inflation'){const ot=game.time>=game.duration-INFLATION.overtime;if(game.isHvt(a))return `HIGH VALUE TARGET · ${cashText(a.cash)} · Everyone can see you`;if(ot)return `OVERTIME · Every pickup pays double`;return '';}
   if(game.mode==='dom'&&game.zones){for(let i=0;i<game.zones.length;i++){const z=game.zones[i],n=DOM.names[i];if(hyp(a.x-z.x,a.y-z.y)>=DOM.r)continue;
@@ -1890,12 +1912,14 @@ function reconcileScrap(previous,next,now){
  // Domination and crown messages, worked out from state changes (the same offline and online).
  let modeSeen=null;function watchModes(){const me=game.human,was=modeSeen&&modeSeen.world===game?modeSeen:null;
   if(game.mode==='inflation'){const rate=inflationRate(game,game.time),ot=game.time>=game.duration-INFLATION.overtime,cash=me.cash||0,hvts=new Set(game.hvts().map(a=>a.id));
-   const now={world:game,cash,ot,rate,hvts,gain:was?.gain||0,labelAt:was?.labelAt??-9};modeSeen=now;if(!was)return;
-   if(cash>was.cash)now.gain+=cash-was.cash;else if(cash<was.cash){game.label(me.x,me.y-46,'−'+cashText(was.cash-cash),'#ff8d8d');now.gain=0;}
-   if(now.gain>0&&game.time-now.labelAt>=.6){game.label(me.x,me.y-46,'+'+cashText(now.gain),CASH_COLOR);now.gain=0;now.labelAt=game.time;}
+   const now={world:game,cash,ot,rate,hvts,hvtToastAt:was?.hvtToastAt??-99,announced:was?.announced||new Set()};modeSeen=now;if(!was)return;
+   if(cash>was.cash)game.showSalvageTotal(cash-was.cash,true);else if(cash<was.cash)game.label(me.x,me.y-46,'−'+cashText(was.cash-cash),'#ff8d8d');
    if(ot&&!was.ot){toast(`OVERTIME! Every cash pickup pays double for the last ${INFLATION.overtime} s.`);play('power');}
    else if(!ot&&Math.floor(rate*2)>Math.floor(was.rate*2))toast(`Inflation! Debris is now worth ×${+rate.toFixed(2)}.`);
    if(hvts.has(me.id)&&!was.hvts.has(me.id)){toast('You are your team\'s High Value Target! Both teams can see you. Stay alive.');play('power');}
+   // Each new High Value Target is announced once, one at a time (at most every 4 s), so none is missed.
+   for(const id of [...now.announced])if(!hvts.has(id))now.announced.delete(id);
+   for(const id of hvts)if(id!==me.id&&!now.announced.has(id)&&game.time-now.hvtToastAt>4){const a=game.actors.find(b=>b.id===id);if(a){now.announced.add(id);now.hvtToastAt=game.time;toast(a.team===me.team?`${a.name} is your team's High Value Target. Protect them!`:`${a.name} is the enemy High Value Target (${cashText(a.cash)}). Hunt them down!`);break;}}
    for(const id of was.hvts)if(id!==me.id&&!hvts.has(id)){const a=game.actors.find(b=>b.id===id);if(a&&!a.alive)toast(`${a.name}, a High Value Target, was knocked out. Grab the bounty!`);}return;}
   if(game.mode==='dom'&&game.zones){const now={world:game,owners:game.zones.map(z=>z.owner),warned:was?.warned||false};modeSeen=now;if(!was)return;const side=t=>CTF.names[t][0]+CTF.names[t].slice(1).toLowerCase();
    game.zones.forEach((z,i)=>{if(z.owner===was.owners[i]||z.owner<0)return;const ours=z.owner===me.team;toast(ours?`Your team captured ${DOM.names[i]}!`:`${side(z.owner)} took ${DOM.names[i]}${was.owners[i]===me.team?' from you':''}!`);play(ours?'power':'strip');});
@@ -1999,7 +2023,7 @@ function reconcileScrap(previous,next,now){
   const now=performance.now(),ring=game.arenaEvent?.kind==='collapse'&&game.time>=game.arenaEvent.start&&game.time<game.arenaEvent.end?game.arenaEvent:null,ringR=ring?game.collapseRadius(ring):0;let m=null,lastAlpha=-1;
   for(const p of game.ground){
    const blend=scrapBlend(p,now),x=p.x+(p.blendX||0)*blend,y=p.y+(p.blendY||0)*blend;
-   if(!visible(x,y,15))continue;
+   if(p.cash>0||!visible(x,y,15))continue;
    if(!m){m=ctx.getTransform();ctx.save();}
    const c=Math.cos(p.id*2.39996),sn=Math.sin(p.id*2.39996),alpha=game.time<p.pickupAt?.5:.92;
    ctx.setTransform(m.a*c+m.c*sn,m.b*c+m.d*sn,m.c*c-m.a*sn,m.d*c-m.b*sn,m.a*x+m.c*y+m.e,m.b*x+m.d*y+m.f);if(alpha!==lastAlpha){ctx.globalAlpha=alpha;lastAlpha=alpha;}
@@ -2673,7 +2697,7 @@ function reconcileScrap(previous,next,now){
   if(game.mode==='dom'&&game.zones){const R=DOM.r*sx;game.zones.forEach((z,i)=>{const own=z.owner>=0?CTF.colors[z.owner]:'#8aa0b4';mc.globalAlpha=.3;mc.fillStyle=own;mc.beginPath();mc.arc(z.x*sx,z.y*sy,R,0,Math.PI*2);mc.fill();mc.globalAlpha=1;mc.strokeStyle=z.contested&&Math.sin(performance.now()/90)>0?'#ff6b6b':own;mc.lineWidth=1.5;mc.stroke();
    if(z.progress>0&&z.cap>=0){mc.strokeStyle=CTF.colors[z.cap];mc.lineWidth=2.5;mc.beginPath();mc.arc(z.x*sx,z.y*sy,R+1.5,-Math.PI/2,-Math.PI/2+z.progress*Math.PI*2);mc.stroke();}mc.fillStyle='#e8f4ff';mc.font='700 10px Fredoka,sans-serif';mc.textAlign='center';mc.textBaseline='middle';mc.fillText(DOM.names[i],z.x*sx,z.y*sy+.5);mc.textBaseline='alphabetic';});}
   if(game.mode==='crown'&&game.crown&&game.crown.state>=0){const c=game.crown;mc.fillStyle=CROWN.color;mc.globalAlpha=c.state===1?.6+.4*Math.sin(performance.now()/110):1;mc.beginPath();mc.arc(c.x*sx,c.y*sy,c.state===1?4.2:3.6,0,Math.PI*2);mc.fill();mc.globalAlpha=1;}
-  if(game.mode==='inflation'){for(const a of game.hvts()){mc.globalAlpha=.6+.4*Math.sin(performance.now()/110);mc.fillStyle=CTF.colors[a.team]||'#ffd34d';mc.beginPath();mc.arc(a.x*sx,a.y*sy,4.5,0,Math.PI*2);mc.fill();mc.strokeStyle='#ffd34d';mc.lineWidth=1.5;mc.stroke();}mc.globalAlpha=1;}
+  if(game.mode==='inflation'){for(const d of game.ground)if(d.cash>0){mc.globalAlpha=.85;mc.fillStyle=CASH_COLOR;mc.fillRect(d.x*sx-1.5,d.y*sy-1.5,3,3);}for(const a of game.hvts()){mc.globalAlpha=.75+.25*Math.sin(performance.now()/110);hvtBadge(mc,a.x*sx,a.y*sy,5.5,a.team===game.human.team);}mc.globalAlpha=1;}
   if(game.mode==='teams'||game.mode==='dom'||game.mode==='inflation'){mc.globalAlpha=.9;for(const a of game.actors)if(a.alive&&a.id!==game.human.id&&a.team===game.human.team){mc.fillStyle=a.color;mc.beginPath();mc.arc(a.x*sx,a.y*sy,2.6,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
   if(game.mode==='ctf'){CTF.bases.forEach((b,team)=>{mc.strokeStyle=CTF.colors[team];mc.globalAlpha=.7;mc.lineWidth=1.5;mc.beginPath();mc.arc(b.x*sx,b.y*sy,CTF.baseR*sx,0,Math.PI*2);mc.stroke();});
    for(const f of game.flags){mc.globalAlpha=f.state===2?.6+.4*Math.sin(performance.now()/120):1;mc.fillStyle=CTF.colors[f.team];const x=f.x*sx,y=f.y*sy;mc.beginPath();mc.moveTo(x,y-7);mc.lineTo(x+7,y-4);mc.lineTo(x,y-1);mc.closePath();mc.fill();mc.fillRect(x-.7,y-7,1.4,8);}
@@ -2908,7 +2932,7 @@ function reconcileScrap(previous,next,now){
   for(const a of game.actors){if(!a.alive||a===game.human||!visible(a.x,a.y,40))continue;polygon(a.x,a.y,18,6,a.aim);ctx.strokeStyle=a.color;ctx.globalAlpha=.22*fade;ctx.lineWidth=6;ctx.stroke();ctx.globalAlpha=.7*fade;ctx.lineWidth=2;ctx.stroke();}
   ctx.restore();
  }
- function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);if(state!=='menu'){watchEvent();watchRush();}ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();drawWrecks();drawEventMarkers();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawStardust();drawSmoke();powerAuras();drawRush();drawTails(drawNow);drawPilots();drawCtfFlags();drawCrownMode();drawHvts();drawHeals(drawNow);drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();drawBlackout();cometIndicators();vignette();eventBanner();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
+ function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);if(state!=='menu'){watchEvent();watchRush();}ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();drawWrecks();drawEventMarkers();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawMoney();drawStardust();drawSmoke();powerAuras();drawRush();drawTails(drawNow);drawPilots();drawCtfFlags();drawCrownMode();drawHvts();drawHvtPointers();drawHeals(drawNow);drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();drawBlackout();cometIndicators();vignette();eventBanner();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
  function frame(now){const workStart=performance.now(),gap=lastFrameAt?now-lastFrameAt:0;
   if(gap>25){droppedFrames++;if(graphicsMode==='auto'&&state==='playing'&&!document.hidden&&now-playingSince>2500){
    const stall=gap>90&&gap<1000&&dpr>1.01&&frameWork<12&&longTaskEnd<lastFrameAt;// the graphics chip, not the game code or other page work
