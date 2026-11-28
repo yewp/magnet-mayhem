@@ -271,12 +271,13 @@ const DOM=Object.freeze({r:150,capTime:5,maxRate:2,drain:.25,toWin:300,duration:
 // the most when the 4 minutes end. No Collapse or Jackpot.
 const CROWN=Object.freeze({grab:40,step:6,rush:3,maxRate:3,toWin:100,duration:240,points:5,first:3,returnAfter:20,color:'#ffd34d',noEvents:Object.freeze(['collapse','jackpot']),
  spots:Object.freeze([{x:1400,y:520},{x:2200,y:1180},{x:1380,y:1560},{x:650,y:1100},{x:2250,y:400},{x:550,y:1800},{x:900,y:300},{x:2000,y:1900}].map(Object.freeze))});
-// Inflation: Blue against Red. Knocking out an enemy pays you fresh cash: `pay` times the inflation rate, which climbs
-// by `step` every `every` seconds and is multiplied by otRate in Overtime (the last `overtime` seconds). Cash is carried
-// and counts for your team. A knocked-out ship drops `drop` of its cash as bundles anyone can grab (gone after `life`
-// s). A ship carrying `hvt` or more is a High Value Target everyone can see; an enemy who knocks it out takes all of
-// it. No score limit: the team carrying the most cash when the 4 minutes end wins.
-const INFLATION=Object.freeze({pay:100,every:30,step:.25,overtime:60,otRate:2,drop:.5,hvt:1000,life:30,grab:30,bundles:4,duration:240});
+// Inflation: Blue against Red, and debris is money. Collecting a piece of debris (the first time, like salvage) pays
+// its value by kind times the inflation rate, which climbs by `step` every `every` seconds and is multiplied by otRate
+// in Overtime (the last `overtime` seconds). Cash is carried and counts for your team. A knocked-out ship loses `drop`
+// of its cash, released as gold debris worth exactly that (about `piece` a piece, at most maxPieces pieces), which pays
+// that cash once to whoever collects it. A ship carrying `hvt` or more is a High Value Target everyone can see; an
+// enemy who knocks one out makes it release all of its cash. The team carrying the most cash when the 4 minutes end wins.
+const INFLATION=Object.freeze({values:Object.freeze([1,2,3]),every:30,step:.25,overtime:60,otRate:2,drop:.5,hvt:2000,piece:25,maxPieces:14,duration:240});
 const inflationRate=(w,time)=>(1+INFLATION.step*Math.floor(time/INFLATION.every))*(time>=w.duration-INFLATION.overtime?INFLATION.otRate:1);
 const crownRate=(c,time)=>Math.min(CROWN.maxRate,1+Math.floor(Math.max(0,time-c.since)/CROWN.step));
 // Team bot roles, by bot number: attackers go for the enemy flag, defenders guard home, roamers do either.
@@ -330,7 +331,7 @@ class MagnetWorld{
   if(ctf){this.flags=CTF.bases.map((b,team)=>({team,x:b.x,y:b.y,state:0,carrier:0,droppedAt:0}));this.captures=[0,0];this.winner=-1;}
   if(this.mode==='teams'){this.teamScore=[0,0];this.winner=-1;}
   if(this.mode==='dom'){this.teamScore=[0,0];this.winner=-1;this.domTick=0;this.zones=DOM.points.map(p=>({x:p.x,y:p.y,owner:-1,cap:-1,progress:0,contested:false}));}
-  if(this.mode==='inflation'){this.cashDrops=[];this.winner=-1;}
+  if(this.mode==='inflation')this.winner=-1;
   if(this.mode==='crown'){const far=CROWN.spots.filter(s=>distance(s,{x:1400,y:1100})>=700),s=far[Math.floor(this.random()*far.length)];this.crown={state:-1,x:s.x,y:s.y,holder:0,since:0,droppedAt:0,readyAt:CROWN.first};this.winner=0;}
   this.human=this.actor(name,'#64eee0',true);this.human.homeColor='#64eee0';if(teams)this.human.team=0;this.actors=[this.human];this.spawn(this.human,true,0);
   // Team modes: 9 bots, 4 on your team and 5 on the other (5 against 5), in team colors.
@@ -362,13 +363,9 @@ class MagnetWorld{
   const s=this.teamScore;if(s[0]>=DOM.toWin||s[1]>=DOM.toWin){this.winner=s[0]>s[1]?0:s[1]>s[0]?1:-1;this.finished=true;this.event('finished');}}
  // Inflation. Online, only the room pays out, drops and picks up cash; clients draw what it sends.
  teamCash(){const s=[0,0];for(const a of this.actors)if(a.team===0||a.team===1)s[a.team]+=a.cash||0;return s;}
- dropCash(a,amount){amount=Math.floor(amount);if(amount<=0)return;a.cash-=amount;const n=Math.min(INFLATION.bundles,Math.max(1,Math.ceil(amount/60)));let left=amount;
-  for(let i=0;i<n;i++){const v=i===n-1?left:Math.floor(amount/n);left-=v;const ang=this.random()*Math.PI*2,r=25+this.random()*55;
-   this.cashDrops.push({id:this.nextId++,x:limit(a.x+Math.cos(ang)*r,20,MM.width-20),y:limit(a.y+Math.sin(ang)*r,20,MM.height-20),value:v,expiresAt:this.time+INFLATION.life});}}
- updateCash(){if(this.mode!=='inflation'||this.finished||this.predictInteractions)return;
-  this.cashDrops=this.cashDrops.filter(d=>d.expiresAt>this.time);
-  for(const d of this.cashDrops){let best=null,bd=INFLATION.grab+MM.coreRadius;for(const a of this.actors){if(!a.alive||hasPower(a,'phase',this.time))continue;const k=distance(a,d);if(k<bd){bd=k;best=a;}}if(best){best.cash=(best.cash||0)+d.value;d.taken=true;}}
-  if(this.cashDrops.some(d=>d.taken))this.cashDrops=this.cashDrops.filter(d=>!d.taken);}
+ // Cash a knocked-out ship loses comes out as gold debris worth exactly that much, flung out like its armor.
+ dropMoney(a,amount){amount=Math.floor(Math.min(amount,a.cash||0));if(amount<=0)return;a.cash-=amount;const n=Math.min(INFLATION.maxPieces,Math.max(1,Math.round(amount/INFLATION.piece)));let left=amount;
+  for(let i=0;i<n;i++){const v=i===n-1?left:Math.floor(amount/n);left-=v;const item=this.scrap(a.x,a.y,2),ang=this.random()*Math.PI*2,speed=90+this.random()*150;item.cash=v;this.drop(item,a.x,a.y,Math.cos(ang)*speed,Math.sin(ang)*speed,0,0);}}
  // Hold the crown. Online, only the room moves the crown between ships and counts crown points; clients keep a carried
  // crown on its holder.
  updateCrown(dt){if(this.mode!=='crown'||this.finished)return;const c=this.crown,room=!this.predictInteractions;
@@ -412,7 +409,7 @@ class MagnetWorld{
    const used=new Set(a.pieces.map(p=>p.slot));let slot=0;while(used.has(slot))slot++;
    item.dead=false;a.pieces.push({item,slot,x:a.x,y:a.y,prevX:null,prevY:null,angle:0});this.updateOrbits(a);
   }
-  if(credit&&!a.seen.has(item.id)){a.seen.add(item.id);const value=[6,10,18][item.kind];a.score+=value;if(a.human){const stolen=item.origin!==a.id;if(stolen)a.steals++;this.event('collect',{stolen,value});if(full){a.fullSalvage=(a.fullSalvage||0)+value;if(a===this.human)this.showSalvageTotal(value);}else if(stolen)this.label(item.x,item.y,`STOLEN +${value}`,'#ffda79');this.burst(item.x,item.y,item.color,3,45);}}
+  if(credit&&!a.seen.has(item.id)){a.seen.add(item.id);const value=[6,10,18][item.kind];a.score+=value;if(this.mode==='inflation'&&!this.predictInteractions){a.cash=(a.cash||0)+(item.cash||Math.round(INFLATION.values[item.kind]*inflationRate(this,this.time)));item.cash=0;}if(a.human){const stolen=item.origin!==a.id;if(stolen)a.steals++;this.event('collect',{stolen,value});if(full){a.fullSalvage=(a.fullSalvage||0)+value;if(a===this.human&&this.mode!=='inflation')this.showSalvageTotal(value);}else if(stolen&&this.mode!=='inflation')this.label(item.x,item.y,`STOLEN +${value}`,'#ffda79');this.burst(item.x,item.y,item.color,3,45);}}
   return true;
  }
  drop(item,x,y,vx=0,vy=0,ignoreId=0,grace=.55,hot=false){item.x=limit(x,8,MM.width-8);item.y=limit(y,8,MM.height-8);item.vx=vx;item.vy=vy;item.dead=false;item.pickupAt=this.time+.14;item.hot=hot;item.ignoreId=ignoreId;item.ignoreUntil=this.time+grace;item.expiresAt=this.time+45;this.ground.push(item);}
@@ -478,13 +475,11 @@ class MagnetWorld{
     if(hyp(fx,fy)<.05){fx=(MM.width/2-a.x)/1000;fy=(MM.height/2-a.y)/1000;}const gl=hyp(fx,fy)||1;goal={x:a.x+fx/gl*300,y:a.y+fy/gl*300};}
    else if(crown.state>=0&&!(kind==='scavenger'&&a.pieces.length<12)){const h=crownHolder&&this.actors.find(b=>b.id===crownHolder);
     if(kind==='marksman'&&h&&distance(a,h)<700){const ang=Math.atan2(a.y-h.y,a.x-h.x)+(a.id%2?.3:-.3);goal={x:h.x+Math.cos(ang)*420,y:h.y+Math.sin(ang)*420};}else goal={x:crown.x,y:crown.y};}}
-  // Inflation: a High Value Target that is hurt with an enemy close heads home; otherwise loose cash nearby is worth a
-  // detour unless a fight is already on (or the cash is right there).
-  if(cashMode){if(hvtOf(a)&&a.hp<3&&enemy&&enemyDist<500)goal=CTF.bases[a.team];
-   else{let bag=null,bd=600;for(const d of this.cashDrops){const k=distance(a,d);if(k<bd){bd=k;bag=d;}}if(bag&&(!enemy||enemyDist>st.fire||bd<220))goal=bag;}}
+  // Inflation: a High Value Target that is hurt with an enemy close heads home.
+  if(cashMode&&hvtOf(a)&&a.hp<3&&enemy&&enemyDist<500)goal=CTF.bases[a.team];
   let dust=null,dustDist=450;for(const m of this.stardust||[]){const d=distance(a,m);if(d<dustDist){dust=m;dustDist=d;}}
-  const hotRing=this.arenaEvent?.kind==='collapse'&&now>=this.arenaEvent.start&&now<this.arenaEvent.end?this.arenaEvent:null,hotR=hotRing?this.collapseRadius(hotRing):0,gold=this.eventActive('rain');
-  let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,now)||item.ignoreId===a.id&&now<item.ignoreUntil)continue;if(hotRing&&(item.x-hotRing.x)*(item.x-hotRing.x)+(item.y-hotRing.y)*(item.y-hotRing.y)>hotR*hotR)continue;const d=distance(a,item)/(1+item.kind*.15);if(d<lootDist){loot=item;lootDist=d;}}
+  const hotRing=this.arenaEvent?.kind==='collapse'&&now>=this.arenaEvent.start&&now<this.arenaEvent.end?this.arenaEvent:null,hotR=hotRing?this.collapseRadius(hotRing):0,gold=this.eventActive('rain')||cashMode;
+  let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,now)||item.ignoreId===a.id&&now<item.ignoreUntil)continue;if(hotRing&&(item.x-hotRing.x)*(item.x-hotRing.x)+(item.y-hotRing.y)*(item.y-hotRing.y)>hotR*hotR)continue;const d=distance(a,item)/(1+item.kind*.15)/(item.cash?2.5:1);if(d<lootDist){loot=item;lootDist=d;}}
   let tx=a.x,ty=a.y;const reserve=Math.max(st.reserve,this.difficulty==='easy'?5:0),phase=hasPower(a,'phase',now),leech=hasPower(a,'leech',now);
   let pad=null,padDist=this.eventActive('items')?850:520;if(!holdsPower(a,now))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
   // Scavengers keep out of fights they did not start unless they are well armored.
@@ -548,11 +543,9 @@ class MagnetWorld{
   const killer=this.actors.find(b=>b.id===owner);
   // Team battle: a knockout by an enemy ship scores for its team (event deaths score nothing).
   if(this.mode==='teams'&&killer&&killer.team!==a.team&&!this.finished&&!this.predictInteractions){this.teamScore[killer.team]++;if(this.teamScore[killer.team]>=TEAMS.toWin){this.winner=killer.team;this.finished=true;this.event('finished');}}
-  // Inflation: an enemy knockout pays the killer fresh cash at the current rate; an enemy who knocks out a High Value
-  // Target also takes everything it carried; any other knockout drops part of the victim's cash for anyone to grab.
-  if(this.mode==='inflation'&&!this.finished&&!this.predictInteractions){const enemyKill=killer&&killer!==a&&killer.team!==a.team;
-   if(enemyKill)killer.cash=(killer.cash||0)+Math.round(INFLATION.pay*inflationRate(this,this.time));
-   if(enemyKill&&(a.cash||0)>=INFLATION.hvt){killer.cash+=a.cash;a.cash=0;}else this.dropCash(a,(a.cash||0)*INFLATION.drop);}
+  // Inflation: a knocked-out ship releases half its cash as debris (all of it when an enemy knocks out a High Value
+  // Target).
+  if(this.mode==='inflation'&&!this.finished&&!this.predictInteractions){const enemyKill=killer&&killer!==a&&killer.team!==a.team;this.dropMoney(a,(a.cash||0)*(enemyKill&&(a.cash||0)>=INFLATION.hvt?1:INFLATION.drop));}
   if(killer&&killer!==a){killer.kills++;killer.score+=KNOCKOUT_REWARD;
    if(killer.alive && killer.hp<3){
     killer.hp=Math.min(3,killer.hp+1);
@@ -657,7 +650,7 @@ class MagnetWorld{
   for(const a of this.actors){if(!a.alive)continue;a.prevX=a.x;a.prevY=a.y;for(const p of a.pieces){p.prevX=p.x;p.prevY=p.y;}if(!a.human)this.think(a,dt);if(a.human&&this.humanMovementStep)this.humanMovementStep(a,dt);else this.move(a,dt);}
   for(let i=0;i<this.actors.length;i++){const a=this.actors[i];if(!a.alive)continue;for(let j=i+1;j<this.actors.length;j++){const b=this.actors[j];if(!b.alive)continue;const dx=b.x-a.x,dy=b.y-a.y,d=hyp(dx,dy);if(d<33){const len=d||1,px=(d?dx/len:1)*(33-d)*.5,py=(d?dy/len:0)*(33-d)*.5;a.x-=px;a.y-=py;b.x+=px;b.y+=py;this.bound(a);this.bound(b);}}}
   for(const a of this.actors)if(a.alive){advanceShield(a,dt,this.time);this.updateOrbits(a);if(a.fire)this.shoot(a);}
-  this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateStardust(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.updateCollapse();this.updateHole();this.updateFlags();this.updateDom(dt);this.updateCrown(dt);this.updateCash();this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
+  this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateStardust(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.updateCollapse();this.updateHole();this.updateFlags();this.updateDom(dt);this.updateCrown(dt);this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
   for(const a of this.actors){if(!a.alive){if(this.time>=a.respawnAt)this.spawn(a);continue;}
    const canRepair=a.hp<3&&this.time-a.lastHurt>2&&this.time-a.lastShot>1.5&&this.wells.some(w=>distance(a,w)<w.r-9);
    if(canRepair){a.repair+=dt;if(a.repair>=3){a.hp++;a.repair=0;if(a.human)this.event('repair');}}else a.repair=0;
@@ -999,9 +992,9 @@ const wireTeams=w=>w.mode==='teams'?[w.teamScore[0],w.teamScore[1],w.winner]:und
 // holder id, held since, dropped at, first appears at, winner id]. Each absent in other modes.
 const wireDom=w=>w.mode==='dom'?[w.teamScore[0],w.teamScore[1],w.winner,...w.zones.map(z=>[z.owner,z.cap,Math.round(z.progress*1000)/1000,z.contested?1:0,z.x,z.y])]:undefined;
 const wireCrown=w=>w.mode==='crown'?[w.crown.state,Math.round(w.crown.x),Math.round(w.crown.y),w.crown.holder,r2(w.crown.since),r2(w.crown.droppedAt),r2(w.crown.readyAt),w.winner]:undefined;
-// Inflation: [winner, [[id, x, y, value, vanishes at], ...]] (cash bundles on the ground). Absent in other modes.
-const wireInflation=w=>w.mode==='inflation'?[w.winner,w.cashDrops.map(d=>[d.id,Math.round(d.x),Math.round(d.y),d.value,r2(d.expiresAt)])]:undefined;
-const unwireMode=(cf,tb,dm,cr,ic)=>ic?{mode:'inflation',winner:ic[0],cashDrops:(ic[1]||[]).map(([id,x,y,value,expiresAt])=>({id,x,y,value,expiresAt}))}
+// Inflation: [winner]; the cash itself rides on each ship. Absent in other modes.
+const wireInflation=w=>w.mode==='inflation'?[w.winner]:undefined;
+const unwireMode=(cf,tb,dm,cr,ic)=>ic?{mode:'inflation',winner:ic[0]}
  :cr?{mode:'crown',crown:{state:cr[0],x:cr[1],y:cr[2],holder:cr[3],since:cr[4],droppedAt:cr[5],readyAt:cr[6]},winner:cr[7]}
  :dm?{mode:'dom',teamScore:[dm[0],dm[1]],winner:dm[2],zones:dm.slice(3).map(([owner,cap,progress,contested,x,y])=>({x,y,owner,cap,progress,contested:contested===1}))}
  :tb?{mode:'teams',teamScore:[tb[0],tb[1]],winner:tb[2]}:unwireCtf(cf);
@@ -1337,7 +1330,7 @@ function reconcileScrap(previous,next,now){
    const session={code:data.code,token:data.token,seq:Math.max(resume?.seq||0,data.ack||0),shot:Math.max(resume?.shot||0,data.shotAck||0),round:0,version:0,lastSnapshot:performance.now(),timer:null,sentMove:0,sentPrediction:null,failures:0,prediction:null,playback:new SnapshotPlayback()};online=session;
    try{sessionStorage.setItem('magnet-online-session',JSON.stringify({code:session.code,token:session.token,seq:session.seq,shot:session.shot}));}catch{}
    preferredRoom='';onlineButton.textContent='Play online';joinInput.value=data.code;const url=new URL(location.href);url.searchParams.set('room',data.code);history.replaceState(null,'',url.pathname+url.search);
-   applySnapshot(data,true);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};hudAt=0;show('playing');save();updateHUD();updateRoomStrip();{const n=CTF.names[game.human.team]||'BLUE',side=n[0]+n.slice(1).toLowerCase();toast(game.mode==='inflation'?`Room ${data.code}: Inflation, you are ${side}. Knock out enemies for cash; payouts grow. Most team cash wins.`:game.mode==='dom'?`Room ${data.code}: Domination, you are ${side}. Capture A, B and C. First to ${DOM.toWin}.`:game.mode==='crown'?`Room ${data.code}: Hold the crown. Points grow the longer you keep it. First to ${CROWN.toWin}.`:game.mode==='ctf'?`Room ${data.code}: you are ${side}. Bring the enemy flag to your base. First to ${CTF.toWin}.`:game.mode==='teams'?`Room ${data.code}: you are ${side}. First team to ${TEAMS.toWin} knockouts wins.`:`Online in room ${data.code}. Invite friends with Copy link.`);}if(data.world.finished)finish();openArenaSocket(session);
+   applySnapshot(data,true);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};hudAt=0;show('playing');save();updateHUD();updateRoomStrip();{const n=CTF.names[game.human.team]||'BLUE',side=n[0]+n.slice(1).toLowerCase();toast(game.mode==='inflation'?`Room ${data.code}: Inflation, you are ${side}. Debris is money and it's worth more as the round goes on. Most team cash wins.`:game.mode==='dom'?`Room ${data.code}: Domination, you are ${side}. Capture A, B and C. First to ${DOM.toWin}.`:game.mode==='crown'?`Room ${data.code}: Hold the crown. Points grow the longer you keep it. First to ${CROWN.toWin}.`:game.mode==='ctf'?`Room ${data.code}: you are ${side}. Bring the enemy flag to your base. First to ${CTF.toWin}.`:game.mode==='teams'?`Room ${data.code}: you are ${side}. First team to ${TEAMS.toWin} knockouts wins.`:`Online in room ${data.code}. Invite friends with Copy link.`);}if(data.world.finished)finish();openArenaSocket(session);
   }catch(error){lobbyStatus.classList.add('error');lobbyStatus.textContent=error.name==='TimeoutError'?'Connection timed out. Please try again.':error.message;show('menu');}
   finally{lobbyBusy(false);}
  }
@@ -1576,7 +1569,7 @@ function reconcileScrap(previous,next,now){
  function toast(text){$('toast').textContent=text;$('toast').classList.add('show');toastUntil=performance.now()+3000;}
  function clearInput(){keys.clear();fireSources.clear();magnetSources.clear();touch=null;pointer.active=false;game.human.fire=game.human.magnet=false;game.human.moveX=game.human.moveY=0;$('fireBtn').classList.remove('engaged');$('magnetBtn').classList.remove('engaged');$('magnetBtn').setAttribute('aria-pressed','false');}
  function show(next){$('adminKeyRow').hidden=!online;state=next;if(next==='menu')$('menuBest').textContent=Math.floor(best).toLocaleString();for(const id of screens)$(id).hidden=true;const active={menu:'menuScreen',paused:'pauseScreen',help:'helpScreen',finished:'finishScreen',customize:'customizeScreen',shop:'shopScreen'}[next];if(active)$(active).hidden=false;const lobby=next==='menu'||next==='customize'||next==='shop';for(const id of panels)$(id).hidden=lobby;if(lobby)updateProgressUI();$('rebuildPanel').hidden=true;$('pauseBtn').disabled=!['playing','paused'].includes(next);$('pauseBtn').setAttribute('aria-label',next==='paused'?'Resume game':'Pause game');$('pauseBtn').title=next==='paused'?'Resume (P)':'Pause (P)';$('roomStrip').hidden=!online||['menu','customize','shop'].includes(next);$('pauseCopy').textContent=online?'Your controls are paused. The online arena keeps running, so rivals can still hit your core.':'Your core, armor, and round timer are waiting for you.';$('restartBtn').textContent=online?'Start a new room':'Start a fresh round';$('againBtn').textContent=online?'Leave to lobby':'One more round';document.body.classList.toggle('in-match',next==='playing'||next==='paused');if(next==='playing'||next==='paused')window.getSelection()?.removeAllRanges();clearInput();acc=0;if(next==='paused')$('resumeBtn').focus();if(next==='finished')$('againBtn').focus();if(next==='help')$('closeHelpBtn').focus();}
- function start(){const mode=$('gameMode').value;$('rivalsLabel').textContent=mode==='ffa'||mode==='crown'?'10 AI RIVALS':'BLUE 5 v 5 RED';disconnectOnline();game=new MagnetWorld({name:$('playerName').value.trim()||'You',difficulty:$('difficulty').value,mode});ctfSeen=null;Object.assign(game.human,look);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};pointer={x:width/2,y:height/2-160,active:false};hudAt=0;show('playing');save();updateHUD();toast(mode==='ctf'?'Capture the flag: take the red flag and bring it to your blue base. First to 3.':mode==='teams'?`Team battle: you are Blue. First team to ${TEAMS.toWin} knockouts wins.`:mode==='inflation'?`Inflation: you are Blue. Knock out Red for cash; payouts grow as the round goes on. Die and you drop half. Most team cash wins.`:mode==='dom'?`Domination: you are Blue. Capture A, B and C; every point you own scores each second. First to ${DOM.toWin}.`:mode==='crown'?`Hold the crown: grab it and keep it. Points grow the longer you hold it. First to ${CROWN.toWin}.`:'Your armor is ammo. Hold click to fire; right click or E to reclaim.');play('start');document.activeElement?.blur();}
+ function start(){const mode=$('gameMode').value;$('rivalsLabel').textContent=mode==='ffa'||mode==='crown'?'10 AI RIVALS':'BLUE 5 v 5 RED';disconnectOnline();game=new MagnetWorld({name:$('playerName').value.trim()||'You',difficulty:$('difficulty').value,mode});ctfSeen=null;Object.assign(game.human,look);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};pointer={x:width/2,y:height/2-160,active:false};hudAt=0;show('playing');save();updateHUD();toast(mode==='ctf'?'Capture the flag: take the red flag and bring it to your blue base. First to 3.':mode==='teams'?`Team battle: you are Blue. First team to ${TEAMS.toWin} knockouts wins.`:mode==='inflation'?`Inflation: you are Blue. Debris is money, and it's worth more as the round goes on. Get knocked out and half your cash spills out as debris. Most team cash wins.`:mode==='dom'?`Domination: you are Blue. Capture A, B and C; every point you own scores each second. First to ${DOM.toWin}.`:mode==='crown'?`Hold the crown: grab it and keep it. Points grow the longer you hold it. First to ${CROWN.toWin}.`:'Your armor is ammo. Hold click to fire; right click or E to reclaim.');play('start');document.activeElement?.blur();}
  function pause(){if(state==='playing'){show('paused');save();}else if(state==='paused'){show('playing');toast('Back in orbit.');}}
  function menu(){save();disconnectOnline();lobbyStatus.textContent='Play with others, or create a room and invite friends.';lobbyStatus.classList.remove('error');$('toast').classList.remove('show');toastUntil=0;preferredRoom='';onlineButton.textContent='Play online';history.replaceState(null,'',location.pathname);show('menu');$('playerName').focus();}
  $('startForm').addEventListener('submit',e=>{e.preventDefault();connectOnline(preferredRoom?'join':'quick',preferredRoom);});$('againBtn').onclick=()=>online?menu():start();$('restartBtn').onclick=()=>online?connectOnline('create'):start();$('resumeBtn').onclick=pause;$('pauseBtn').onclick=pause;$('returnMenuBtn').onclick=menu;$('finishMenuBtn').onclick=menu;
@@ -1875,16 +1868,13 @@ function reconcileScrap(previous,next,now){
     crownShape(h.x,h.y-54+Math.sin(t*3)*2,.62,CROWN.color,.95);const rate=crownRate(c,game.time);if(rate>1){ctx.save();ctx.fillStyle=CROWN.color;ctx.font='700 13px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='left';ctx.fillText(rate+'×',h.x+20,h.y-62);ctx.restore();}}}
   else if(visible(c.x,c.y,90)){ctx.save();ctx.globalAlpha=.4+.12*Math.sin(t*3);ctx.drawImage(softSprite(CROWN.color),c.x-70,c.y-70,140,140);if(c.state===2){const left=Math.max(0,1-(game.time-c.droppedAt)/CROWN.returnAfter);ctx.globalAlpha=.8;ctx.strokeStyle=CROWN.color;ctx.lineWidth=3;ctx.beginPath();ctx.arc(c.x,c.y,34,-Math.PI/2,-Math.PI/2+left*Math.PI*2);ctx.stroke();}ctx.restore();crownShape(c.x,c.y+Math.sin(t*2.4)*4,.85,CROWN.color,1);}
   const me=game.human;if(!me.alive||c.state===1&&c.holder===me.id)return;const dx=c.x-me.x,dy=c.y-me.y;if(hyp(dx,dy)<200)return;ctx.save();ctx.translate(me.x,me.y);ctx.rotate(Math.atan2(dy,dx));ctx.fillStyle=CROWN.color;ctx.globalAlpha=.9;ctx.beginPath();ctx.moveTo(92,0);ctx.lineTo(75,-9);ctx.lineTo(75,9);ctx.closePath();ctx.fill();ctx.restore();}
- // Inflation: cash amounts ($850, $1.2k, $12k), cash bundles on the ground (green notes that blink before they vanish),
- // and a gold ring with the amount around every High Value Target (everyone sees them).
+ // Inflation: cash amounts ($850, $1.2k, $12k) and a gold ring with the amount around every High Value Target
+ // (everyone sees them).
  const CASH_COLOR='#5ef08a',cashText=n=>n>=10000?'$'+Math.round(n/1000)+'k':n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+Math.round(n);
- function drawCashDrops(){if(game.mode!=='inflation')return;const t=performance.now()/1000;for(const d of game.cashDrops||[]){if(!visible(d.x,d.y,40)||d.expiresAt-game.time<5&&Math.sin(t*16)<0)continue;
-  ctx.save();ctx.translate(d.x,d.y+Math.sin(t*3+d.id)*2);ctx.globalAlpha=.3;ctx.drawImage(softSprite(CASH_COLOR),-28,-28,56,56);ctx.globalAlpha=1;ctx.fillStyle='#174a2c';ctx.strokeStyle=CASH_COLOR;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(-13,-8,26,16,3);ctx.fill();ctx.stroke();
-  ctx.fillStyle=CASH_COLOR;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='700 12px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.fillText('$',0,1);ctx.textBaseline='alphabetic';ctx.font='700 11px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.fillText(cashText(d.value),0,-13);ctx.restore();}}
  function drawHvts(){if(game.mode!=='inflation')return;const t=performance.now()/1000;for(const a of game.actors){if(!a.alive||(a.cash||0)<INFLATION.hvt||!visible(a.x,a.y,120))continue;
   ctx.save();ctx.strokeStyle='#ffd34d';ctx.globalAlpha=.55+.25*Math.sin(t*6);ctx.lineWidth=2.5;ctx.setLineDash([6,6]);ctx.lineDashOffset=-t*20;ctx.beginPath();ctx.arc(a.x,a.y,40,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);if(a!==game.human){ctx.globalAlpha=.95;ctx.fillStyle='#ffd34d';ctx.font='700 13px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillText('HVT '+cashText(a.cash),a.x,a.y+60);}ctx.restore();}}
  function modeNotice(a){
-  if(game.mode==='inflation'){const ot=game.time>=game.duration-INFLATION.overtime;if((a.cash||0)>=INFLATION.hvt)return `HIGH VALUE TARGET · ${cashText(a.cash)} · Everyone can see you`;if(ot)return `OVERTIME · Knockouts pay ${cashText(Math.round(INFLATION.pay*inflationRate(game,game.time)))}`;return '';}
+  if(game.mode==='inflation'){const ot=game.time>=game.duration-INFLATION.overtime;if((a.cash||0)>=INFLATION.hvt)return `HIGH VALUE TARGET · ${cashText(a.cash)} · Everyone can see you`;if(ot)return `OVERTIME · Debris is worth ×${+inflationRate(game,game.time).toFixed(2)}`;return '';}
   if(game.mode==='dom'&&game.zones){for(let i=0;i<game.zones.length;i++){const z=game.zones[i],n=DOM.names[i];if(hyp(a.x-z.x,a.y-z.y)>=DOM.r)continue;
     if(a.shieldUntil>game.time)return 'SPAWN SHIELD · No capturing until it ends';if(z.contested)return `${n} CONTESTED · Clear them out`;if(z.cap===a.team&&z.progress>0)return `CAPTURING ${n} · ${Math.floor(z.progress*100)}%`;
     if(z.cap>=0&&z.progress>0)return `DEFENDING ${n}`;if(z.owner===a.team)return `HOLDING ${n}`;return '';}return '';}
@@ -1893,12 +1883,13 @@ function reconcileScrap(previous,next,now){
  // Domination and crown messages, worked out from state changes (the same offline and online).
  let modeSeen=null;function watchModes(){const me=game.human,was=modeSeen&&modeSeen.world===game?modeSeen:null;
   if(game.mode==='inflation'){const rate=inflationRate(game,game.time),ot=game.time>=game.duration-INFLATION.overtime,cash=me.cash||0,hvts=new Set(game.actors.filter(a=>a.alive&&(a.cash||0)>=INFLATION.hvt).map(a=>a.id));
-   const now={world:game,cash,ot,rate,hvts};modeSeen=now;if(!was)return;
-   if(cash>was.cash){game.label(me.x,me.y-46,'+'+cashText(cash-was.cash),CASH_COLOR);play('collect');}else if(cash<was.cash)game.label(me.x,me.y-46,'−'+cashText(was.cash-cash),'#ff8d8d');
-   if(ot&&!was.ot){toast(`OVERTIME! Knockouts pay double for the last ${INFLATION.overtime} s.`);play('power');}
-   else if(!ot&&Math.floor(rate*2)>Math.floor(was.rate*2))toast(`Inflation! Knockouts now pay ${cashText(Math.round(INFLATION.pay*rate))}.`);
+   const now={world:game,cash,ot,rate,hvts,gain:was?.gain||0,labelAt:was?.labelAt??-9};modeSeen=now;if(!was)return;
+   if(cash>was.cash)now.gain+=cash-was.cash;else if(cash<was.cash){game.label(me.x,me.y-46,'−'+cashText(was.cash-cash),'#ff8d8d');now.gain=0;}
+   if(now.gain>0&&game.time-now.labelAt>=.6){game.label(me.x,me.y-46,'+'+cashText(now.gain),CASH_COLOR);now.gain=0;now.labelAt=game.time;}
+   if(ot&&!was.ot){toast(`OVERTIME! Debris is worth double for the last ${INFLATION.overtime} s.`);play('power');}
+   else if(!ot&&Math.floor(rate*2)>Math.floor(was.rate*2))toast(`Inflation! Debris is now worth ×${+rate.toFixed(2)}.`);
    if(hvts.has(me.id)&&!was.hvts.has(me.id)){toast('You are a High Value Target! Everyone can see you. Stay alive.');play('power');}
-   for(const id of was.hvts)if(id!==me.id&&!hvts.has(id)){const a=game.actors.find(b=>b.id===id);if(a&&!a.alive)toast(`${a.name}, a High Value Target, was knocked out.`);}return;}
+   for(const id of was.hvts)if(id!==me.id&&!hvts.has(id)){const a=game.actors.find(b=>b.id===id);if(a&&!a.alive)toast(`${a.name}, a High Value Target, was knocked out and spilled their cash.`);}return;}
   if(game.mode==='dom'&&game.zones){const now={world:game,owners:game.zones.map(z=>z.owner),warned:was?.warned||false};modeSeen=now;if(!was)return;const side=t=>CTF.names[t][0]+CTF.names[t].slice(1).toLowerCase();
    game.zones.forEach((z,i)=>{if(z.owner===was.owners[i]||z.owner<0)return;const ours=z.owner===me.team;toast(ours?`Your team captured ${DOM.names[i]}!`:`${side(z.owner)} took ${DOM.names[i]}${was.owners[i]===me.team?' from you':''}!`);play(ours?'power':'strip');});
    const sc=game.teamScore,they=1-me.team;if(!now.warned&&sc[they]>=DOM.toWin-50&&sc[they]>sc[me.team]){now.warned=true;toast(`${side(they)} is ${DOM.toWin-sc[they]} points from winning. Take their points!`);}return;}
@@ -1911,7 +1902,7 @@ function reconcileScrap(previous,next,now){
    for(const a of game.actors)if(a!==me&&(a.crown||0)>=CROWN.toWin-20&&!now.warned.has(a.id)){now.warned.add(a.id);toast(`${a.name} is ${Math.max(1,Math.ceil(CROWN.toWin-a.crown))} points from winning. Stop them!`);}return;}
   modeSeen=null;}
  function wellsAndCover(){
-  drawCtfBases();drawDom();drawCashDrops();
+  drawCtfBases();drawDom();
   const now=performance.now();
   for(const w of game.wells){if(!visible(w.x,w.y,100))continue;const pulse=.5+Math.sin(game.time*2)*.15;ctx.save();
    // Breathing glow (brighter while someone repairs) and arcs turning slowly around the ring.
@@ -2675,8 +2666,7 @@ function reconcileScrap(previous,next,now){
   if(game.mode==='dom'&&game.zones){const R=DOM.r*sx;game.zones.forEach((z,i)=>{const own=z.owner>=0?CTF.colors[z.owner]:'#8aa0b4';mc.globalAlpha=.3;mc.fillStyle=own;mc.beginPath();mc.arc(z.x*sx,z.y*sy,R,0,Math.PI*2);mc.fill();mc.globalAlpha=1;mc.strokeStyle=z.contested&&Math.sin(performance.now()/90)>0?'#ff6b6b':own;mc.lineWidth=1.5;mc.stroke();
    if(z.progress>0&&z.cap>=0){mc.strokeStyle=CTF.colors[z.cap];mc.lineWidth=2.5;mc.beginPath();mc.arc(z.x*sx,z.y*sy,R+1.5,-Math.PI/2,-Math.PI/2+z.progress*Math.PI*2);mc.stroke();}mc.fillStyle='#e8f4ff';mc.font='700 10px Fredoka,sans-serif';mc.textAlign='center';mc.textBaseline='middle';mc.fillText(DOM.names[i],z.x*sx,z.y*sy+.5);mc.textBaseline='alphabetic';});}
   if(game.mode==='crown'&&game.crown&&game.crown.state>=0){const c=game.crown;mc.fillStyle=CROWN.color;mc.globalAlpha=c.state===1?.6+.4*Math.sin(performance.now()/110):1;mc.beginPath();mc.arc(c.x*sx,c.y*sy,c.state===1?4.2:3.6,0,Math.PI*2);mc.fill();mc.globalAlpha=1;}
-  if(game.mode==='inflation'){for(const d of game.cashDrops||[]){mc.globalAlpha=.85;mc.fillStyle=CASH_COLOR;mc.fillRect(d.x*sx-1.5,d.y*sy-1.5,3,3);}
-   for(const a of game.actors)if(a.alive&&(a.cash||0)>=INFLATION.hvt){mc.globalAlpha=.6+.4*Math.sin(performance.now()/110);mc.fillStyle=CTF.colors[a.team]||'#ffd34d';mc.beginPath();mc.arc(a.x*sx,a.y*sy,4.5,0,Math.PI*2);mc.fill();mc.strokeStyle='#ffd34d';mc.lineWidth=1.5;mc.stroke();}mc.globalAlpha=1;}
+  if(game.mode==='inflation'){for(const a of game.actors)if(a.alive&&(a.cash||0)>=INFLATION.hvt){mc.globalAlpha=.6+.4*Math.sin(performance.now()/110);mc.fillStyle=CTF.colors[a.team]||'#ffd34d';mc.beginPath();mc.arc(a.x*sx,a.y*sy,4.5,0,Math.PI*2);mc.fill();mc.strokeStyle='#ffd34d';mc.lineWidth=1.5;mc.stroke();}mc.globalAlpha=1;}
   if(game.mode==='teams'||game.mode==='dom'||game.mode==='inflation'){mc.globalAlpha=.9;for(const a of game.actors)if(a.alive&&a.id!==game.human.id&&a.team===game.human.team){mc.fillStyle=a.color;mc.beginPath();mc.arc(a.x*sx,a.y*sy,2.6,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
   if(game.mode==='ctf'){CTF.bases.forEach((b,team)=>{mc.strokeStyle=CTF.colors[team];mc.globalAlpha=.7;mc.lineWidth=1.5;mc.beginPath();mc.arc(b.x*sx,b.y*sy,CTF.baseR*sx,0,Math.PI*2);mc.stroke();});
    for(const f of game.flags){mc.globalAlpha=f.state===2?.6+.4*Math.sin(performance.now()/120):1;mc.fillStyle=CTF.colors[f.team];const x=f.x*sx,y=f.y*sy;mc.beginPath();mc.moveTo(x,y-7);mc.lineTo(x+7,y-4);mc.lineTo(x,y-1);mc.closePath();mc.fill();mc.fillRect(x-.7,y-7,1.4,8);}
