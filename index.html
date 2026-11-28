@@ -367,13 +367,25 @@ class MagnetWorld{
   let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,now)||item.ignoreId===a.id&&now<item.ignoreUntil)continue;if(hotRing&&(item.x-hotRing.x)*(item.x-hotRing.x)+(item.y-hotRing.y)*(item.y-hotRing.y)>hotR*hotR)continue;const d=distance(a,item)/(1+item.kind*.15);if(d<lootDist){loot=item;lootDist=d;}}
   let tx=a.x,ty=a.y;const reserve=Math.max(st.reserve,this.difficulty==='easy'?5:0),phase=hasPower(a,'phase',now),leech=hasPower(a,'leech',now);
   let pad=null,padDist=this.eventActive('items')?850:520;if(!holdsPower(a,now))for(const p of this.pads||[])if(p.kind>=0){const d=distance(a,p);if(d<padDist){pad=p;padDist=d;}}
-  a.magnet=Boolean(loot&&lootDist<270*st.loot*(gold?1.4:1)&&(nearestDist>260||a.pieces.length<3))&&!this.eventActive('polarity');
+  // Scavengers keep out of fights they did not start unless they are well armored.
+  const shy=st.shy&&enemy&&enemy.id!==revenge&&a.pieces.length<12,underFire=now-(a.lastAttackedAt??-99)<2,full=a.pieces.length>=armorCapacity(a);
+  // The magnet slows a ship and stops it firing, and bots often pull scrap (even with a full orbit) instead of
+  // shooting. On Hard they don't: no magnet while being hit (unless almost out of armor), and none with a full orbit
+  // while a target is in firing range. Measured: this about doubles how often you die, so Easy and Normal keep the habit.
+  a.magnet=Boolean(loot&&lootDist<270*st.loot*(gold?1.4:1)&&(nearestDist>260||a.pieces.length<3))&&!this.eventActive('polarity')
+   &&!(skill===2&&(underFire&&a.pieces.length>=3||full&&enemy&&!shy&&enemyDist<st.fire));
   a.fire=Boolean(enemy&&enemyDist<st.fire&&a.pieces.length>reserve&&!a.magnet&&now>a.shieldUntil&&!phase);
   const jp=this.arenaEvent,jackpot=jp?.kind==='jackpot'&&!jp.cracked&&now>=jp.start-1&&a.hp>1&&distance(a,jp)<(EVENT.jackpot.ring+520)?jp:null;
-  // Scavengers keep out of fights they did not start unless they are well armored.
-  const shy=st.shy&&enemy&&enemy.id!==revenge&&a.pieces.length<12;
-  if(a.hp===1&&now-a.lastHurt>1){const well=this.wells.reduce((best,w)=>distance(a,w)<distance(a,best)?w:best);tx=well.x;ty=well.y;a.fire=false;if(distance(a,well)<30){tx=a.x;ty=a.y;}}
-  else if(nearest&&nearestDist<270&&(a.pieces.length<5||a.hp===1||phase)){tx=a.x+(a.x-nearest.x)*2;ty=a.y+(a.y-nearest.y)*2;a.magnet=false;}
+  // On its last core segment a bot heads for a repair well: not one past (or near) the ship chasing it, and while the
+  // chaser is within 600 px it weaves from side to side instead of flying a straight line that is easy to lead.
+  // (Measured: shooting back on the way, or turning to fight, got more bots killed than it saved.)
+  const threat=a.hp===1?(this.actors.find(b=>b.id===revenge&&b.alive)||(nearestDist<500?nearest:null)):null;
+  if(a.hp===1&&now-a.lastHurt>1){let well=null,bestCost=Infinity;for(const w of this.wells){const d=distance(a,w);let cost=d;if(threat){const td=distance(threat,w);cost+=Math.max(0,520-td)*1.3;const ax=w.x-a.x,ay=w.y-a.y,bx=threat.x-a.x,by=threat.y-a.y,cos=(ax*bx+ay*by)/((hyp(ax,ay)*hyp(bx,by))||1);if(cos>.5)cost+=350;}if(cost<bestCost){bestCost=cost;well=w;}}tx=well.x;ty=well.y;a.fire=false;a.magnet=false;if(distance(a,well)<30){tx=a.x;ty=a.y;}if(threat&&distance(a,threat)<600&&distance(a,well)>well.r){if(now>=(a.weaveUntil??0)){a.weave=a.weave===1?-1:1;a.weaveUntil=now+.5+this.random()*.4;}const dx=well.x-a.x,dy=well.y-a.y,dl=hyp(dx,dy)||1;tx=a.x+dx/dl*200-dy/dl*a.weave*170;ty=a.y+dy/dl*200+dx/dl*a.weave*170;}}
+  else if(nearest&&nearestDist<270&&(a.pieces.length<5||a.hp===1||phase)){
+   // Flee away from the nearest ship, bending away from walls so it does not run itself into a corner.
+   let fx=a.x-nearest.x,fy=a.y-nearest.y;const fl=hyp(fx,fy)||1;fx/=fl;fy/=fl;const edge=360;
+   fx+=(a.x<edge?(edge-a.x)/edge:a.x>MM.width-edge?-(a.x-MM.width+edge)/edge:0)*1.6;fy+=(a.y<edge?(edge-a.y)/edge:a.y>MM.height-edge?-(a.y-MM.height+edge)/edge:0)*1.6;
+   const gl=hyp(fx,fy)||1;tx=a.x+fx/gl*320;ty=a.y+fy/gl*320;a.magnet=false;}
   else if(dust){tx=dust.x;ty=dust.y;}
   else if(jackpot){const spot=(a.id*2.4)%(Math.PI*2);tx=jackpot.x+Math.cos(spot)*55;ty=jackpot.y+Math.sin(spot)*55;}
   else if(pad){tx=pad.x;ty=pad.y;}
