@@ -1910,9 +1910,12 @@ function reconcileScrap(previous,next,now){
   if(game.mode==='crown'&&game.crown){const c=game.crown;if(c.state===1&&c.holder===a.id){const r=crownRate(c,game.time),next=r<CROWN.maxRate?` · ${r+1}× in ${Math.max(1,Math.ceil(r*CROWN.step-(game.time-c.since)))}s`:'';return `YOU HAVE THE CROWN · ${r}× points${next}`;}if(c.state===2)return 'THE CROWN IS DOWN · Grab it';}
   return '';}
  // Domination and crown messages, worked out from state changes (the same offline and online).
- let modeSeen=null;function watchModes(){const me=game.human,was=modeSeen&&modeSeen.world===game?modeSeen:null;
+ // The round these messages belong to. Online the world object is rebuilt from every server update, so the room code
+ // and round number identify it there; offline it is the world itself.
+ const modeRound=()=>online?online.code+":"+online.round:game;
+ let modeSeen=null;function watchModes(){const me=game.human,round=modeRound(),was=modeSeen&&modeSeen.world===round?modeSeen:null;
   if(game.mode==='inflation'){const rate=inflationRate(game,game.time),ot=game.time>=game.duration-INFLATION.overtime,cash=me.cash||0,hvts=new Set(game.hvts().map(a=>a.id));
-   const now={world:game,cash,ot,rate,hvts,hvtToastAt:was?.hvtToastAt??-99,announced:was?.announced||new Set()};modeSeen=now;if(!was)return;
+   const now={world:round,cash,ot,rate,hvts,hvtToastAt:was?.hvtToastAt??-99,announced:was?.announced||new Set()};modeSeen=now;if(!was)return;
    if(cash>was.cash)game.showSalvageTotal(cash-was.cash,true);else if(cash<was.cash)game.label(me.x,me.y-46,'−'+cashText(was.cash-cash),'#ff8d8d');
    if(ot&&!was.ot){toast(`OVERTIME! Every cash pickup pays double for the last ${INFLATION.overtime} s.`);play('power');}
    else if(!ot&&Math.floor(rate*2)>Math.floor(was.rate*2))toast(`Inflation! Debris is now worth ×${+rate.toFixed(2)}.`);
@@ -1921,10 +1924,10 @@ function reconcileScrap(previous,next,now){
    for(const id of [...now.announced])if(!hvts.has(id))now.announced.delete(id);
    for(const id of hvts)if(id!==me.id&&!now.announced.has(id)&&game.time-now.hvtToastAt>4){const a=game.actors.find(b=>b.id===id);if(a){now.announced.add(id);now.hvtToastAt=game.time;toast(a.team===me.team?`${a.name} is your team's High Value Target. Protect them!`:`${a.name} is the enemy High Value Target (${cashText(a.cash)}). Hunt them down!`);break;}}
    for(const id of was.hvts)if(id!==me.id&&!hvts.has(id)){const a=game.actors.find(b=>b.id===id);if(a&&!a.alive)toast(`${a.name}, a High Value Target, was knocked out. Grab the bounty!`);}return;}
-  if(game.mode==='dom'&&game.zones){const now={world:game,owners:game.zones.map(z=>z.owner),warned:was?.warned||false};modeSeen=now;if(!was)return;const side=t=>CTF.names[t][0]+CTF.names[t].slice(1).toLowerCase();
+  if(game.mode==='dom'&&game.zones){const now={world:round,owners:game.zones.map(z=>z.owner),warned:was?.warned||false};modeSeen=now;if(!was)return;const side=t=>CTF.names[t][0]+CTF.names[t].slice(1).toLowerCase();
    game.zones.forEach((z,i)=>{if(z.owner===was.owners[i]||z.owner<0)return;const ours=z.owner===me.team;toast(ours?`Your team captured ${DOM.names[i]}!`:`${side(z.owner)} took ${DOM.names[i]}${was.owners[i]===me.team?' from you':''}!`);play(ours?'power':'strip');});
    const sc=game.teamScore,they=1-me.team;if(!now.warned&&sc[they]>=DOM.toWin-50&&sc[they]>sc[me.team]){now.warned=true;toast(`${side(they)} is ${DOM.toWin-sc[they]} points from winning. Take their points!`);}return;}
-  if(game.mode==='crown'&&game.crown){const c=game.crown,holder=c.state===1?c.holder:0,now={world:game,holder,state:c.state,warned:was?.warned||new Set(),lastToast:was?.lastToast??-99};modeSeen=now;if(!was)return;
+  if(game.mode==='crown'&&game.crown){const c=game.crown,holder=c.state===1?c.holder:0,now={world:round,holder,state:c.state,warned:was?.warned||new Set(),lastToast:was?.lastToast??-99};modeSeen=now;if(!was)return;
    if(was.state===-1&&c.state===0){toast('The crown is out! Grab it and hold on.');play('power');}
    else if(was.state===2&&c.state===0)toast('Nobody took the crown, so it moved to a new spot.');
    if(holder!==was.holder){if(holder===me.id){toast('You have the crown! Points grow the longer you keep it.');play('power');now.lastToast=game.time;}
