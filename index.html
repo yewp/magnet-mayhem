@@ -111,11 +111,11 @@ body.in-match .brand,body.in-match #helpBtn{display:none}body.in-match .tools{ma
  body.in-match .admin,body.in-match:has(#roomStrip:not([hidden])) .admin{top:calc(var(--stack) + 62px)}
  .map{padding:6px}}
 /* Capture the flag */
-.mode-field{margin-top:12px}.mode-note{margin:6px 2px 0;font-size:11px;color:var(--muted)}.hill-stat .stat-value{color:#ffd34d}#boardTitle{display:inline;letter-spacing:inherit;font-weight:inherit;color:inherit;font-size:inherit}.team-stat .t-blue{color:#5fb8ff}.team-stat .t-red{color:#ff6b6b}
+.mode-field{margin-top:12px}.mode-note{margin:6px 2px 0;font-size:11px;color:var(--muted)}.crown-stat .stat-value{color:#ffd34d}#boardTitle{display:inline;letter-spacing:inherit;font-weight:inherit;color:inherit;font-size:inherit}.team-stat .t-blue{color:#5fb8ff}.team-stat .t-red{color:#ff6b6b}
 </style></head><body>
 <canvas id="arena" aria-label="Orbbitz.io arena. Mouse or WASD to move. Hold left mouse or Space to fire scrap. Hold right mouse or E to pull in your shield and attract scrap. P pauses."></canvas>
 <header class="topbar"><div class="brand"><svg class="brand-logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><circle cx="20" cy="20" r="13" stroke="currentColor" stroke-opacity=".4"/><circle cx="20" cy="20" r="5" fill="currentColor"/><path d="m27 4 7 4-3 6-7-4zM3 25l7-3 3 7-7 3z" fill="#f5c886"/></svg><div><div class="wordmark">orbbitz<span>.io</span></div><div class="brand-sub">YOUR ARMOR IS YOUR AMMO</div></div></div><div class="tools"><button class="icon-btn" id="soundBtn" title="Turn sound on" aria-label="Turn sound on" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m11 5-5 4H3v6h3l5 4V5Z"/><path id="soundWaves" d="m16 9 6 6m0-6-6 6"/></svg></button><button class="icon-btn" id="helpBtn" title="How to play" aria-label="How to play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4m0 2v2"/></svg></button><button class="icon-btn" id="pauseBtn" title="Pause (P)" aria-label="Pause game" disabled><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3v14H7zm7 0h3v14h-3z"/></svg></button></div></header><div id="roomStrip" class="room-strip" hidden><div><strong id="connectionValue">Connecting</strong><span>ROOM <b id="roomCodeValue"></b></span></div><button id="copyRoomBtn" type="button">Copy link</button><input id="shareLink" readonly hidden aria-label="Share this room link"></div>
-<section class="hud" id="hud" hidden><div class="score-stat"><div class="stat-label">SCORE</div><div class="stat-value" id="scoreValue">0</div></div><div class="divider"></div><div class="clock-stat" id="clockStat"><div class="stat-label">ROUND</div><div class="stat-value" id="timeValue">3:00</div></div><div class="divider team-part" hidden></div><div class="team-stat team-part" hidden><div class="stat-label" id="teamStatLabel">FLAGS</div><div class="stat-value"><span class="t-blue" id="teamBlue">0</span><small> – </small><span class="t-red" id="teamRed">0</span></div></div><div class="divider hill-part" hidden></div><div class="hill-stat hill-part" hidden><div class="stat-label" id="hillStatLabel">HILL</div><div class="stat-value" id="hillValue">0s</div></div></section>
+<section class="hud" id="hud" hidden><div class="score-stat"><div class="stat-label">SCORE</div><div class="stat-value" id="scoreValue">0</div></div><div class="divider"></div><div class="clock-stat" id="clockStat"><div class="stat-label">ROUND</div><div class="stat-value" id="timeValue">3:00</div></div><div class="divider team-part" hidden></div><div class="team-stat team-part" hidden><div class="stat-label" id="teamStatLabel">FLAGS</div><div class="stat-value"><span class="t-blue" id="teamBlue">0</span><small> – </small><span class="t-red" id="teamRed">0</span></div></div><div class="divider crown-part" hidden></div><div class="crown-stat crown-part" hidden><div class="stat-label" id="crownStatLabel">CROWN</div><div class="stat-value" id="crownValue">0</div></div></section>
 <aside class="board" id="board" hidden><div class="panel-heading"><span id="boardTitle">SALVAGE LEADERS</span> <span id="rivalsLabel">10 AI RIVALS</span></div><div id="leaders"></div></aside><div class="kill-feed" id="feed" hidden></div>
 <aside class="map" id="mapPanel" hidden><canvas id="minimap" width="272" height="214" aria-label="Arena minimap with repair wells and pilots"></canvas></aside>
 <div class="bottom-note" id="bottomNote" hidden><div id="perfValue" style="font-size:11px;color:#8da6be;margin-bottom:8px" title="Frame rate and network round trip"></div><div class="touch-hint">Drag anywhere to move.<br>Hold Fire for touch auto-aim.</div></div>
@@ -126,7 +126,7 @@ body.in-match .brand,body.in-match #helpBtn{display:none}body.in-match .tools{ma
 <div class="overlay menu-overlay" id="menuScreen"><main class="menu-layout">
 <section class="hero"><div class="eyebrow">ORBIT · STEAL · SURVIVE</div><h1 class="logo">orbbitz<span>.io</span></h1><p class="intro">Your armor is your ammo. Pull scrap into orbit, fire it, and steal theirs.</p></section>
 <form id="startForm" class="glass menu-card"><div class="level-row"><div class="level-badge">LV <b id="levelValue">1</b></div><div class="level-bar" aria-hidden="true"><i id="levelFill"></i></div><button type="button" class="text-btn" id="customizeBtn">Customize</button><button type="button" class="text-btn" id="shopBtn">Shop</button></div><div class="level-next" id="levelNext"></div><div class="form-row"><div class="field"><label for="playerName">Pilot name</label><input id="playerName" value="You" maxlength="16" autocomplete="off" spellcheck="false"></div><div class="field"><label for="difficulty">AI difficulty</label><select id="difficulty"><option value="easy">Relaxed</option><option value="normal" selected>Standard</option><option value="hard">Relentless</option></select></div></div>
-<div class="field mode-field"><label for="gameMode">Mode</label><select id="gameMode"><option value="ffa" selected>Free-for-all</option><option value="ctf">Capture the flag · 5 v 5</option><option value="teams">Team battle · 5 v 5</option><option value="hill">King of the hill · free for all</option></select><p class="mode-note" id="modeNote" hidden>Practice and private rooms. Play online stays free-for-all.</p></div>
+<div class="field mode-field"><label for="gameMode">Mode</label><select id="gameMode"><option value="ffa" selected>Free-for-all</option><option value="ctf">Capture the flag · 5 v 5</option><option value="teams">Team battle · 5 v 5</option><option value="dom">Domination · 5 v 5</option><option value="crown">Hold the crown · free for all</option></select><p class="mode-note" id="modeNote" hidden>Practice and private rooms. Play online stays free-for-all.</p></div>
 <button class="primary" id="onlinePlayBtn" type="submit">Play online</button><button class="secondary" type="button" id="offlineBtn">Practice offline</button><button class="secondary" type="button" id="roomToggle" aria-expanded="false" aria-controls="roomSheet">Private room</button>
 <div class="room-sheet" id="roomSheet" hidden><button class="secondary" type="button" id="createRoomBtn">Create a room</button><div class="join-row"><label class="sr-only" for="roomCode">Room code</label><input id="roomCode" placeholder="ROOM CODE" maxlength="6" autocomplete="off" spellcheck="false"><button class="secondary" id="joinRoomBtn" type="button">Join</button></div></div>
 <p id="lobbyStatus" class="lobby-status" role="status" aria-live="polite">Play with others, or create a room and invite friends.</p>
@@ -256,13 +256,22 @@ const CTF=Object.freeze({bases:Object.freeze([Object.freeze({x:250,y:1100}),Obje
 // Team battle: the same two teams without flags; every knockout of an enemy scores for your team. First to toWin or
 // most when the 4 minutes end.
 const TEAMS=Object.freeze({toWin:12,duration:240});
-// King of the hill: one zone that moves every `move` seconds (the next spot shows `warn` seconds ahead). A ship alone
-// in it (not spawn-shielded, not phased) earns hill time and `points` score per whole second; two or more ships in it
-// contest it and nobody earns. First to toWin seconds, or the most hill time when the 4 minutes end. Every pilot for
-// themselves. Spots keep clear of repair wells and power-up pads. No Collapse (it could close over the hill) or Jackpot
-// (a second capture zone).
-const HILL=Object.freeze({r:175,move:45,warn:8,toWin:45,duration:240,points:5,color:'#ffd34d',noEvents:Object.freeze(['collapse','jackpot']),
+// Domination: Blue against Red (the capture the flag team setup). Three points: A on Blue's side, B in the middle (top),
+// C on Red's side. Stand in a point to capture it: capTime seconds alone, faster with more teammates (up to maxRate
+// times); any enemy in it freezes it (contested). A point the other team owns flips straight over. Progress with
+// nobody there drains away. Every second each owned point scores 1 for its team; first to toWin or the most when the
+// 4 minutes end. Spawn-shielded and phased ships do not count. No Collapse (it could close over a point) or Jackpot.
+const DOM=Object.freeze({r:150,capTime:5,maxRate:2,drain:.25,toWin:300,duration:240,capturePoints:50,names:Object.freeze(['A','B','C']),noEvents:Object.freeze(['collapse','jackpot']),
+ points:Object.freeze([{x:720,y:1180},{x:1400,y:560},{x:2080,y:1180}].map(Object.freeze))});
+// Hold the crown: one crown, every pilot for themselves. Touch it to take it (that ends a spawn shield; phased ships
+// cannot) and gets a short speed rush. The holder earns crown points: 1 a second, 2 after `step` s of holding it, 3
+// after twice that (back to 1 when it is lost) and `points` score per crown point. Bots aim at a holder at most 3 at
+// a time (measured: without the cap and the rush, half of all holds were under 4 s). A knocked-out holder drops it where they fell; a dropped crown
+// nobody takes goes back to a spot after returnAfter s. It first appears `first` s in. First to toWin crown points or
+// the most when the 4 minutes end. No Collapse or Jackpot.
+const CROWN=Object.freeze({grab:40,step:6,rush:3,maxRate:3,toWin:100,duration:240,points:5,first:3,returnAfter:20,color:'#ffd34d',noEvents:Object.freeze(['collapse','jackpot']),
  spots:Object.freeze([{x:1400,y:520},{x:2200,y:1180},{x:1380,y:1560},{x:650,y:1100},{x:2250,y:400},{x:550,y:1800},{x:900,y:300},{x:2000,y:1900}].map(Object.freeze))});
+const crownRate=(c,time)=>Math.min(CROWN.maxRate,1+Math.floor(Math.max(0,time-c.since)/CROWN.step));
 // Team bot roles, by bot number: attackers go for the enemy flag, defenders guard home, roamers do either.
 const CTF_ROLES=['attack','defend','attack','roam','roam'];
 const CRATE_RADIUS=28;
@@ -305,15 +314,16 @@ const ORBIT_SLOTS=Array.from({length:38},(_,slot)=>Object.freeze(makeOrbitSlot(s
 function orbitSlot(slot){return ORBIT_SLOTS[slot]||makeOrbitSlot(slot);}
 class MagnetWorld{
  constructor({name='You',difficulty='normal',random=Math.random,duration=MM.duration,mode='ffa'}={}){
-  this.mode=['ctf','teams','hill'].includes(mode)?mode:'ffa';const ctf=this.mode==='ctf',teams=ctf||this.mode==='teams';
-  this.random=random;this.difficulty=difficulty;this.duration=this.mode!=='ffa'&&duration===MM.duration?(ctf?CTF.duration:teams?TEAMS.duration:HILL.duration):duration;this.time=0;this.nextId=1;this.finished=false;this.ground=[];this.shots=[];this.effects=[];this.labels=[];this.events=[];this.feed=[];
+  this.mode=['ctf','teams','dom','crown'].includes(mode)?mode:'ffa';const ctf=this.mode==='ctf',teams=ctf||this.mode==='teams'||this.mode==='dom';
+  this.random=random;this.difficulty=difficulty;const durations={ctf:CTF.duration,teams:TEAMS.duration,dom:DOM.duration,crown:CROWN.duration};this.duration=duration===MM.duration&&durations[this.mode]?durations[this.mode]:duration;this.time=0;this.nextId=1;this.finished=false;this.ground=[];this.shots=[];this.effects=[];this.labels=[];this.events=[];this.feed=[];
   this.wrecks=newWrecks();
   this.wells=[{x:1400,y:1100,r:65},{x:500,y:500,r:65},{x:2300,y:1700,r:65}];
   this.pads=PAD_SPOTS.map(p=>({...p,kind:-1,readyAt:POWER.first}));this.vortices=[];this.stardust=[];this.arenaEvent=null;this.nextEventAt=EVENT.first;this.lastEvent=null;
   this.covers=[{x:1010,y:880,r:43},{x:1790,y:1320,r:43},{x:680,y:1580,r:51},{x:2120,y:620,r:51},{x:1720,y:480,r:38},{x:1080,y:1720,r:38},{x:380,y:1050,r:45},{x:2420,y:1150,r:45}];
   if(ctf){this.flags=CTF.bases.map((b,team)=>({team,x:b.x,y:b.y,state:0,carrier:0,droppedAt:0}));this.captures=[0,0];this.winner=-1;}
   if(this.mode==='teams'){this.teamScore=[0,0];this.winner=-1;}
-  if(this.mode==='hill'){const s=HILL.spots[Math.floor(this.random()*HILL.spots.length)];this.hill={x:s.x,y:s.y,nx:s.x,ny:s.y,moveAt:HILL.move,holder:0,contested:false};this.pickNextHill();this.winner=0;}
+  if(this.mode==='dom'){this.teamScore=[0,0];this.winner=-1;this.domTick=0;this.zones=DOM.points.map(p=>({x:p.x,y:p.y,owner:-1,cap:-1,progress:0,contested:false}));}
+  if(this.mode==='crown'){const far=CROWN.spots.filter(s=>distance(s,{x:1400,y:1100})>=700),s=far[Math.floor(this.random()*far.length)];this.crown={state:-1,x:s.x,y:s.y,holder:0,since:0,droppedAt:0,readyAt:CROWN.first};this.winner=0;}
   this.human=this.actor(name,'#64eee0',true);this.human.homeColor='#64eee0';if(teams)this.human.team=0;this.actors=[this.human];this.spawn(this.human,true,0);
   // Team modes: 9 bots, 4 on your team and 5 on the other (5 against 5), in team colors.
   for(let i=0;i<(teams?9:MM.bots);i++){const team=teams?(i<4?0:1):undefined,color=teams?CTF.palettes[team][team?i-4:i+1]:PALETTE[i],a=this.actor(PILOTS[i],color,false);
@@ -322,7 +332,7 @@ class MagnetWorld{
   // A ring of easy salvage teaches collection on the first run.
   for(let i=0;i<22;i++){const a=i*.47,r=105+i*5;this.ground[i].x=1400+Math.cos(a)*r;this.ground[i].y=1100+Math.sin(a)*r;}
  }
- actor(name,color,human){return{id:this.nextId++,name,color,human,x:0,y:0,prevX:0,prevY:0,vx:0,vy:0,hp:3,alive:true,pieces:[],phase:this.random()*Math.PI*2,score:0,kills:0,deaths:0,steals:0,seen:new Set(),moveX:0,moveY:0,aim:-Math.PI/2,fire:false,magnet:false,nextShot:0,shieldUntil:0,hurtUntil:0,lastShot:-99,lastHurt:-99,repair:0,think:0,respawnAt:0,flashUntil:0,powerUntil:0,powerKind:-1,powerAt:0,leechAt:0,skin:0,core:0,tail:0,hill:0};}
+ actor(name,color,human){return{id:this.nextId++,name,color,human,x:0,y:0,prevX:0,prevY:0,vx:0,vy:0,hp:3,alive:true,pieces:[],phase:this.random()*Math.PI*2,score:0,kills:0,deaths:0,steals:0,seen:new Set(),moveX:0,moveY:0,aim:-Math.PI/2,fire:false,magnet:false,nextShot:0,shieldUntil:0,hurtUntil:0,lastShot:-99,lastHurt:-99,repair:0,think:0,respawnAt:0,flashUntil:0,powerUntil:0,powerKind:-1,powerAt:0,leechAt:0,skin:0,core:0,tail:0,crown:0};}
  scrap(x,y,kind=null){if(x==null||y==null){const p=this.freePoint();x=p.x;y=p.y;}if(kind==null){const n=this.random();kind=n>.94?2:n>.72?1:0;}return{id:this.nextId++,x,y,kind,color:METAL[kind],origin:0,vx:0,vy:0,pickupAt:0,ignoreId:0,ignoreUntil:0,expiresAt:this.time+65+this.random()*35,dead:false};}
  freePoint(clearance=25){let p={x:1400,y:1100};for(let i=0;i<80;i++){p={x:70+this.random()*(MM.width-140),y:70+this.random()*(MM.height-140)};if(this.covers.every(c=>distance(c,p)>c.r+clearance))break;}return p;}
  // A free spot near a team's base (capture the flag spawns).
@@ -331,17 +341,28 @@ class MagnetWorld{
  // Team of the ship with this id in capture the flag (undefined otherwise): used to switch off friendly fire.
  teamOf(id){return this.teamPlay()?this.actors.find(b=>b.id===id)?.team:undefined;}
  // Capture the flag and team battle: two teams, no friendly fire, team spawns.
- teamPlay(){return this.mode==='ctf'||this.mode==='teams';}
- // King of the hill: the next spot, 700-1800 px from the current one (it crosses the map but can be reached in time).
- pickNextHill(){const h=this.hill;let pick=null;for(let i=0;i<30&&!pick;i++){const s=HILL.spots[Math.floor(this.random()*HILL.spots.length)],d=distance(s,h);if(d>=700&&d<=1800)pick=s;}pick=pick||HILL.spots.find(s=>s.x!==h.x||s.y!==h.y);h.nx=pick.x;h.ny=pick.y;}
- onHill(a){return a.alive&&!(a.shieldUntil>this.time)&&!hasPower(a,'phase',this.time)&&distance(a,this.hill)<HILL.r;}
- // Online, only the room moves the hill and counts hill time; clients draw what it sends.
- updateHill(dt){if(this.mode!=='hill'||this.finished||this.predictInteractions)return;const h=this.hill;
-  if(this.time>=h.moveAt){h.x=h.nx;h.y=h.ny;h.moveAt+=HILL.move;this.pickNextHill();}
-  let holder=null,count=0;for(const a of this.actors)if(this.onHill(a)){count++;holder=a;}
-  h.contested=count>1;h.holder=count===1?holder.id:0;if(count!==1)return;
-  const before=Math.floor(holder.hill||0);holder.hill=(holder.hill||0)+dt;if(Math.floor(holder.hill)>before)holder.score+=HILL.points;
-  if(holder.hill>=HILL.toWin){holder.hill=HILL.toWin;this.winner=holder.id;this.finished=true;this.event('finished');}}
+ teamPlay(){return this.mode==='ctf'||this.mode==='teams'||this.mode==='dom';}
+ // Domination. Online, only the room changes points and scores; clients draw what it sends.
+ counts(z){const n=[0,0];for(const a of this.actors)if(a.alive&&(a.team===0||a.team===1)&&!(a.shieldUntil>this.time)&&!hasPower(a,'phase',this.time)&&distance(a,z)<DOM.r)n[a.team]++;return n;}
+ updateDom(dt){if(this.mode!=='dom'||this.finished||this.predictInteractions)return;
+  this.zones.forEach((z,i)=>{const n=this.counts(z);z.contested=n[0]>0&&n[1]>0;if(z.contested)return;const t=n[0]?0:n[1]?1:-1;
+   const undo=k=>{z.progress=Math.max(0,z.progress-k);if(!z.progress)z.cap=-1;};
+   if(t<0){undo(DOM.drain*dt);return;}const rate=Math.min(DOM.maxRate,1+.5*(n[t]-1))/DOM.capTime*dt;
+   if(z.owner===t||z.cap!==t&&z.progress>0){undo(rate);return;}
+   z.cap=t;z.progress+=rate;if(z.progress>=1){z.owner=t;z.progress=0;z.cap=-1;for(const a of this.actors)if(a.alive&&a.team===t&&distance(a,z)<DOM.r)a.score+=DOM.capturePoints;this.event('domCapture',{zone:i,team:t});}});
+  this.domTick+=dt;while(this.domTick>=1){this.domTick-=1;for(const z of this.zones)if(z.owner>=0)this.teamScore[z.owner]++;}
+  const s=this.teamScore;if(s[0]>=DOM.toWin||s[1]>=DOM.toWin){this.winner=s[0]>s[1]?0:s[1]>s[0]?1:-1;this.finished=true;this.event('finished');}}
+ // Hold the crown. Online, only the room moves the crown between ships and counts crown points; clients keep a carried
+ // crown on its holder.
+ updateCrown(dt){if(this.mode!=='crown'||this.finished)return;const c=this.crown,room=!this.predictInteractions;
+  if(c.state===1){const h=this.actors.find(a=>a.id===c.holder);
+   if(!h||!h.alive){if(room){c.state=2;c.droppedAt=this.time;c.holder=0;if(h){c.x=h.x;c.y=h.y;}this.event('crownDrop');}return;}
+   c.x=h.x;c.y=h.y;if(!room)return;const before=Math.floor(h.crown||0);h.crown=(h.crown||0)+crownRate(c,this.time)*dt;const gained=Math.floor(h.crown)-before;if(gained>0)h.score+=gained*CROWN.points;
+   if(h.crown>=CROWN.toWin){h.crown=CROWN.toWin;this.winner=h.id;this.finished=true;this.event('finished');}return;}
+  if(!room)return;if(c.state===-1){if(this.time<c.readyAt)return;c.state=0;this.event('crownReady');}
+  if(c.state===2&&this.time-c.droppedAt>=CROWN.returnAfter){const options=CROWN.spots.filter(s=>distance(s,c)>500),s=options[Math.floor(this.random()*options.length)];c.x=s.x;c.y=s.y;c.state=0;this.event('crownReturn');}
+  let best=null,bd=CROWN.grab+MM.coreRadius;for(const a of this.actors){if(!a.alive||hasPower(a,'phase',this.time))continue;const d=distance(a,c);if(d<bd){bd=d;best=a;}}
+  if(best){c.state=1;c.holder=best.id;c.since=this.time;c.x=best.x;c.y=best.y;best.shieldUntil=Math.min(best.shieldUntil,this.time);best.rushStart=this.time;best.rushUntil=this.time+CROWN.rush;this.event('crownTake',{id:best.id});}}
  safeSpawn(actor){let best=this.freePoint(),bestScore=-1;for(let i=0;i<45;i++){const p=this.freePoint();let d=Infinity;for(const a of this.actors)if(a!==actor&&a.alive)d=Math.min(d,distance(a,p));const hole=this.arenaEvent?.kind==='hole'?this.arenaEvent:null;if(hole)d=Math.min(d,distance(hole,p)-this.holePull(hole,this.time+3)*.6);if(d>bestScore){best=p;bestScore=d;}if(d>550)break;}return best;}
  spawn(a,initial=false,index=0){
   a.wreckMod=0;a.spawnSeq=(a.spawnSeq||0)+1;
@@ -396,17 +417,17 @@ class MagnetWorld{
   const st=botStyle(a),skill=this.difficulty==='easy'?0:this.difficulty==='hard'?2:1,now=this.time;
   // Who is near, who is a threat, and which bots already chose each player (so a player is never swarmed).
   let nearest=null,nearestDist=Infinity;const chosen=new Map();
-  const ctf=this.mode==='ctf',teamPlay=this.teamPlay(),ally=b=>teamPlay&&b.team===a.team,hill=this.mode==='hill'?this.hill:null;
+  const ctf=this.mode==='ctf',teamPlay=this.teamPlay(),ally=b=>teamPlay&&b.team===a.team,zones=this.mode==='dom'?this.zones:null,crown=this.mode==='crown'?this.crown:null,crownHolder=crown&&crown.state===1?crown.holder:0;
   const backing=new Map();if(this.mode==='teams')for(const b of this.actors)if(b!==a&&b.alive&&!b.human&&b.team===a.team&&b.targetId&&now<b.targetUntil)backing.set(b.targetId,(backing.get(b.targetId)||0)+1);
   for(const b of this.actors){if(b===a||!b.alive)continue;if(!b.human&&b.targetId&&now<b.targetUntil)chosen.set(b.targetId,(chosen.get(b.targetId)||0)+1);if(ally(b))continue;
    if(b.shieldUntil<now){const d=distance(a,b);if(d<nearestDist){nearest=b;nearestDist=d;}}}
   // Target: the best-scoring ship in range. Closer, weaker and recently-hurt ships score higher (how much depends on
   // the play style); the ship that just hit this bot scores much higher (revenge); the current target is sticky.
   let enemy=null,enemyDist=Infinity,best=-Infinity;const revenge=now-(a.lastAttackedAt??-99)<4?a.lastAttacker:0;
-  for(const b of this.actors){if(b===a||!b.alive||b.shieldUntil>=now||ally(b))continue;const d=distance(a,b);if(d>st.engage&&b.id!==revenge&&!(ctf&&b.carrying&&d<1100)&&!(hill&&b.id===hill.holder&&d<900))continue;
+  for(const b of this.actors){if(b===a||!b.alive||b.shieldUntil>=now||ally(b))continue;const d=distance(a,b);if(d>st.engage&&b.id!==revenge&&!(ctf&&b.carrying&&d<1100)&&!(crownHolder&&b.id===crownHolder&&d<1200))continue;
    let score=-d/220+(3-b.hp)*.5*st.weak+Math.max(0,8-b.pieces.length)*.05*st.weak;
-   if(b.id===revenge)score+=2.4;if(backing.has(b.id))score+=Math.min(2,backing.get(b.id))*.45;if(ctf&&b.carrying)score+=3.5;if(hill&&b.id===hill.holder)score+=2;else if(hill&&distance(b,hill)<HILL.r+40)score+=.8;if(ctf&&distance(b,CTF.bases[a.team])<450)score+=1;if(b.id===a.targetId&&now<a.targetUntil)score+=1.5;if(st.third&&now-(b.lastHurt??-99)<1.5)score+=1.3;
-   if(b.human&&b.id!==a.targetId&&(chosen.get(b.id)||0)>=2&&b.id!==revenge)score-=5;
+   if(b.id===revenge)score+=2.4;if(backing.has(b.id))score+=Math.min(2,backing.get(b.id))*.45;if(ctf&&b.carrying)score+=3.5;if(b.id===crownHolder)score+=3;if(zones)for(const z of zones)if(distance(b,z)<DOM.r+60){score+=z.owner===a.team?1.4:.8;break;}if(ctf&&distance(b,CTF.bases[a.team])<450)score+=1;if(b.id===a.targetId&&now<a.targetUntil)score+=1.5;if(st.third&&now-(b.lastHurt??-99)<1.5)score+=1.3;
+   if((b.human||b.id===crownHolder)&&b.id!==a.targetId&&(chosen.get(b.id)||0)>=(b.id===crownHolder?3:2)&&b.id!==revenge)score-=5;
    if(score>best){best=score;enemy=b;enemyDist=d;}}
   if(enemy){if(enemy.id!==a.targetId||now>=a.targetUntil){a.targetId=enemy.id;a.targetUntil=now+2.5+this.random()*1.5;}}else a.targetId=0;
   // Capture the flag objective: carriers head home; everyone near hunts an enemy carrying our flag; a dropped flag of
@@ -419,13 +440,27 @@ class MagnetWorld{
    if(!goal&&theirs.state!==1&&(role==='attack'||role==='roam'&&distance(a,theirs)<1000))goal=theirs;
    if(!goal&&theirs.state===1&&role!=='defend'){const c=this.actors.find(b=>b.id===theirs.carrier);if(c){const side=a.id%2?1:-1;goal={x:c.x+side*90,y:c.y-side*60};}}
    if(!goal&&role==='defend'&&!(enemy&&distance(enemy,home)<520)){const dir=home.x<MM.width/2?1:-1;goal={x:home.x+dir*170,y:home.y+((a.id%3)-1)*90};}}
-  // King of the hill: armored bots go to the hill and keep moving inside it; marksmen ring it from outside while
-  // someone else is on it and slip in when it is free; scavengers come once well armored. In the last seconds
-  // before the hill moves, bots not holding it head for the next spot.
-  if(hill){const kind=BOT_STYLE_ORDER[(a.botIndex??a.id)%BOT_STYLE_ORDER.length],soon=now>=hill.moveAt-HILL.warn&&hill.holder!==a.id,spot=soon?{x:hill.nx,y:hill.ny}:hill;
-   if(!(kind==='scavenger'&&a.pieces.length<14)){
-    if(kind==='marksman'&&!soon&&(hill.contested||hill.holder&&hill.holder!==a.id)&&distance(a,hill)>HILL.r){const ang=Math.atan2(a.y-hill.y,a.x-hill.x)+(a.id%2?.3:-.3),rr=HILL.r+230;goal={x:hill.x+Math.cos(ang)*rr,y:hill.y+Math.sin(ang)*rr};}
-    else{const ang=a.id*2.1+now*.55*(a.id%2?1:-1),rr=HILL.r*.45;goal={x:spot.x+Math.cos(ang)*rr,y:spot.y+Math.sin(ang)*rr};}}}
+  const kind=BOT_STYLE_ORDER[(a.botIndex??a.id)%BOT_STYLE_ORDER.length],holding=crownHolder===a.id;
+  // Domination: every few seconds a bot picks a point: ones the other team owns or is taking score higher, our own
+  // ones only when enemies are near them; nearer is better, crowding (more than two teammates on it) is worse;
+  // defenders favour the point on our side. It moves around inside the point; marksmen cover a contested point from
+  // just outside; scavengers arm up first.
+  if(zones&&!(kind==='scavenger'&&a.pieces.length<12)){const role=CTF_ROLES[(a.botIndex??a.id)%CTF_ROLES.length],home=a.team===0?0:2;
+   const pickedOk=a.domPick!=null&&now<(a.domUntil||0)&&!(zones[a.domPick].owner===a.team&&!zones[a.domPick].progress&&!this.counts({x:zones[a.domPick].x,y:zones[a.domPick].y})[1-a.team]);
+   if(!pickedOk){let bestZ=0,bestS=-Infinity;zones.forEach((z,i)=>{let s=-distance(a,z)/500;const threat=this.actors.some(b=>b.alive&&b.team!==a.team&&distance(b,z)<DOM.r+250);
+     if(z.owner!==a.team)s+=2+(z.owner<0?.3:0);else s+=threat?2.2:-1.2;if(role==='defend'&&i===home)s+=1.2;if(role==='attack'&&i!==home)s+=.5;
+     const crowd=this.actors.filter(b=>b!==a&&b.alive&&!b.human&&b.team===a.team&&b.domPick===i).length;s-=.6*Math.max(0,crowd-1);if(s>bestS){bestS=s;bestZ=i;}});
+    a.domPick=bestZ;a.domUntil=now+3+this.random()*2;}
+   const z=zones[a.domPick];if(kind==='marksman'&&z.contested&&distance(a,z)>DOM.r){const ang=Math.atan2(a.y-z.y,a.x-z.x)+(a.id%2?.3:-.3),rr=DOM.r+200;goal={x:z.x+Math.cos(ang)*rr,y:z.y+Math.sin(ang)*rr};}
+   else{const ang=a.id*2.1+now*.55*(a.id%2?1:-1),rr=DOM.r*.45;goal={x:z.x+Math.cos(ang)*rr,y:z.y+Math.sin(ang)*rr};}}
+  // Hold the crown: the holder runs from whoever is close (bending away from walls, drifting to the middle when
+  // nobody is near) while still shooting; everyone else goes for the crown or its holder (marksmen keep their range,
+  // scavengers arm up first).
+  if(crown){if(holding){let fx=0,fy=0;for(const b of this.actors)if(b!==a&&b.alive){const dx=a.x-b.x,dy=a.y-b.y,d=hyp(dx,dy)||1;if(d<750){fx+=dx/d*(750-d)/750;fy+=dy/d*(750-d)/750;}}
+    const edge=420;fx+=(a.x<edge?(edge-a.x)/edge:a.x>MM.width-edge?-(a.x-MM.width+edge)/edge:0)*1.4;fy+=(a.y<edge?(edge-a.y)/edge:a.y>MM.height-edge?-(a.y-MM.height+edge)/edge:0)*1.4;
+    if(hyp(fx,fy)<.05){fx=(MM.width/2-a.x)/1000;fy=(MM.height/2-a.y)/1000;}const gl=hyp(fx,fy)||1;goal={x:a.x+fx/gl*300,y:a.y+fy/gl*300};}
+   else if(crown.state>=0&&!(kind==='scavenger'&&a.pieces.length<12)){const h=crownHolder&&this.actors.find(b=>b.id===crownHolder);
+    if(kind==='marksman'&&h&&distance(a,h)<700){const ang=Math.atan2(a.y-h.y,a.x-h.x)+(a.id%2?.3:-.3);goal={x:h.x+Math.cos(ang)*420,y:h.y+Math.sin(ang)*420};}else goal={x:crown.x,y:crown.y};}}
   let dust=null,dustDist=450;for(const m of this.stardust||[]){const d=distance(a,m);if(d<dustDist){dust=m;dustDist=d;}}
   const hotRing=this.arenaEvent?.kind==='collapse'&&now>=this.arenaEvent.start&&now<this.arenaEvent.end?this.arenaEvent:null,hotR=hotRing?this.collapseRadius(hotRing):0,gold=this.eventActive('rain');
   let loot=null,lootDist=Infinity;for(const item of this.ground){if(item.dead||!canCollectScrap(a,item,now)||item.ignoreId===a.id&&now<item.ignoreUntil)continue;if(hotRing&&(item.x-hotRing.x)*(item.x-hotRing.x)+(item.y-hotRing.y)*(item.y-hotRing.y)>hotR*hotR)continue;const d=distance(a,item)/(1+item.kind*.15);if(d<lootDist){loot=item;lootDist=d;}}
@@ -445,7 +480,7 @@ class MagnetWorld{
   // (Measured: shooting back on the way, or turning to fight, got more bots killed than it saved.)
   const threat=a.hp===1?(this.actors.find(b=>b.id===revenge&&b.alive)||(nearestDist<500?nearest:null)):null;
   if(a.hp===1&&now-a.lastHurt>1&&!a.carrying){let well=null,bestCost=Infinity;for(const w of this.wells){const d=distance(a,w);let cost=d;if(threat){const td=distance(threat,w);cost+=Math.max(0,520-td)*1.3;const ax=w.x-a.x,ay=w.y-a.y,bx=threat.x-a.x,by=threat.y-a.y,cos=(ax*bx+ay*by)/((hyp(ax,ay)*hyp(bx,by))||1);if(cos>.5)cost+=350;}if(cost<bestCost){bestCost=cost;well=w;}}tx=well.x;ty=well.y;a.fire=false;a.magnet=false;if(distance(a,well)<30){tx=a.x;ty=a.y;}if(threat&&distance(a,threat)<600&&distance(a,well)>well.r){if(now>=(a.weaveUntil??0)){a.weave=a.weave===1?-1:1;a.weaveUntil=now+.5+this.random()*.4;}const dx=well.x-a.x,dy=well.y-a.y,dl=hyp(dx,dy)||1;tx=a.x+dx/dl*200-dy/dl*a.weave*170;ty=a.y+dy/dl*200+dx/dl*a.weave*170;}}
-  else if(goal&&(a.carrying||a.pieces.length>reserve+2||!loot||lootDist>350)){tx=goal.x;ty=goal.y;if(a.carrying)a.magnet=false;}
+  else if(goal&&(a.carrying||holding||a.pieces.length>reserve+2||!loot||lootDist>350)){tx=goal.x;ty=goal.y;if(a.carrying||holding)a.magnet=false;}
   else if(nearest&&nearestDist<270&&(a.pieces.length<5||a.hp===1||phase)){
    // Flee away from the nearest ship, bending away from walls so it does not run itself into a corner.
    let fx=a.x-nearest.x,fy=a.y-nearest.y;const fl=hyp(fx,fy)||1;fx/=fl;fy/=fl;const edge=360;
@@ -596,14 +631,14 @@ class MagnetWorld{
   for(const a of this.actors){if(!a.alive)continue;a.prevX=a.x;a.prevY=a.y;for(const p of a.pieces){p.prevX=p.x;p.prevY=p.y;}if(!a.human)this.think(a,dt);if(a.human&&this.humanMovementStep)this.humanMovementStep(a,dt);else this.move(a,dt);}
   for(let i=0;i<this.actors.length;i++){const a=this.actors[i];if(!a.alive)continue;for(let j=i+1;j<this.actors.length;j++){const b=this.actors[j];if(!b.alive)continue;const dx=b.x-a.x,dy=b.y-a.y,d=hyp(dx,dy);if(d<33){const len=d||1,px=(d?dx/len:1)*(33-d)*.5,py=(d?dy/len:0)*(33-d)*.5;a.x-=px;a.y-=py;b.x+=px;b.y+=py;this.bound(a);this.bound(b);}}}
   for(const a of this.actors)if(a.alive){advanceShield(a,dt,this.time);this.updateOrbits(a);if(a.fire)this.shoot(a);}
-  this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateStardust(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.updateCollapse();this.updateHole();this.updateFlags();this.updateHill(dt);this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
+  this.updateLeech();this.updateShots(dt);this.updateScrap(dt);this.updateStardust(dt);this.updateWrecks(dt);this.updatePads();this.updateEvents();this.updateCollapse();this.updateHole();this.updateFlags();this.updateDom(dt);this.updateCrown(dt);this.vortices=(this.vortices||[]).filter(v=>v.until>this.time);
   for(const a of this.actors){if(!a.alive){if(this.time>=a.respawnAt)this.spawn(a);continue;}
    const canRepair=a.hp<3&&this.time-a.lastHurt>2&&this.time-a.lastShot>1.5&&this.wells.some(w=>distance(a,w)<w.r-9);
    if(canRepair){a.repair+=dt;if(a.repair>=3){a.hp++;a.repair=0;if(a.human)this.event('repair');}}else a.repair=0;
   }
   for(const p of this.effects){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=Math.exp(-dt*3);p.vy*=Math.exp(-dt*3);p.life-=dt;}this.effects=this.effects.filter(p=>p.life>0);
   for(const p of this.labels){p.y-=dt*22;p.life-=dt;}this.labels=this.labels.filter(p=>p.life>0);
-  if(this.time>=this.duration&&!this.finished){this.time=this.duration;this.finished=true;if(this.teamPlay()){const s=this.mode==='ctf'?this.captures:this.teamScore;this.winner=s[0]>s[1]?0:s[1]>s[0]?1:-1;}else if(this.mode==='hill'){const top=this.ranking()[0];this.winner=top&&top.hill>0?top.id:0;}this.event('finished');}
+  if(this.time>=this.duration&&!this.finished){this.time=this.duration;this.finished=true;if(this.teamPlay()){const s=this.mode==='ctf'?this.captures:this.teamScore;this.winner=s[0]>s[1]?0:s[1]>s[0]?1:-1;}else if(this.mode==='crown'){const top=this.ranking()[0];this.winner=top&&top.crown>0?top.id:0;}this.event('finished');}
  }
  // Capture the flag. Online, only the room changes flag state; clients just keep a carried flag on its carrier.
  updateFlags(){if(this.mode!=='ctf'||this.finished)return;
@@ -872,7 +907,7 @@ class MagnetWorld{
   if(!e){
    if(this.nextEventAt==null)this.nextEventAt=EVENT.first;
    if(this.time<this.nextEventAt)return;
-   const options=EVENTS.filter(k=>k!==this.lastEvent&&!(this.mode==='ctf'&&CTF.noEvents.includes(k))&&!(this.mode==='hill'&&HILL.noEvents.includes(k))),kind=options[Math.floor(this.random()*options.length)];
+   const options=EVENTS.filter(k=>k!==this.lastEvent&&!(this.mode==='ctf'&&CTF.noEvents.includes(k))&&!(this.mode==='dom'&&DOM.noEvents.includes(k))&&!(this.mode==='crown'&&CROWN.noEvents.includes(k))),kind=options[Math.floor(this.random()*options.length)];
    const start=this.time+EVENT_WARN(kind),end=start+EVENT.length[kind];
    if(end>this.duration-2){this.nextEventAt=Infinity;return;}
    this.arenaEvent=this.makeEvent(kind);this.lastEvent=kind;return;
@@ -907,13 +942,13 @@ class MagnetWorld{
   this.arenaEvent=null;this.nextEventAt=this.time+EVENT.gapMin+this.random()*(EVENT.gapMax-EVENT.gapMin);return true;}
  // Admin: announce a chosen event now (with its usual warning), ending any current one first.
  forceEvent(kind){if(!EVENTS.includes(kind))return false;if(this.arenaEvent)this.endEvent();this.arenaEvent=this.makeEvent(kind);this.lastEvent=kind;return true;}
- ranking(){const hill=this.mode==='hill';return this.actors.slice().sort((a,b)=>(hill?(b.hill||0)-(a.hill||0):0)||b.score-a.score||b.kills-a.kills||b.pieces.length-a.pieces.length);}
+ ranking(){const crown=this.mode==='crown';return this.actors.slice().sort((a,b)=>(crown?(b.crown||0)-(a.crown||0):0)||b.score-a.score||b.kills-a.kills||b.pieces.length-a.pieces.length);}
 }
 /* ENGINE_END */
 // Orbit positions, particle effects, and colors are rebuilt locally rather than
 // transferred as hundreds of redundant objects on every update.
 const WIRE_METALS=['#9dbbd5','#c98d7a','#ffde85'];
-const WIRE_ACTOR_FIELDS=['id','name','color','human','x','y','vx','vy','hp','alive','phase','score','kills','deaths','steals','aim','fire','magnet','shieldUntil','hurtUntil','lastShot','lastHurt','repair','respawnAt','flashUntil','spawnSeq','moveX','moveY','pullRank','orbitRank','railRank','shieldTightness','orbitDelay','bankedLevel','powerUntil','powerKind','powerAt','fullSalvage','wreckMod','rushStart','rushUntil','leechId','skin','core','tail','team','carrying','hill'];
+const WIRE_ACTOR_FIELDS=['id','name','color','human','x','y','vx','vy','hp','alive','phase','score','kills','deaths','steals','aim','fire','magnet','shieldUntil','hurtUntil','lastShot','lastHurt','repair','respawnAt','flashUntil','spawnSeq','moveX','moveY','pullRank','orbitRank','railRank','shieldTightness','orbitDelay','bankedLevel','powerUntil','powerKind','powerAt','fullSalvage','wreckMod','rushStart','rushUntil','leechId','skin','core','tail','team','carrying','crown'];
 const wireDust=(w,visible)=>(w.stardust||[]).filter(visible).map(m=>[m.id,Math.round(m.x),Math.round(m.y)]);
 const unwireDust=list=>(list||[]).map(([id,x,y])=>({id,x,y}));
 // Power-up pads: [x, y, kind (-1 while charging), readyAt].
@@ -933,9 +968,14 @@ const wireCtf=w=>w.mode==='ctf'?[w.captures[0],w.captures[1],w.winner,...w.flags
 const unwireCtf=c=>c?{mode:'ctf',captures:[c[0],c[1]],winner:c[2],flags:[c[3],c[4]].map(([state,x,y,carrier,droppedAt],team)=>({team,state,x,y,carrier,droppedAt}))}:{mode:'ffa'};
 // Team battle: [blue knockouts, red knockouts, winner]. Absent otherwise.
 const wireTeams=w=>w.mode==='teams'?[w.teamScore[0],w.teamScore[1],w.winner]:undefined;
-// King of the hill: [x, y, next x, next y, moves at, holder id (0 none), contested, winner id (0 none)]. Absent otherwise.
-const wireHill=w=>w.mode==='hill'?[Math.round(w.hill.x),Math.round(w.hill.y),Math.round(w.hill.nx),Math.round(w.hill.ny),r2(w.hill.moveAt),w.hill.holder,w.hill.contested?1:0,w.winner]:undefined;
-const unwireMode=(cf,tb,hl)=>hl?{mode:'hill',hill:{x:hl[0],y:hl[1],nx:hl[2],ny:hl[3],moveAt:hl[4],holder:hl[5],contested:hl[6]===1},winner:hl[7]}:tb?{mode:'teams',teamScore:[tb[0],tb[1]],winner:tb[2]}:unwireCtf(cf);
+// Domination: [blue points, red points, winner, ...points], each point [owner (-1 none), team capturing (-1 none),
+// progress 0-1, contested, x, y]. Hold the crown: [state (-1 not out yet, 0 on its spot, 1 carried, 2 dropped), x, y,
+// holder id, held since, dropped at, first appears at, winner id]. Each absent in other modes.
+const wireDom=w=>w.mode==='dom'?[w.teamScore[0],w.teamScore[1],w.winner,...w.zones.map(z=>[z.owner,z.cap,Math.round(z.progress*1000)/1000,z.contested?1:0,z.x,z.y])]:undefined;
+const wireCrown=w=>w.mode==='crown'?[w.crown.state,Math.round(w.crown.x),Math.round(w.crown.y),w.crown.holder,r2(w.crown.since),r2(w.crown.droppedAt),r2(w.crown.readyAt),w.winner]:undefined;
+const unwireMode=(cf,tb,dm,cr)=>cr?{mode:'crown',crown:{state:cr[0],x:cr[1],y:cr[2],holder:cr[3],since:cr[4],droppedAt:cr[5],readyAt:cr[6]},winner:cr[7]}
+ :dm?{mode:'dom',teamScore:[dm[0],dm[1]],winner:dm[2],zones:dm.slice(3).map(([owner,cap,progress,contested,x,y])=>({x,y,owner,cap,progress,contested:contested===1}))}
+ :tb?{mode:'teams',teamScore:[tb[0],tb[1]],winner:tb[2]}:unwireCtf(cf);
 const wireEvent=w=>{const e=w.arenaEvent;return e?[e.kind,r2(e.start),r2(e.end),Math.round(e.x),Math.round(e.y),(e.drops||[]).map(d=>[Math.round(d.x),Math.round(d.y),r2(d.t)]),e.panels??0,e.toX??0,e.toY??0,e.launched!=null?1:0,e.eaten??0,Math.round((e.progress||0)*1000)/1000,e.owner||0,e.contested?1:0,e.cracked?1:0]:0;};
 const unwireEvent=e=>e?{kind:e[0],start:e[1],end:e[2],x:e[3],y:e[4],drops:(e[5]||[]).map(([x,y,t])=>({x,y,t})),panels:e[6]??0,toX:e[7]??0,toY:e[8]??0,fired:false,shower:!!e[9],eaten:e[10]??0,progress:e[11]??0,owner:e[12]??0,contested:e[13]??0,cracked:!!e[14]}:null;
 const wireRound=n=>Math.round((Number(n)||0)*10)/10;
@@ -947,14 +987,14 @@ function wireVisibility(w,selfId,view){
 }
 function encodeWireWorld(w,selfId,view){
  const visible=wireVisibility(w,selfId,view);
- return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),wr:wireWrecks(w),cm:wireComets(w),ev:wireEvent(w),cf:wireCtf(w),tb:wireTeams(w),hl:wireHill(w),
+ return {wire:2,time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:wirePads(w),vx:wireVortices(w),wr:wireWrecks(w),cm:wireComets(w),ev:wireEvent(w),cf:wireCtf(w),tb:wireTeams(w),dm:wireDom(w),cr:wireCrown(w),
   a:w.actors.map(a=>[WIRE_ACTOR_FIELDS.map(k=>a[k]??0),a.pieces.map(p=>[p.slot,p.item.id,p.item.kind])]),
   sd:wireDust(w,visible),g:w.ground.filter(visible).map(p=>[p.id,wireRound(p.x),wireRound(p.y),p.kind,wireRound(p.vx),wireRound(p.vy),p.pickupAt,p.ignoreId,p.ignoreUntil,p.expiresAt,...(p.origin?[Number(Boolean(p.hot)),p.repelUntil>w.time?r2(p.repelUntil):0,p.origin]:p.repelUntil>w.time?[Number(Boolean(p.hot)),r2(p.repelUntil)]:p.hot?[1]:[])]),
   s:w.shots.filter(visible).map(s=>[s.item.id,s.item.kind,s.owner,wireRound(s.x),wireRound(s.y),wireRound(s.vx),wireRound(s.vy),s.life,s.bounces,...(s.pierce?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil||0),1]:s.deflectTrailUntil>w.time?[Number(Boolean(s.seek)),r2(s.deflectTrailUntil)]:s.seek?[1]:[])])};
 }
 function decodeWireWorld(w){
  if(w?.wire!==2)return w;
- return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(w.wr),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),...unwireMode(w.cf,w.tb,w.hl),effects:[],labels:[],
+ return {time:w.time,duration:w.duration,finished:w.finished,difficulty:w.difficulty,wells:w.wells,covers:w.covers,feed:w.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(w.wr),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),...unwireMode(w.cf,w.tb,w.dm,w.cr),effects:[],labels:[],
   actors:w.a.map(([values,pieces])=>{const a=Object.fromEntries(WIRE_ACTOR_FIELDS.map((k,i)=>[k,values[i]]));a.pieces=pieces.map(([slot,id,kind])=>({slot,item:{id,kind,color:WIRE_METALS[kind]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0}));return a;}),
   stardust:unwireDust(w.sd),ground:w.g.map(([id,x,y,kind,vx,vy,pickupAt,ignoreId=0,ignoreUntil=0,expiresAt=Infinity,hot=0,repelUntil=0,origin=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil})),
   shots:w.s.map(([id,kind,owner,x,y,vx,vy,life,bounces,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
@@ -973,7 +1013,7 @@ const WIRE3_KEYFRAME_TICKS=40;
 const WIRE3_ACTOR_FIELDS=WIRE_ACTOR_FIELDS.filter(k=>!['name','color','human','skin','core','tail','team'].includes(k));
 const WIRE3_BOOLEANS=new Set(['alive','fire','magnet','carrying']);
 const WIRE3_DIGITS={x:2,y:2,vx:1,vy:1,phase:3,aim:3,moveX:3,moveY:3,shieldTightness:3,orbitDelay:3,
- shieldUntil:2,hurtUntil:2,lastShot:2,lastHurt:2,repair:2,respawnAt:2,flashUntil:2,powerUntil:2,powerAt:2,rushStart:2,rushUntil:2,hill:1};
+ shieldUntil:2,hurtUntil:2,lastShot:2,lastHurt:2,repair:2,respawnAt:2,flashUntil:2,powerUntil:2,powerAt:2,rushStart:2,rushUntil:2,crown:1};
 const WIRE3_EXACT=new Set(['x','y','vx','vy']);
 const wireDigits=(n,d)=>{const f=10**d;return Math.round((Number(n)||0)*f)/f;};
 // Trailing zeros are implied by the decoder's defaults.
@@ -983,7 +1023,7 @@ class WireSender{
  encode(w,selfId,view){
   const key=this.ticks++%WIRE3_KEYFRAME_TICKS===0,visible=wireVisibility(w,selfId,view),t=w.time,delta=this.delta;
   if(key){this.pieces.clear();this.values.clear();this.ground.clear();}
-  const out={wire:3,time:w.time,finished:w.finished,pads:wirePads(w),vx:wireVortices(w),cm:wireComets(w),ev:wireEvent(w),cf:wireCtf(w),tb:wireTeams(w),hl:wireHill(w)};
+  const out={wire:3,time:w.time,finished:w.finished,pads:wirePads(w),vx:wireVortices(w),cm:wireComets(w),ev:wireEvent(w),cf:wireCtf(w),tb:wireTeams(w),dm:wireDom(w),cr:wireCrown(w)};
   if(delta)out.n=this.ticks;
   const wrecks=wireWrecks(w),wreckText=JSON.stringify(wrecks);
   if(key||this.wreckText!==wreckText){out.wr=wrecks;this.wreckText=wreckText;}
@@ -1046,7 +1086,7 @@ class WireReceiver{
    a.pieces=[];for(let i=0;i<pieces.length;i+=3)a.pieces.push({slot:pieces[i],item:{id:pieces[i+1],kind:pieces[i+2],color:WIRE_METALS[pieces[i+2]]},x:a.x,y:a.y,prevX:null,prevY:null,angle:0});
    actors.push(a);
   }
-  return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(this.wrecks),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),...unwireMode(w.cf,w.tb,w.hl),effects:[],labels:[],actors,
+  return {time:w.time,finished:w.finished,...this.statics,feed:this.feed,pads:unwirePads(w.pads),vortices:unwireVortices(w.vx),wrecks:unwireWrecks(this.wrecks),comets:unwireComets(w.cm),arenaEvent:unwireEvent(w.ev),...unwireMode(w.cf,w.tb,w.dm,w.cr),effects:[],labels:[],actors,
    stardust:unwireDust(w.sd),ground:this.groundList(w).map(([id,x,y,kind,expiresAt,vx=0,vy=0,pickupAt=0,ignoreId=0,ignoreUntil=0,hot=0,repelUntil=0,origin=0,leechTo=0,leechUntil=0])=>({id,x,y,kind,origin,color:WIRE_METALS[kind],vx,vy,pickupAt,ignoreId,ignoreUntil,expiresAt,hot,repelUntil,leechTo,leechUntil})),
    shots:w.s.map(([id,kind,owner,x,y,vx=0,vy=0,life=0,bounces=0,seek=0,deflectTrailUntil=0,pierce=0])=>({item:{id,kind,color:WIRE_METALS[kind]},owner,x,y,prevX:x,prevY:y,vx,vy,life,bounces,deflectTrailUntil,pierce:!!pierce,seek:seek===1}))};
  }
@@ -1268,7 +1308,7 @@ function reconcileScrap(previous,next,now){
    const session={code:data.code,token:data.token,seq:Math.max(resume?.seq||0,data.ack||0),shot:Math.max(resume?.shot||0,data.shotAck||0),round:0,version:0,lastSnapshot:performance.now(),timer:null,sentMove:0,sentPrediction:null,failures:0,prediction:null,playback:new SnapshotPlayback()};online=session;
    try{sessionStorage.setItem('magnet-online-session',JSON.stringify({code:session.code,token:session.token,seq:session.seq,shot:session.shot}));}catch{}
    preferredRoom='';onlineButton.textContent='Play online';joinInput.value=data.code;const url=new URL(location.href);url.searchParams.set('room',data.code);history.replaceState(null,'',url.pathname+url.search);
-   applySnapshot(data,true);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};hudAt=0;show('playing');save();updateHUD();updateRoomStrip();{const n=CTF.names[game.human.team]||'BLUE',side=n[0]+n.slice(1).toLowerCase();toast(game.mode==='hill'?`Room ${data.code}: King of the hill. Earn time alone in the gold zone. First to ${HILL.toWin}s.`:game.mode==='ctf'?`Room ${data.code}: you are ${side}. Bring the enemy flag to your base. First to ${CTF.toWin}.`:game.mode==='teams'?`Room ${data.code}: you are ${side}. First team to ${TEAMS.toWin} knockouts wins.`:`Online in room ${data.code}. Invite friends with Copy link.`);}if(data.world.finished)finish();openArenaSocket(session);
+   applySnapshot(data,true);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};hudAt=0;show('playing');save();updateHUD();updateRoomStrip();{const n=CTF.names[game.human.team]||'BLUE',side=n[0]+n.slice(1).toLowerCase();toast(game.mode==='dom'?`Room ${data.code}: Domination, you are ${side}. Capture A, B and C. First to ${DOM.toWin}.`:game.mode==='crown'?`Room ${data.code}: Hold the crown. Points grow the longer you keep it. First to ${CROWN.toWin}.`:game.mode==='ctf'?`Room ${data.code}: you are ${side}. Bring the enemy flag to your base. First to ${CTF.toWin}.`:game.mode==='teams'?`Room ${data.code}: you are ${side}. First team to ${TEAMS.toWin} knockouts wins.`:`Online in room ${data.code}. Invite friends with Copy link.`);}if(data.world.finished)finish();openArenaSocket(session);
   }catch(error){lobbyStatus.classList.add('error');lobbyStatus.textContent=error.name==='TimeoutError'?'Connection timed out. Please try again.':error.message;show('menu');}
   finally{lobbyBusy(false);}
  }
@@ -1444,7 +1484,7 @@ function reconcileScrap(previous,next,now){
   for(const p of game.labels){p.y-=dt*22;p.life-=dt;}game.labels=game.labels.filter(p=>p.life>0);
  }
 
- try{best=Number(localStorage.getItem('magnet-mayhem-best'))||0;storedBest=best;xp=Math.max(0,Number(localStorage.getItem('orbbitz-xp'))||0);try{look=cleanLook(JSON.parse(localStorage.getItem('orbbitz-look')||'{}'));owned=new Set([0,...(JSON.parse(localStorage.getItem('orbbitz-owned')||'[]')).filter(i=>Number.isInteger(i)&&i>0&&i<TAILS.length)]);try{const o=JSON.parse(localStorage.getItem('orbbitz-owned-looks')||'{}');for(const [kind,list] of [['skin',SKINS],['core',CORES]])ownedLooks[kind]=new Set((Array.isArray(o[kind])?o[kind]:[]).filter(i=>Number.isInteger(i)&&list[i]?.shop));}catch{}}catch{look={skin:0,core:0,tail:0};}if(!owned.has(look.tail))look.tail=0;const lv=levelFromXp(xp);if(!lookAllowed('skin',look.skin,lv))look.skin=0;if(!lookAllowed('core',look.core,lv))look.core=0;$('menuBest').textContent=Math.floor(best).toLocaleString();const name=localStorage.getItem('magnet-mayhem-pilot');if(name)$('playerName').value=name.slice(0,16);const difficulty=localStorage.getItem('magnet-mayhem-difficulty');if(['easy','normal','hard'].includes(difficulty))$('difficulty').value=difficulty;const mode=localStorage.getItem('orbbitz-mode');if(['ffa','ctf','teams','hill'].includes(mode))$('gameMode').value=mode;}catch{}
+ try{best=Number(localStorage.getItem('magnet-mayhem-best'))||0;storedBest=best;xp=Math.max(0,Number(localStorage.getItem('orbbitz-xp'))||0);try{look=cleanLook(JSON.parse(localStorage.getItem('orbbitz-look')||'{}'));owned=new Set([0,...(JSON.parse(localStorage.getItem('orbbitz-owned')||'[]')).filter(i=>Number.isInteger(i)&&i>0&&i<TAILS.length)]);try{const o=JSON.parse(localStorage.getItem('orbbitz-owned-looks')||'{}');for(const [kind,list] of [['skin',SKINS],['core',CORES]])ownedLooks[kind]=new Set((Array.isArray(o[kind])?o[kind]:[]).filter(i=>Number.isInteger(i)&&list[i]?.shop));}catch{}}catch{look={skin:0,core:0,tail:0};}if(!owned.has(look.tail))look.tail=0;const lv=levelFromXp(xp);if(!lookAllowed('skin',look.skin,lv))look.skin=0;if(!lookAllowed('core',look.core,lv))look.core=0;$('menuBest').textContent=Math.floor(best).toLocaleString();const name=localStorage.getItem('magnet-mayhem-pilot');if(name)$('playerName').value=name.slice(0,16);const difficulty=localStorage.getItem('magnet-mayhem-difficulty');if(['easy','normal','hard'].includes(difficulty))$('difficulty').value=difficulty;const mode=localStorage.getItem('orbbitz-mode');if(['ffa','ctf','teams','dom','crown'].includes(mode))$('gameMode').value=mode;}catch{}
  function save(){try{localStorage.setItem('magnet-mayhem-best',String(Math.floor(best)));localStorage.setItem('magnet-mayhem-pilot',$('playerName').value.trim()||'You');localStorage.setItem('magnet-mayhem-difficulty',$('difficulty').value);localStorage.setItem('orbbitz-mode',$('gameMode').value);xp=Math.max(xp,Number(localStorage.getItem('orbbitz-xp'))||0);localStorage.setItem('orbbitz-xp',String(xp));localStorage.setItem('orbbitz-look',JSON.stringify(look));localStorage.setItem('orbbitz-owned',JSON.stringify([...owned]));localStorage.setItem('orbbitz-owned-looks',JSON.stringify({skin:[...ownedLooks.skin],core:[...ownedLooks.core]}));storedBest=best;}catch{}}
  // ---- Drawing sharpness: canvas pixels per screen point, adapted to the device (online and offline) ----
  // Measured on an Iris Xe laptop: above 1x its graphics chip falls behind in busy moments and the screen
@@ -1507,7 +1547,7 @@ function reconcileScrap(previous,next,now){
  function toast(text){$('toast').textContent=text;$('toast').classList.add('show');toastUntil=performance.now()+3000;}
  function clearInput(){keys.clear();fireSources.clear();magnetSources.clear();touch=null;pointer.active=false;game.human.fire=game.human.magnet=false;game.human.moveX=game.human.moveY=0;$('fireBtn').classList.remove('engaged');$('magnetBtn').classList.remove('engaged');$('magnetBtn').setAttribute('aria-pressed','false');}
  function show(next){$('adminKeyRow').hidden=!online;state=next;if(next==='menu')$('menuBest').textContent=Math.floor(best).toLocaleString();for(const id of screens)$(id).hidden=true;const active={menu:'menuScreen',paused:'pauseScreen',help:'helpScreen',finished:'finishScreen',customize:'customizeScreen',shop:'shopScreen'}[next];if(active)$(active).hidden=false;const lobby=next==='menu'||next==='customize'||next==='shop';for(const id of panels)$(id).hidden=lobby;if(lobby)updateProgressUI();$('rebuildPanel').hidden=true;$('pauseBtn').disabled=!['playing','paused'].includes(next);$('pauseBtn').setAttribute('aria-label',next==='paused'?'Resume game':'Pause game');$('pauseBtn').title=next==='paused'?'Resume (P)':'Pause (P)';$('roomStrip').hidden=!online||['menu','customize','shop'].includes(next);$('pauseCopy').textContent=online?'Your controls are paused. The online arena keeps running, so rivals can still hit your core.':'Your core, armor, and round timer are waiting for you.';$('restartBtn').textContent=online?'Start a new room':'Start a fresh round';$('againBtn').textContent=online?'Leave to lobby':'One more round';document.body.classList.toggle('in-match',next==='playing'||next==='paused');if(next==='playing'||next==='paused')window.getSelection()?.removeAllRanges();clearInput();acc=0;if(next==='paused')$('resumeBtn').focus();if(next==='finished')$('againBtn').focus();if(next==='help')$('closeHelpBtn').focus();}
- function start(){const mode=$('gameMode').value;$('rivalsLabel').textContent=mode==='ffa'||mode==='hill'?'10 AI RIVALS':'BLUE 5 v 5 RED';disconnectOnline();game=new MagnetWorld({name:$('playerName').value.trim()||'You',difficulty:$('difficulty').value,mode});ctfSeen=null;Object.assign(game.human,look);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};pointer={x:width/2,y:height/2-160,active:false};hudAt=0;show('playing');save();updateHUD();toast(mode==='ctf'?'Capture the flag: take the red flag and bring it to your blue base. First to 3.':mode==='teams'?`Team battle: you are Blue. First team to ${TEAMS.toWin} knockouts wins.`:mode==='hill'?`King of the hill: earn time while you're alone in the gold zone. First to ${HILL.toWin}s wins.`:'Your armor is ammo. Hold click to fire; right click or E to reclaim.');play('start');document.activeElement?.blur();}
+ function start(){const mode=$('gameMode').value;$('rivalsLabel').textContent=mode==='ffa'||mode==='crown'?'10 AI RIVALS':'BLUE 5 v 5 RED';disconnectOnline();game=new MagnetWorld({name:$('playerName').value.trim()||'You',difficulty:$('difficulty').value,mode});ctfSeen=null;Object.assign(game.human,look);cam={x:game.human.x,y:game.human.y,zoom:width<720?.82:1};pointer={x:width/2,y:height/2-160,active:false};hudAt=0;show('playing');save();updateHUD();toast(mode==='ctf'?'Capture the flag: take the red flag and bring it to your blue base. First to 3.':mode==='teams'?`Team battle: you are Blue. First team to ${TEAMS.toWin} knockouts wins.`:mode==='dom'?`Domination: you are Blue. Capture A, B and C; every point you own scores each second. First to ${DOM.toWin}.`:mode==='crown'?`Hold the crown: grab it and keep it. Points grow the longer you hold it. First to ${CROWN.toWin}.`:'Your armor is ammo. Hold click to fire; right click or E to reclaim.');play('start');document.activeElement?.blur();}
  function pause(){if(state==='playing'){show('paused');save();}else if(state==='paused'){show('playing');toast('Back in orbit.');}}
  function menu(){save();disconnectOnline();lobbyStatus.textContent='Play with others, or create a room and invite friends.';lobbyStatus.classList.remove('error');$('toast').classList.remove('show');toastUntil=0;preferredRoom='';onlineButton.textContent='Play online';history.replaceState(null,'',location.pathname);show('menu');$('playerName').focus();}
  $('startForm').addEventListener('submit',e=>{e.preventDefault();connectOnline(preferredRoom?'join':'quick',preferredRoom);});$('againBtn').onclick=()=>online?menu():start();$('restartBtn').onclick=()=>online?connectOnline('create'):start();$('resumeBtn').onclick=pause;$('pauseBtn').onclick=pause;$('returnMenuBtn').onclick=menu;$('finishMenuBtn').onclick=menu;
@@ -1556,13 +1596,13 @@ function reconcileScrap(previous,next,now){
   $('fireBtn').style.setProperty('--fill',(count/capacity*100)+'%');
   const touchy=touchMode||coarsePointer;document.body.classList.toggle('touchy',touchy);document.querySelector('.ammo-caption').classList.toggle('dry',count===0);$('fireCaption').textContent=count?(touchy?'HOLD · AUTO-AIM':'HOLD CLICK / SPACE'):'OUT OF SCRAP · RECLAIM';$('magnetCaption').textContent=touchy?'HOLD TO PULL':'RIGHT CLICK / E';
  }
- function updateHUD(){const hillOn=game.mode==='hill';for(const el of document.querySelectorAll('.hill-part'))el.hidden=!hillOn;if(hillOn){$('hillStatLabel').textContent='HILL · '+HILL.toWin+'s';$('hillValue').textContent=Math.floor(game.human.hill||0)+'s';}$('boardTitle').textContent=hillOn?'HILL TIME':'SALVAGE LEADERS';
-  const teamOn=game.mode==='ctf'||game.mode==='teams';for(const el of document.querySelectorAll('.team-part'))el.hidden=!teamOn;if(teamOn){const sc=game.mode==='ctf'?game.captures:game.teamScore;$('teamStatLabel').textContent=game.mode==='ctf'?'FLAGS':'KILLS · '+TEAMS.toWin;$('teamBlue').textContent=String(sc[0]);$('teamRed').textContent=String(sc[1]);}
+ function updateHUD(){const crownOn=game.mode==='crown';for(const el of document.querySelectorAll('.crown-part'))el.hidden=!crownOn;if(crownOn){$('crownStatLabel').textContent='CROWN · '+CROWN.toWin;$('crownValue').textContent=String(Math.floor(game.human.crown||0));}$('boardTitle').textContent=crownOn?'CROWN POINTS':'SALVAGE LEADERS';
+  const teamOn=game.mode==='ctf'||game.mode==='teams'||game.mode==='dom';for(const el of document.querySelectorAll('.team-part'))el.hidden=!teamOn;if(teamOn){const sc=game.mode==='ctf'?game.captures:game.teamScore;$('teamStatLabel').textContent=game.mode==='ctf'?'FLAGS':game.mode==='dom'?'POINTS · '+DOM.toWin:'KILLS · '+TEAMS.toWin;$('teamBlue').textContent=String(sc[0]);$('teamRed').textContent=String(sc[1]);}
   const a=game.human,ranking=game.ranking(),rank=ranking.indexOf(a)+1;$('bottomNote').classList.toggle('fresh',game.time<15);best=Math.max(best,a.score);$('scoreValue').textContent=fmt(a.score);$('timeValue').textContent=clock(Math.max(0,Math.ceil(game.duration-game.time)));$('clockStat').classList.toggle('urgent',game.duration-game.time<=30);$('hpValue').textContent=`CORE ${Math.max(0,a.hp)}/3`;
   Array.from($('healthBars').querySelectorAll('i')).forEach((el,i)=>{el.className=i<a.hp?(a.hp===1?'full hurt':'full'):'';});
   $('fireBtn').disabled=!a.alive;$('magnetBtn').disabled=!a.alive;$('fireBtn').classList.toggle('engaged',a.fire&&a.pieces.length>0);$('magnetBtn').classList.toggle('engaged',a.magnet);$('magnetBtn').setAttribute('aria-pressed',String(a.magnet));
-  let message=a.wreckMod?WRECK_NAMES[a.wreckMod]+' · Equipped':'';if(!a.alive)message='Rebuilding your core…';else if(game.mode==='ctf'&&a.carrying)message='YOU HAVE THE FLAG · Bring it to your base';else if(game.mode==='ctf'&&game.flags[a.team].state===1)message='YOUR FLAG IS TAKEN · Stop the carrier';else if(holdsPower(a,game.time)&&POWERS[a.powerKind])message=`${POWER_LABELS[POWERS[a.powerKind]]} · ${Math.ceil(a.powerUntil-game.time)}s · ${POWER_HINTS[POWERS[a.powerKind]]}`;else if(a.shieldUntil>game.time)message=`SPAWN SHIELD · ${Math.ceil(a.shieldUntil-game.time)}s · Firing ends protection`;else if(a.repair>0)message=`REPAIRING CORE · ${(3-a.repair).toFixed(1)}s`;else if(!a.pieces.length)message='NO ARMOR · Pull in loose scrap';else if(a.magnet)message='DEFENSIVE ORBIT · Magnet active';else if(a.pieces.length===armorCapacity(a))message='FULL ORBIT · Collect cooled scrap for salvage';$('statusLine').textContent=game.mode==='ctf'&&a.alive&&(a.carrying||game.flags[a.team].state===1)?message:(game.mode==='hill'&&a.alive?hillNotice(a):'')||eventNotice()||rushNotice(a)||message;$('statusLine').classList.toggle('repairing',a.repair>0);
-  const list=$('leaders'),signature=ranking.map(p=>p.id+':'+p.name+':'+p.score+':'+Math.floor(p.hill||0)).join('|');if(signature!==leaderKey){leaderKey=signature;list.replaceChildren();const visible=ranking.slice(0,6);if(!visible.includes(a))visible.push(a);for(const pilot of visible){const i=ranking.indexOf(pilot),row=document.createElement('div');row.className='leader'+(pilot.id===a.id?' you':'')+(i>=6?' separated':'');const rankEl=document.createElement('span');rankEl.className='rank';rankEl.textContent=String(i+1);const dot=document.createElement('i');dot.style.background=pilot.color;const who=document.createElement('span');who.className='who';who.textContent=pilot.name+(pilot.id===a.id?' (you)':pilot.human?' · player':'');const points=document.createElement('span');points.className='points';points.textContent=game.mode==='hill'?Math.floor(pilot.hill||0)+'s':fmt(pilot.score);row.append(rankEl,dot,who,points);list.append(row);}}
+  let message=a.wreckMod?WRECK_NAMES[a.wreckMod]+' · Equipped':'';if(!a.alive)message='Rebuilding your core…';else if(game.mode==='ctf'&&a.carrying)message='YOU HAVE THE FLAG · Bring it to your base';else if(game.mode==='ctf'&&game.flags[a.team].state===1)message='YOUR FLAG IS TAKEN · Stop the carrier';else if(holdsPower(a,game.time)&&POWERS[a.powerKind])message=`${POWER_LABELS[POWERS[a.powerKind]]} · ${Math.ceil(a.powerUntil-game.time)}s · ${POWER_HINTS[POWERS[a.powerKind]]}`;else if(a.shieldUntil>game.time)message=`SPAWN SHIELD · ${Math.ceil(a.shieldUntil-game.time)}s · Firing ends protection`;else if(a.repair>0)message=`REPAIRING CORE · ${(3-a.repair).toFixed(1)}s`;else if(!a.pieces.length)message='NO ARMOR · Pull in loose scrap';else if(a.magnet)message='DEFENSIVE ORBIT · Magnet active';else if(a.pieces.length===armorCapacity(a))message='FULL ORBIT · Collect cooled scrap for salvage';$('statusLine').textContent=game.mode==='ctf'&&a.alive&&(a.carrying||game.flags[a.team].state===1)?message:(a.alive?modeNotice(a):'')||eventNotice()||rushNotice(a)||message;$('statusLine').classList.toggle('repairing',a.repair>0);
+  const list=$('leaders'),signature=ranking.map(p=>p.id+':'+p.name+':'+p.score+':'+Math.floor(p.crown||0)).join('|');if(signature!==leaderKey){leaderKey=signature;list.replaceChildren();const visible=ranking.slice(0,6);if(!visible.includes(a))visible.push(a);for(const pilot of visible){const i=ranking.indexOf(pilot),row=document.createElement('div');row.className='leader'+(pilot.id===a.id?' you':'')+(i>=6?' separated':'');const rankEl=document.createElement('span');rankEl.className='rank';rankEl.textContent=String(i+1);const dot=document.createElement('i');dot.style.background=pilot.color;const who=document.createElement('span');who.className='who';who.textContent=pilot.name+(pilot.id===a.id?' (you)':pilot.human?' · player':'');const points=document.createElement('span');points.className='points';points.textContent=game.mode==='crown'?String(Math.floor(pilot.crown||0)):fmt(pilot.score);row.append(rankEl,dot,who,points);list.append(row);}}
   const feed=$('feed'),activeFeed=game.feed.filter(e=>game.time-e.time<10),signatureFeed=JSON.stringify(activeFeed);if(signatureFeed!==feedKey){feedKey=signatureFeed;feed.replaceChildren();for(const entry of activeFeed){const line=document.createElement('div');line.className='feed-line';line.style.borderColor=entry.color;const who=document.createElement('b');who.textContent=entry.killer;who.style.color=entry.color;line.append(who,document.createTextNode(` scrapped ${entry.victim}`));feed.append(line);}}
   // Keep the status line just above the controls, across screen sizes.
   // (Wider screens only: on phones the personal-best note sits right above the controls.)
@@ -1572,7 +1612,8 @@ function reconcileScrap(previous,next,now){
  function finish(){const rank=game.ranking().indexOf(game.human)+1;awardXp();best=Math.max(best,game.human.score);save();$('finishTitle').textContent=rank===1?'You ruled the orbit.':'Round over.';$('finishCopy').textContent=rank===1?'A full orbit, a steady aim, and a scrapyard full of spare parts.':`${game.ranking()[0].name} took the top spot. There is always another round.`;
   if(game.mode==='ctf'){const mine=game.human.team,won=game.winner===mine,score=`${CTF.names[0]} ${game.captures[0]} – ${game.captures[1]} ${CTF.names[1]}`;$('finishTitle').textContent=game.winner===-1?'A draw.':won?'Your team wins!':`${CTF.names[game.winner]} team wins.`;$('finishCopy').textContent=score+(won?'. Flags home, orbits full.':game.winner===-1?'. Nobody gave an inch.':'. Get their flag next time.');}
   if(game.mode==='teams'){const mine=game.human.team,won=game.winner===mine,score=`${CTF.names[0]} ${game.teamScore[0]} – ${game.teamScore[1]} ${CTF.names[1]}`;$('finishTitle').textContent=game.winner===-1?'A draw.':won?'Your team wins!':`${CTF.names[game.winner]} team wins.`;$('finishCopy').textContent=score+(won?' knockouts. Your squad held the orbit.':game.winner===-1?' knockouts. Dead even.':' knockouts. Regroup and run it back.');}
-  if(game.mode==='hill'){const win=game.actors.find(a=>a.id===game.winner),mine=Math.floor(game.human.hill||0);$('finishTitle').textContent=win===game.human?'King of the hill!':win?`${win.name} is king of the hill.`:'Nobody held the hill.';$('finishCopy').textContent=win===game.human?`${mine}s on the hill. The crown is yours.`:`You held it for ${mine}s${win?`, ${win.name} for ${Math.floor(win.hill||0)}s`:''}. Take it back next round.`;}
+  if(game.mode==='dom'){const mine=game.human.team,won=game.winner===mine,score=`${CTF.names[0]} ${game.teamScore[0]} – ${game.teamScore[1]} ${CTF.names[1]}`;$('finishTitle').textContent=game.winner===-1?'A draw.':won?'Your team wins!':`${CTF.names[game.winner]} team wins.`;$('finishCopy').textContent=score+(won?' points. You owned the map.':game.winner===-1?' points. Dead even.':' points. Take their points next time.');}
+  if(game.mode==='crown'){const win=game.actors.find(a=>a.id===game.winner),mine=Math.floor(game.human.crown||0);$('finishTitle').textContent=win===game.human?'The crown is yours!':win?`${win.name} keeps the crown.`:'Nobody held the crown.';$('finishCopy').textContent=win===game.human?`${mine} crown points. Long live the king.`:`You scored ${mine}${win?`, ${win.name} ${Math.floor(win.crown||0)}`:''} crown points. Take it back next round.`;}
   $('finishRank').textContent=`#${rank}`;$('finishRankText').textContent=`of ${game.actors.length} pilots`;$('resultScore').textContent=fmt(game.human.score);$('resultKills').textContent=String(game.human.kills);$('resultSteals').textContent=String(game.human.steals);show('finished');updateHUD();play('finish');}
  let ringToastFor=-1,holeToastFor=-1;
  function events(){for(const e of game.events){if(e.type==='jackpot'){toast('You cracked the jackpot! +'+e.bonus+' points.');play('kill');}if(e.type==='holeEat'){play('strip');const at=game.arenaEvent?.start??0;if(holeToastFor!==at){holeToastFor=at;toast('The black hole is eating your armor. Pull away before it swallows you!');}}if(e.type==='holeBurst')play('strip');if(e.type==='shot')play('shot');if(e.type==='ring'){play('strip');const at=game.arenaEvent?.start??0;if(ringToastFor!==at){ringToastFor=at;toast('Outside the ring! You can\'t collect scrap and your armor is breaking off. Get inside.');}}if(e.type==='collect')play(e.stolen?'steal':'collect');if(e.type==='strip')play('strip');if(e.type==='hit')play('hurt');if(e.type==='hurt'){toast('Core hit! Let your orbit block shots, or find a repair well.');play('hurt');}if(e.type==='kill'){toast(`You scrapped ${e.name}. +${KNOCKOUT_REWARD} points!`);play('kill');}if(e.type==='death'){toast(`${e.name} scrapped your core. Rebuilding…`);play('death');}if(e.type==='respawn'){cam.x=game.human.x;cam.y=game.human.y;clearInput();toast('Fresh core. Six armor pieces. Get back in there.');play('start');}if(e.type==='repair'){toast('Core segment repaired.');play('repair');}if(e.type==='power'){toast(POWER_TOASTS[e.kind]||'Power-up!');play('power');}if(e.type==='leech')play('collect');if(e.type==='leeched'){toast('A rival is leeching your armor. Get out of range!');play('strip');}if(e.type==='deflect')play('strip');if(e.type==='cometHit'){toast('A comet knocked your armor loose. Grab it back!');play('strip');}if(e.type==='cometShot')toast('Comet shattered! Grab the stardust for a speed rush.');}game.events.length=0;}
@@ -1786,31 +1827,45 @@ function reconcileScrap(previous,next,now){
    const fs=now.s,fw=was.s;if(fw[team]!==1&&fs[team]===1){const c=game.actors.find(a=>a.id===now.c[team]);if(!mine&&c===me)toast('You have their flag! Bring it to your base.');else if(!mine)toast(`${c?.name||'A teammate'} has their flag. Cover them!`);else toast('Your flag was taken! Stop the carrier.');play('power');}
    else if(fw[team]===1&&fs[team]===2&&mine)toast('Your flag is down. Touch it to send it home.');
    else if(fw[team]===2&&fs[team]===0&&now.cap[1-team]===was.cap[1-team])toast(mine?'Your flag is back home.':'Their flag went back home.');}}
- // King of the hill: the zone (gold when free, the holder's color when held, flashing red when contested), a crown in
- // the middle, a thin arc of the time left on this spot, and the next spot (dashed, with a countdown) just before it moves.
- function drawHill(){if(game.mode!=='hill'||!game.hill)return;const h=game.hill,t=performance.now()/1000,R=HILL.r,left=Math.max(0,h.moveAt-game.time),soon=left<=HILL.warn;
-  if(soon&&visible(h.nx,h.ny,R+40)){ctx.save();ctx.strokeStyle=HILL.color;ctx.globalAlpha=.45+.25*Math.sin(t*8);ctx.lineWidth=2;ctx.setLineDash([10,10]);ctx.lineDashOffset=-t*30;ctx.beginPath();ctx.arc(h.nx,h.ny,R,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=.85;ctx.fillStyle=HILL.color;ctx.font='700 24px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillText(String(Math.ceil(left)),h.nx,h.ny+8);ctx.globalAlpha=.6;ctx.font='700 12px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.fillText('NEXT HILL',h.nx,h.ny-R-12);ctx.restore();}
-  if(!visible(h.x,h.y,R+60))return;const holder=h.holder?game.actors.find(a=>a.id===h.holder):null,flash=h.contested&&Math.sin(t*14)>0,col=h.contested?(flash?'#ff6b6b':HILL.color):holder?.color||HILL.color;
-  ctx.save();ctx.globalAlpha=holder?.13:.07;ctx.fillStyle=col;ctx.beginPath();ctx.arc(h.x,h.y,R,0,Math.PI*2);ctx.fill();
-  ctx.globalAlpha=.6;ctx.strokeStyle=col;ctx.lineWidth=holder?3:2;ctx.setLineDash([16,10]);ctx.lineDashOffset=-t*(holder?30:14);ctx.beginPath();ctx.arc(h.x,h.y,R,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
-  ctx.globalAlpha=.5;ctx.strokeStyle=soon?'#ff8d8d':HILL.color;ctx.lineWidth=3;ctx.lineCap='round';ctx.beginPath();ctx.arc(h.x,h.y,R+9,-Math.PI/2,-Math.PI/2+Math.min(1,left/HILL.move)*Math.PI*2);ctx.stroke();
-  if(holder){ctx.globalAlpha=.32+.08*Math.sin(t*4);ctx.drawImage(softSprite(col),h.x-60,h.y-62,120,120);}
-  ctx.globalAlpha=holder?.9:.55;ctx.fillStyle=col;ctx.translate(h.x,h.y);const k=1+.05*Math.sin(t*3);ctx.scale(k,k);ctx.beginPath();ctx.moveTo(-22,8);ctx.lineTo(-25,-14);ctx.lineTo(-11,-3);ctx.lineTo(0,-20);ctx.lineTo(11,-3);ctx.lineTo(25,-14);ctx.lineTo(22,8);ctx.closePath();ctx.fill();ctx.fillRect(-22,11,44,5);ctx.restore();ctx.save();
-  const label=h.contested?'CONTESTED':holder?(holder===game.human?'YOU':holder.name):'KING OF THE HILL';ctx.globalAlpha=.92;ctx.fillStyle=h.contested?'#ff8d8d':col;ctx.font='700 14px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillText(label,h.x,h.y-R-18);ctx.restore();}
- // Arrows around your ship: to the hill, and to the next spot when it is about to move.
- function drawHillPointer(){if(game.mode!=='hill'||!game.hill)return;const me=game.human;if(!me.alive)return;const h=game.hill,soon=h.moveAt-game.time<=HILL.warn;
-  const arrow=(x,y,col,r,alpha)=>{const dx=x-me.x,dy=y-me.y;if(hyp(dx,dy)<HILL.r+60)return;ctx.save();ctx.translate(me.x,me.y);ctx.rotate(Math.atan2(dy,dx));ctx.fillStyle=col;ctx.globalAlpha=alpha;ctx.beginPath();ctx.moveTo(r+16,0);ctx.lineTo(r,-8);ctx.lineTo(r,8);ctx.closePath();ctx.fill();ctx.restore();};
-  arrow(h.x,h.y,HILL.color,74,.85);if(soon)arrow(h.nx,h.ny,'#fff3c4',96,.55+.3*Math.sin(performance.now()/120));}
- function hillNotice(a){const h=game.hill;if(!h)return '';const inZone=hyp(a.x-h.x,a.y-h.y)<HILL.r,left=Math.ceil(h.moveAt-game.time),moving=left<=HILL.warn?` · moves in ${left}s`:'';
-  if(inZone&&h.holder===a.id)return 'YOU HOLD THE HILL'+moving;if(inZone&&h.contested)return 'HILL CONTESTED · Knock them out to score';if(inZone&&a.shieldUntil>game.time)return 'SPAWN SHIELD · No hill time until it ends';if(left<=HILL.warn)return `HILL MOVES IN ${left}s · Follow the arrow`;return '';}
- // Hill messages, worked out from hill state changes (the same offline and online).
- let hillSeen=null;function watchHill(){if(game.mode!=='hill'||!game.hill){hillSeen=null;return;}const h=game.hill,me=game.human,was=hillSeen&&hillSeen.world===game?hillSeen:null;
-  hillSeen={world:game,x:h.x,y:h.y,holder:h.holder,warned:was?.warned||new Set(),heldToast:was?.heldToast??-99};if(!was)return;
-  if(h.x!==was.x||h.y!==was.y){toast('The hill moved! Follow the gold arrow.');play('power');}
-  else if(h.holder===me.id&&was.holder!==me.id&&game.time-hillSeen.heldToast>12){hillSeen.heldToast=game.time;toast('You hold the hill. Stay alone in the zone to keep earning time.');play('collect');}
-  for(const a of game.actors)if(a!==me&&(a.hill||0)>=HILL.toWin-10&&!hillSeen.warned.has(a.id)){hillSeen.warned.add(a.id);toast(`${a.name} is ${Math.max(1,Math.ceil(HILL.toWin-a.hill))}s from the crown. Knock them off the hill!`);}}
+ // Domination: each point a ring in its owner's color (grey while nobody owns it) with its letter in the middle; a
+ // capture fills an arc in the capturing team's color; a contested point flashes red and white.
+ function drawDom(){if(game.mode!=='dom'||!game.zones)return;const t=performance.now()/1000,R=DOM.r;
+  game.zones.forEach((z,i)=>{if(!visible(z.x,z.y,R+60))return;const own=z.owner>=0?CTF.colors[z.owner]:'#c9d6e2',flash=z.contested&&Math.sin(t*14)>0,ring=z.contested?(flash?'#ff6b6b':'#ffffff'):own;
+   ctx.save();ctx.globalAlpha=z.owner>=0?.12:.05;ctx.fillStyle=own;ctx.beginPath();ctx.arc(z.x,z.y,R,0,Math.PI*2);ctx.fill();
+   ctx.globalAlpha=.6;ctx.strokeStyle=ring;ctx.lineWidth=z.owner>=0?3:2;ctx.setLineDash([16,10]);ctx.lineDashOffset=-t*(z.owner>=0?20:10)*(i%2?1:-1);ctx.beginPath();ctx.arc(z.x,z.y,R,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+   if(z.progress>0&&z.cap>=0){ctx.globalAlpha=.95;ctx.strokeStyle=CTF.colors[z.cap];ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.arc(z.x,z.y,R,-Math.PI/2,-Math.PI/2+z.progress*Math.PI*2);ctx.stroke();}
+   ctx.globalAlpha=z.owner>=0?.8:.45;ctx.fillStyle=own;ctx.font='700 46px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(DOM.names[i],z.x,z.y+2);ctx.textBaseline='alphabetic';
+   const label=z.contested?'CONTESTED':z.progress>0&&z.cap>=0?Math.floor(z.progress*100)+'%':'';if(label){ctx.globalAlpha=.95;ctx.fillStyle=z.contested?'#ff8d8d':CTF.colors[z.cap];ctx.font='700 14px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.fillText(label,z.x,z.y-R-16);}ctx.restore();});}
+ // Hold the crown: the crown bobbing where it lies (a ring counts down a dropped crown's return), or above its holder
+ // with a gold ring and the current points rate; a gold arrow from your ship points to it.
+ function crownShape(x,y,k,col,alpha){ctx.save();ctx.translate(x,y);ctx.scale(k,k);ctx.globalAlpha=alpha;ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(-22,8);ctx.lineTo(-25,-14);ctx.lineTo(-11,-3);ctx.lineTo(0,-20);ctx.lineTo(11,-3);ctx.lineTo(25,-14);ctx.lineTo(22,8);ctx.closePath();ctx.fill();ctx.fillRect(-22,11,44,5);
+  ctx.fillStyle='#fff6d0';for(const [px,py] of [[-25,-14],[0,-20],[25,-14]]){ctx.beginPath();ctx.arc(px,py,3.2,0,Math.PI*2);ctx.fill();}ctx.restore();}
+ function drawCrownMode(){if(game.mode!=='crown'||!game.crown||game.crown.state<0)return;const c=game.crown,t=performance.now()/1000;
+  if(c.state===1){const h=game.actors.find(a=>a.id===c.holder);if(h&&h.alive&&visible(h.x,h.y,120)){ctx.save();ctx.strokeStyle=CROWN.color;ctx.globalAlpha=.5+.25*Math.sin(t*6);ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(h.x,h.y,34,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=.3;ctx.drawImage(softSprite(CROWN.color),h.x-40,h.y-94,80,80);ctx.restore();
+    crownShape(h.x,h.y-54+Math.sin(t*3)*2,.62,CROWN.color,.95);const rate=crownRate(c,game.time);if(rate>1){ctx.save();ctx.fillStyle=CROWN.color;ctx.font='700 13px Fredoka,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';ctx.textAlign='left';ctx.fillText(rate+'×',h.x+20,h.y-62);ctx.restore();}}}
+  else if(visible(c.x,c.y,90)){ctx.save();ctx.globalAlpha=.4+.12*Math.sin(t*3);ctx.drawImage(softSprite(CROWN.color),c.x-70,c.y-70,140,140);if(c.state===2){const left=Math.max(0,1-(game.time-c.droppedAt)/CROWN.returnAfter);ctx.globalAlpha=.8;ctx.strokeStyle=CROWN.color;ctx.lineWidth=3;ctx.beginPath();ctx.arc(c.x,c.y,34,-Math.PI/2,-Math.PI/2+left*Math.PI*2);ctx.stroke();}ctx.restore();crownShape(c.x,c.y+Math.sin(t*2.4)*4,.85,CROWN.color,1);}
+  const me=game.human;if(!me.alive||c.state===1&&c.holder===me.id)return;const dx=c.x-me.x,dy=c.y-me.y;if(hyp(dx,dy)<200)return;ctx.save();ctx.translate(me.x,me.y);ctx.rotate(Math.atan2(dy,dx));ctx.fillStyle=CROWN.color;ctx.globalAlpha=.9;ctx.beginPath();ctx.moveTo(92,0);ctx.lineTo(75,-9);ctx.lineTo(75,9);ctx.closePath();ctx.fill();ctx.restore();}
+ function modeNotice(a){
+  if(game.mode==='dom'&&game.zones){for(let i=0;i<game.zones.length;i++){const z=game.zones[i],n=DOM.names[i];if(hyp(a.x-z.x,a.y-z.y)>=DOM.r)continue;
+    if(a.shieldUntil>game.time)return 'SPAWN SHIELD · No capturing until it ends';if(z.contested)return `${n} CONTESTED · Clear them out`;if(z.cap===a.team&&z.progress>0)return `CAPTURING ${n} · ${Math.floor(z.progress*100)}%`;
+    if(z.cap>=0&&z.progress>0)return `DEFENDING ${n}`;if(z.owner===a.team)return `HOLDING ${n}`;return '';}return '';}
+  if(game.mode==='crown'&&game.crown){const c=game.crown;if(c.state===1&&c.holder===a.id){const r=crownRate(c,game.time),next=r<CROWN.maxRate?` · ${r+1}× in ${Math.max(1,Math.ceil(r*CROWN.step-(game.time-c.since)))}s`:'';return `YOU HAVE THE CROWN · ${r}× points${next}`;}if(c.state===2)return 'THE CROWN IS DOWN · Grab it';}
+  return '';}
+ // Domination and crown messages, worked out from state changes (the same offline and online).
+ let modeSeen=null;function watchModes(){const me=game.human,was=modeSeen&&modeSeen.world===game?modeSeen:null;
+  if(game.mode==='dom'&&game.zones){const now={world:game,owners:game.zones.map(z=>z.owner),warned:was?.warned||false};modeSeen=now;if(!was)return;const side=t=>CTF.names[t][0]+CTF.names[t].slice(1).toLowerCase();
+   game.zones.forEach((z,i)=>{if(z.owner===was.owners[i]||z.owner<0)return;const ours=z.owner===me.team;toast(ours?`Your team captured ${DOM.names[i]}!`:`${side(z.owner)} took ${DOM.names[i]}${was.owners[i]===me.team?' from you':''}!`);play(ours?'power':'strip');});
+   const sc=game.teamScore,they=1-me.team;if(!now.warned&&sc[they]>=DOM.toWin-50&&sc[they]>sc[me.team]){now.warned=true;toast(`${side(they)} is ${DOM.toWin-sc[they]} points from winning. Take their points!`);}return;}
+  if(game.mode==='crown'&&game.crown){const c=game.crown,holder=c.state===1?c.holder:0,now={world:game,holder,state:c.state,warned:was?.warned||new Set(),lastToast:was?.lastToast??-99};modeSeen=now;if(!was)return;
+   if(was.state===-1&&c.state===0){toast('The crown is out! Grab it and hold on.');play('power');}
+   else if(was.state===2&&c.state===0)toast('Nobody took the crown, so it moved to a new spot.');
+   if(holder!==was.holder){if(holder===me.id){toast('You have the crown! Points grow the longer you keep it.');play('power');now.lastToast=game.time;}
+    else if(was.holder===me.id){toast('You lost the crown. Take it back!');play('strip');now.lastToast=game.time;}
+    else if(holder&&game.time-now.lastToast>5){const h=game.actors.find(a=>a.id===holder);if(h){toast(`${h.name} has the crown.`);now.lastToast=game.time;}}}
+   for(const a of game.actors)if(a!==me&&(a.crown||0)>=CROWN.toWin-20&&!now.warned.has(a.id)){now.warned.add(a.id);toast(`${a.name} is ${Math.max(1,Math.ceil(CROWN.toWin-a.crown))} points from winning. Stop them!`);}return;}
+  modeSeen=null;}
  function wellsAndCover(){
-  drawCtfBases();drawHill();
+  drawCtfBases();drawDom();
   const now=performance.now();
   for(const w of game.wells){if(!visible(w.x,w.y,100))continue;const pulse=.5+Math.sin(game.time*2)*.15;ctx.save();
    // Breathing glow (brighter while someone repairs) and arcs turning slowly around the ring.
@@ -2455,7 +2510,7 @@ function reconcileScrap(previous,next,now){
  function knockoutOnce(a,now){if(now-(koFxAt.get(a.id)??-1e9)<1500)return;koFxAt.set(a.id,now);knockoutFx(a,now);}
  let glitchBuf=null;
  function watchCombat(now){
-  watchCtf();watchHill();
+  watchCtf();watchModes();
   watchShotPings(now);
   for(const a of game.actors){const seen=lastHurtSeen.get(a.id);lastHurtSeen.set(a.id,a.lastHurt);
    if(seen!=null&&a.lastHurt>seen&&game.time-a.lastHurt<.5)glitchAt.set(a.id,now);
@@ -2571,9 +2626,10 @@ function reconcileScrap(previous,next,now){
   {const now=performance.now();for(const [id,p] of mapPings){const age=(now-p.at)/PING_LIFE;if(age>=1){mapPings.delete(id);continue;}if(dark)continue;const x=p.x*sx,y=p.y*sy;
    const rk=(now-p.ring)/PING_RING;if(rk<1){mc.strokeStyle='#ff4d4d';mc.globalAlpha=(1-rk)*.9;mc.lineWidth=1.5;mc.beginPath();mc.arc(x,y,3+rk*10,0,Math.PI*2);mc.stroke();}
    mc.globalAlpha=Math.min(1,(1-age)*1.6);mc.fillStyle='#ff4d4d';mc.beginPath();mc.arc(x,y,3.2,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
-  if(game.mode==='hill'&&game.hill){const h=game.hill,R=HILL.r*sx,holder=h.holder&&game.actors.find(a=>a.id===h.holder),col=h.contested?'#ff6b6b':holder?.color||HILL.color;mc.globalAlpha=.25;mc.fillStyle=col;mc.beginPath();mc.arc(h.x*sx,h.y*sy,R,0,Math.PI*2);mc.fill();mc.globalAlpha=.95;mc.strokeStyle=col;mc.lineWidth=1.6;mc.stroke();
-   if(h.moveAt-game.time<=HILL.warn){mc.globalAlpha=.55+.4*Math.sin(performance.now()/120);mc.strokeStyle=HILL.color;mc.setLineDash([3,3]);mc.beginPath();mc.arc(h.nx*sx,h.ny*sy,R,0,Math.PI*2);mc.stroke();mc.setLineDash([]);}mc.globalAlpha=1;}
-  if(game.mode==='teams'){mc.globalAlpha=.9;for(const a of game.actors)if(a.alive&&a.id!==game.human.id&&a.team===game.human.team){mc.fillStyle=a.color;mc.beginPath();mc.arc(a.x*sx,a.y*sy,2.6,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
+  if(game.mode==='dom'&&game.zones){const R=DOM.r*sx;game.zones.forEach((z,i)=>{const own=z.owner>=0?CTF.colors[z.owner]:'#8aa0b4';mc.globalAlpha=.3;mc.fillStyle=own;mc.beginPath();mc.arc(z.x*sx,z.y*sy,R,0,Math.PI*2);mc.fill();mc.globalAlpha=1;mc.strokeStyle=z.contested&&Math.sin(performance.now()/90)>0?'#ff6b6b':own;mc.lineWidth=1.5;mc.stroke();
+   if(z.progress>0&&z.cap>=0){mc.strokeStyle=CTF.colors[z.cap];mc.lineWidth=2.5;mc.beginPath();mc.arc(z.x*sx,z.y*sy,R+1.5,-Math.PI/2,-Math.PI/2+z.progress*Math.PI*2);mc.stroke();}mc.fillStyle='#e8f4ff';mc.font='700 10px Fredoka,sans-serif';mc.textAlign='center';mc.textBaseline='middle';mc.fillText(DOM.names[i],z.x*sx,z.y*sy+.5);mc.textBaseline='alphabetic';});}
+  if(game.mode==='crown'&&game.crown&&game.crown.state>=0){const c=game.crown;mc.fillStyle=CROWN.color;mc.globalAlpha=c.state===1?.6+.4*Math.sin(performance.now()/110):1;mc.beginPath();mc.arc(c.x*sx,c.y*sy,c.state===1?4.2:3.6,0,Math.PI*2);mc.fill();mc.globalAlpha=1;}
+  if(game.mode==='teams'||game.mode==='dom'){mc.globalAlpha=.9;for(const a of game.actors)if(a.alive&&a.id!==game.human.id&&a.team===game.human.team){mc.fillStyle=a.color;mc.beginPath();mc.arc(a.x*sx,a.y*sy,2.6,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
   if(game.mode==='ctf'){CTF.bases.forEach((b,team)=>{mc.strokeStyle=CTF.colors[team];mc.globalAlpha=.7;mc.lineWidth=1.5;mc.beginPath();mc.arc(b.x*sx,b.y*sy,CTF.baseR*sx,0,Math.PI*2);mc.stroke();});
    for(const f of game.flags){mc.globalAlpha=f.state===2?.6+.4*Math.sin(performance.now()/120):1;mc.fillStyle=CTF.colors[f.team];const x=f.x*sx,y=f.y*sy;mc.beginPath();mc.moveTo(x,y-7);mc.lineTo(x+7,y-4);mc.lineTo(x,y-1);mc.closePath();mc.fill();mc.fillRect(x-.7,y-7,1.4,8);}
    mc.globalAlpha=.9;for(const a of game.actors)if(a.alive&&a.id!==game.human.id&&a.team===game.human.team){mc.fillStyle=a.color;mc.beginPath();mc.arc(a.x*sx,a.y*sy,2.6,0,Math.PI*2);mc.fill();}mc.globalAlpha=1;}
@@ -2807,7 +2863,7 @@ function reconcileScrap(previous,next,now){
   for(const a of game.actors){if(!a.alive||a===game.human||!visible(a.x,a.y,40))continue;polygon(a.x,a.y,18,6,a.aim);ctx.strokeStyle=a.color;ctx.globalAlpha=.22*fade;ctx.lineWidth=6;ctx.stroke();ctx.globalAlpha=.7*fade;ctx.lineWidth=2;ctx.stroke();}
   ctx.restore();
  }
- function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);if(state!=='menu'){watchEvent();watchRush();}ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();drawWrecks();drawEventMarkers();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawStardust();drawSmoke();powerAuras();drawRush();drawTails(drawNow);drawPilots();drawCtfFlags();drawHillPointer();drawHeals(drawNow);drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();drawBlackout();cometIndicators();vignette();eventBanner();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
+ function draw(){const drawNow=performance.now(),fxDt=Math.min(.05,(drawNow-(fxLast||drawNow))/1000);fxLast=drawNow;if(state!=='menu')watchCombat(drawNow);updateFx(fxDt);updateMagnetFx(fxDt);watchWalls(drawNow);if(state!=='menu'){watchEvent();watchRush();}ctx.fillStyle='#07111d';ctx.fillRect(0,0,width,height);parallax(drawNow);ctx.save();ctx.translate(width/2,height/2);ctx.scale(cam.zoom,cam.zoom);ctx.translate(-cam.x,-cam.y);background();wellsAndCover();drawWrecks();drawEventMarkers();pads();drawVortices();fields();drawMagnetFx();drawTethers();drawScrap();drawStardust();drawSmoke();powerAuras();drawRush();drawTails(drawNow);drawPilots();drawCtfFlags();drawCrownMode();drawHeals(drawNow);drawShots();drawImpacts(drawNow);effects();drawPops(drawNow);reticle();ctx.restore();drawBlackout();cometIndicators();vignette();eventBanner();if(state!=='menu'&&performance.now()-mapAt>100){mapAt=performance.now();minimap();}joystick();}
  function frame(now){const workStart=performance.now(),gap=lastFrameAt?now-lastFrameAt:0;
   if(gap>25){droppedFrames++;if(graphicsMode==='auto'&&state==='playing'&&!document.hidden&&now-playingSince>2500){
    const stall=gap>90&&gap<1000&&dpr>1.01&&frameWork<12&&longTaskEnd<lastFrameAt;// the graphics chip, not the game code or other page work
